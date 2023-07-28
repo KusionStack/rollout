@@ -1,0 +1,7 @@
+## Append samples of your project ##
+resources:
+- rollout_v1alpha1_rollout.yaml
+- rollout_v1alpha1_rolloutstrategy.yaml
+- rollout_v1alpha1_workflow.yaml
+- rollout_v1alpha1_task.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

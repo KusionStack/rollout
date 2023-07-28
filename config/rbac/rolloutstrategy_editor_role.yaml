@@ -1,0 +1,31 @@
+# permissions for end users to edit rolloutstrategies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: rolloutstrategy-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: rollout
+    app.kubernetes.io/part-of: rollout
+    app.kubernetes.io/managed-by: kustomize
+  name: rolloutstrategy-editor-role
+rules:
+- apiGroups:
+  - rollout.kafe.kusionstack.io
+  resources:
+  - rolloutstrategies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kafe.kusionstack.io
+  resources:
+  - rolloutstrategies/status
+  verbs:
+  - get

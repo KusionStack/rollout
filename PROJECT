@@ -1,0 +1,55 @@
+domain: kafe.kusionstack.io
+layout:
+- go.kubebuilder.io/v3
+projectName: rollout
+repo: github.com/KusionStack/rollout
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kafe.kusionstack.io
+  group: rollout
+  kind: Rollout
+  path: github.com/KusionStack/rollout/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: kafe.kusionstack.io
+  group: rollout
+  kind: RolloutStrategy
+  path: github.com/KusionStack/rollout/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kafe.kusionstack.io
+  group: rollout
+  kind: Workflow
+  path: github.com/KusionStack/rollout/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kafe.kusionstack.io
+  group: rollout
+  kind: Task
+  path: github.com/KusionStack/rollout/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kafe.kusionstack.io
+  group: rollout
+  kind: RolloutJob
+  path: github.com/KusionStack/rollout/api/v1alpha1
+  version: v1alpha1
+version: "3"

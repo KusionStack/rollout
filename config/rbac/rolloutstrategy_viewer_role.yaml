@@ -1,0 +1,27 @@
+# permissions for end users to view rolloutstrategies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: rolloutstrategy-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: rollout
+    app.kubernetes.io/part-of: rollout
+    app.kubernetes.io/managed-by: kustomize
+  name: rolloutstrategy-viewer-role
+rules:
+- apiGroups:
+  - rollout.kafe.kusionstack.io
+  resources:
+  - rolloutstrategies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rollout.kafe.kusionstack.io
+  resources:
+  - rolloutstrategies/status
+  verbs:
+  - get

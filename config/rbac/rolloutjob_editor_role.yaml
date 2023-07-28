@@ -1,0 +1,24 @@
+# permissions for end users to edit rolloutjobs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rolloutjob-editor-role
+rules:
+- apiGroups:
+  - rollout.kafe.kusionstack.io
+  resources:
+  - rolloutjobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kafe.kusionstack.io
+  resources:
+  - rolloutjobs/status
+  verbs:
+  - get

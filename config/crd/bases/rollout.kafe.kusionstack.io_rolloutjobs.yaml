@@ -1,0 +1,477 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: rolloutjobs.rollout.kafe.kusionstack.io
+spec:
+  group: rollout.kafe.kusionstack.io
+  names:
+    kind: RolloutJob
+    listKind: RolloutJobList
+    plural: rolloutjobs
+    singular: rolloutjob
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RolloutJob is the Schema for the rolloutjobs API.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RolloutJobSpec defines the desired state of RolloutJob.
+            properties:
+              action:
+                description: Action is the action that would be executed.
+                type: string
+              batch:
+                description: Batch is the batch strategy for upgrade and operation.
+                properties:
+                  analysis:
+                    description: Analysis defines the analysis of the canary strategy
+                    properties:
+                      rules:
+                        description: Rules is rules for call provider
+                        items:
+                          properties:
+                            checkPoints:
+                              description: CheckPoints is conditions for call provider
+                              items:
+                                description: CheckPointType is the type of the check point
+                                type: string
+                              type: array
+                            intervalSeconds:
+                              description: IntervalSeconds is the interval for call provider
+                              format: int32
+                              type: integer
+                            maxFailureCount:
+                              description: MaxFailureCount is the threshold for call provider
+                              format: int32
+                              type: integer
+                            provider:
+                              description: Provider is config for provider
+                              properties:
+                                address:
+                                  description: Address is the address of the provider
+                                  type: string
+                                name:
+                                  description: Name is the name of the provider
+                                  type: string
+                              required:
+                              - address
+                              - name
+                              type: object
+                          type: object
+                        type: array
+                    required:
+                    - rules
+                    type: object
+                  batchTemplate:
+                    description: BatchTemplate is the batch template of the canary strategy
+                    properties:
+                      customBatchPolicy:
+                        description: CustomizedBatchPolicy is the customized batch policy of the batch template
+                        properties:
+                          batches:
+                            description: Batches defines the batches of the custom batch policy
+                            items:
+                              description: Batch defines the batch
+                              properties:
+                                units:
+                                  description: Units defines the rollout units of the batch
+                                  items:
+                                    description: RolloutUnit defines the rollout unit, which represents rollout partition of a workload
+                                    properties:
+                                      name:
+                                        description: Name is the name of the rollout unit
+                                        type: string
+                                      replicas:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        description: Replicas is the replicas of the rollout unit, which represents the number of pods to be upgraded
+                                        x-kubernetes-int-or-string: true
+                                      selector:
+                                        description: Selector is the selector of the rollout unit, which is used to select the workload to be upgraded
+                                        properties:
+                                          matchExpressions:
+                                            description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                                            items:
+                                              description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                                              properties:
+                                                key:
+                                                  description: key is the label key that the selector applies to.
+                                                  type: string
+                                                operator:
+                                                  description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                  type: string
+                                                values:
+                                                  description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                              required:
+                                              - key
+                                              - operator
+                                              type: object
+                                            type: array
+                                          matchLabels:
+                                            additionalProperties:
+                                              type: string
+                                            description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                            type: object
+                                        type: object
+                                      targets:
+                                        description: Targets are the specific name of resources to operate.
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - name
+                                    - replicas
+                                    type: object
+                                  type: array
+                              required:
+                              - units
+                              type: object
+                            type: array
+                        required:
+                        - batches
+                        type: object
+                      fixedBatchPolicy:
+                        description: FixedBatchPolicy is the fixed batch policy of the batch template
+                        properties:
+                          batchCount:
+                            description: BatchCount indicates the number of batches, workloads across different clusters in the same batch will be upgraded at the same time
+                            format: int32
+                            type: integer
+                          betaBatch:
+                            description: BetaBatch defines the rollout policy of beta(first) batch
+                            properties:
+                              replicas:
+                                description: Replicas indicates the replicas of the beta(first) batch, which will be chosen evenly from workloads
+                                format: int32
+                                type: integer
+                              replicasPerUnit:
+                                description: ReplicasPerUnit indicates the replicas per rollout unit
+                                format: int32
+                                type: integer
+                            type: object
+                          breakpoints:
+                            description: Breakpoints is the breakpoints of the fixed batch policy, which indicates pause points before determined batch
+                            items:
+                              format: int32
+                              type: integer
+                            type: array
+                        required:
+                        - batchCount
+                        type: object
+                      partialAdaptiveFactor:
+                        description: PartialAdaptiveFactor is the special config for partial targets
+                        properties:
+                          minBatchCount:
+                            description: MinBatchCount indicates the number of min batches, default 2
+                            format: int32
+                            type: integer
+                          threshold:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: Threshold indicates how many pods can use this PartialAdaptiveFactor, default 50%
+                            x-kubernetes-int-or-string: true
+                        type: object
+                      provider:
+                        description: Provider is the provider of the batch template
+                        type: object
+                    type: object
+                  pauseMode:
+                    description: PauseMode is the pause mode of the canary strategy
+                    type: string
+                  tolerationPolicy:
+                    description: TolerationPolicy is the toleration policy of the canary strategy
+                    properties:
+                      failureThreshold:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: FailureThreshold indicates how many failed pods can be tolerated before marking the rollout batch as success If not set, the default value is 0, which means no failed pods can be tolerated
+                        x-kubernetes-int-or-string: true
+                      unitFailureThreshold:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: UnitFailureThreshold indicates how many failed resources can be tolerated in a unit. The default value is 0, which means no failed resources can be tolerated.
+                        x-kubernetes-int-or-string: true
+                      waitTimeSeconds:
+                        description: WaitTimeSeconds indicates how long to wait before starting the toleration check
+                        format: int32
+                        type: integer
+                    required:
+                    - waitTimeSeconds
+                    type: object
+                required:
+                - pauseMode
+                type: object
+              pods:
+                description: Pods are the list of pod resources.
+                items:
+                  description: TargetResource contains the information of resource.
+                  properties:
+                    cluster:
+                      description: Cluster represents which kubernetes cluster does the target resource locate.
+                      type: string
+                    name:
+                      description: Name represents the name of target resource in kubernetes.
+                      type: string
+                    namespace:
+                      description: Namespace represents the namespace of target resource in kubernetes.
+                      type: string
+                  required:
+                  - cluster
+                  - name
+                  - namespace
+                  type: object
+                type: array
+            type: object
+          status:
+            description: RolloutJobStatus defines the observed state of RolloutJob
+            properties:
+              conditions:
+                description: Conditions of rollout
+                items:
+                  description: 'Condition defines the condition of a resource See: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties'
+                  properties:
+                    lastTransitionTime:
+                      description: LastTransitionTime is the last time the condition transitioned from one status to another
+                      format: date-time
+                      type: string
+                    message:
+                      description: Message is the human-readable message indicating details about last transition
+                      type: string
+                    reason:
+                      description: Reason is the reason for the condition's last transition
+                      type: string
+                    status:
+                      description: Status is the status of the condition
+                      type: string
+                    type:
+                      description: Type is the type of the condition
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              currentWorkflowInfo:
+                description: WorkflowInfo is the info of latest workflow
+                properties:
+                  conditions:
+                    description: Conditions of workflow
+                    items:
+                      description: 'Condition defines the condition of a resource See: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties'
+                      properties:
+                        lastTransitionTime:
+                          description: LastTransitionTime is the last time the condition transitioned from one status to another
+                          format: date-time
+                          type: string
+                        message:
+                          description: Message is the human-readable message indicating details about last transition
+                          type: string
+                        reason:
+                          description: Reason is the reason for the condition's last transition
+                          type: string
+                        status:
+                          description: Status is the status of the condition
+                          type: string
+                        type:
+                          description: Type is the type of the condition
+                          type: string
+                      required:
+                      - status
+                      - type
+                      type: object
+                    type: array
+                  name:
+                    description: Name of workflow
+                    type: string
+                required:
+                - name
+                type: object
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed for this Rollout. It corresponds to the Rollout's generation, which is updated on mutation by the API Server.
+                format: int64
+                type: integer
+              observedRolloutId:
+                description: ObservedRolloutID is the id of the rollout
+                type: string
+              progress:
+                description: Operation progress of the RolloutJob.
+                type: string
+              stages:
+                description: Stages is the stages of the rollout
+                items:
+                  description: Stage defines the info of a stage
+                  properties:
+                    finishedAt:
+                      description: FinishedAt is the time when the stage finished
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name is the name of the stage
+                      type: string
+                    nextStage:
+                      description: NextStage is the name of next stage
+                      type: string
+                    prevStage:
+                      description: 'TODO(hengzhuo): consider whether we do need prevStage and nextStage PreviousStage is the name of previous stage'
+                      type: string
+                    startedAt:
+                      description: StartedAt is the time when the stage started
+                      format: date-time
+                      type: string
+                    successCondition:
+                      description: SuccessCondition defines the condition of the stage
+                      properties:
+                        lastTransitionTime:
+                          description: LastTransitionTime is the last time the condition transitioned from one status to another
+                          format: date-time
+                          type: string
+                        message:
+                          description: Message is the human-readable message indicating details about last transition
+                          type: string
+                        reason:
+                          description: Reason is the reason for the condition's last transition
+                          type: string
+                        status:
+                          description: Status is the status of the condition
+                          type: string
+                        type:
+                          description: Type is the type of the condition
+                          type: string
+                      required:
+                      - status
+                      - type
+                      type: object
+                    summary:
+                      description: Summary is the summary of the stage
+                      properties:
+                        replicas:
+                          format: int32
+                          type: integer
+                        updatedAvailableReplicas:
+                          format: int32
+                          type: integer
+                        updatedReadyReplicas:
+                          format: int32
+                          type: integer
+                        updatedReplicas:
+                          format: int32
+                          type: integer
+                      required:
+                      - replicas
+                      - updatedAvailableReplicas
+                      - updatedReadyReplicas
+                      - updatedReplicas
+                      type: object
+                    type:
+                      description: 'Type defines different stage type, Valid values are: - Batch: Executed batch stage. - Suspend: Control stage between executed batches.'
+                      type: string
+                    workloadDetails:
+                      description: WorkloadDetails contains release details for each workload
+                      items:
+                        description: WorkloadReleaseTaskStatus defines the status of the workload release task
+                        properties:
+                          name:
+                            description: Name is the name of the workload
+                            type: string
+                          observedGenerationUpdated:
+                            description: ObservedGenerationUpdated indicates if the observedGeneration is updated to the latest generation
+                            type: boolean
+                          replicas:
+                            description: Replicas is the number of replicas
+                            format: int32
+                            type: integer
+                          updatedAvailableReplicas:
+                            description: UpdatedAvailableReplicas is the number of updated available replicas
+                            format: int32
+                            type: integer
+                          updatedReadyReplicas:
+                            description: UpdatedReadyReplicas is the number of updated ready replicas
+                            format: int32
+                            type: integer
+                          updatedReplicas:
+                            description: UpdatedReplicas is the number of updated replicas
+                            format: int32
+                            type: integer
+                        required:
+                        - observedGenerationUpdated
+                        - replicas
+                        - updatedAvailableReplicas
+                        - updatedReadyReplicas
+                        - updatedReplicas
+                        type: object
+                      type: array
+                  required:
+                  - name
+                  type: object
+                type: array
+              tolerationState:
+                description: tolerationState describes the state what targets are hit the toleration policy.
+                items:
+                  description: TolerationState describes the state of operation targets in the entrustPool.
+                  properties:
+                    batchUnitName:
+                      description: BatchUnitName represents which batch has been tolerated.
+                      type: string
+                    targets:
+                      description: Targets contains which targets have been tolerated.
+                      items:
+                        description: TargetResource contains the information of resource.
+                        properties:
+                          cluster:
+                            description: Cluster represents which kubernetes cluster does the target resource locate.
+                            type: string
+                          name:
+                            description: Name represents the name of target resource in kubernetes.
+                            type: string
+                          namespace:
+                            description: Namespace represents the namespace of target resource in kubernetes.
+                            type: string
+                        required:
+                        - cluster
+                        - name
+                        - namespace
+                        type: object
+                      type: array
+                  required:
+                  - batchUnitName
+                  - targets
+                  type: object
+                type: array
+              updateTimestamp:
+                description: The latest operation progress update time
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

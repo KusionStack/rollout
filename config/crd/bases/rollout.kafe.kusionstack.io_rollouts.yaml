@@ -1,0 +1,383 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: rollouts.rollout.kafe.kusionstack.io
+spec:
+  group: rollout.kafe.kusionstack.io
+  names:
+    kind: Rollout
+    listKind: RolloutList
+    plural: rollouts
+    singular: rollout
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Rollout is the Schema for the rollouts API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RolloutSpec defines the desired state of Rollout
+            properties:
+              app:
+                description: App is the application and its related workload
+                properties:
+                  extInfo:
+                    additionalProperties:
+                      type: string
+                    description: ExtInfo is the extended information of the application
+                    type: object
+                  template:
+                    description: Template is the template of the application
+                    properties:
+                      provider:
+                        description: Provider defines spec template provider of application, from which the spec template is rendered
+                        properties:
+                          address:
+                            description: Address is the address of the provider
+                            type: string
+                          name:
+                            description: Name is the name of the provider
+                            type: string
+                        required:
+                        - address
+                        - name
+                        type: object
+                    type: object
+                  workloadRef:
+                    description: WorkloadRef is a reference to a workload
+                    properties:
+                      apiVersion:
+                        description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                        type: string
+                      kind:
+                        description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                        type: string
+                      selector:
+                        description: Selector is a label query over a set of resources, in this case workload
+                        properties:
+                          matchExpressions:
+                            description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                            items:
+                              description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                              properties:
+                                key:
+                                  description: key is the label key that the selector applies to.
+                                  type: string
+                                operator:
+                                  description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                  type: string
+                                values:
+                                  description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - key
+                              - operator
+                              type: object
+                            type: array
+                          matchLabels:
+                            additionalProperties:
+                              type: string
+                            description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                            type: object
+                        type: object
+                    required:
+                    - selector
+                    type: object
+                required:
+                - workloadRef
+                type: object
+              strategyRef:
+                description: StrategyRef is the reference to the rollout strategy
+                type: string
+              triggerCondition:
+                description: TriggerCondition is the condition to trigger the rollout
+                properties:
+                  autoMode:
+                    description: AutoMode indicates how the rollout is triggered automatically
+                    properties:
+                      barrierMatcher:
+                        description: BarrierMatcher is a barrier matcher to match the rollout trigger condition
+                        properties:
+                          key:
+                            description: key is the label key that the selector applies to.
+                            type: string
+                          operator:
+                            description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                            type: string
+                          values:
+                            description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                            items:
+                              type: string
+                            type: array
+                        required:
+                        - key
+                        - operator
+                        type: object
+                    type: object
+                  manualMode:
+                    description: ManualMode indicates how the rollout is triggered manually
+                    properties:
+                      rolloutId:
+                        description: RolloutId is the id of the rollout, trigger the rollout if the id is not matched with status.rolloutId
+                        type: string
+                      target:
+                        description: Target is the target of the rollout
+                        properties:
+                          pods:
+                            description: Pods is the list of pod names
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                    required:
+                    - rolloutId
+                    type: object
+                type: object
+            required:
+            - app
+            - strategyRef
+            type: object
+          status:
+            description: RolloutStatus defines the observed state of Rollout
+            properties:
+              conditions:
+                description: Conditions is the list of conditions
+                items:
+                  description: 'Condition defines the condition of a resource See: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties'
+                  properties:
+                    lastTransitionTime:
+                      description: LastTransitionTime is the last time the condition transitioned from one status to another
+                      format: date-time
+                      type: string
+                    message:
+                      description: Message is the human-readable message indicating details about last transition
+                      type: string
+                    reason:
+                      description: Reason is the reason for the condition's last transition
+                      type: string
+                    status:
+                      description: Status is the status of the condition
+                      type: string
+                    type:
+                      description: Type is the type of the condition
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              currentStageIndex:
+                description: CurrentStageIndex is the index of current rollout stage
+                format: int32
+                type: integer
+              finishedAt:
+                description: FinishedAt is the time when the rollout finished
+                format: date-time
+                type: string
+              lastUpdatedAt:
+                description: LastUpdatedAt is the time when the rollout was last updated
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed for this Rollout. It corresponds to the Rollout's generation, which is updated on mutation by the API Server.
+                format: int64
+                type: integer
+              observedRolloutId:
+                description: ObservedRolloutID is the id of the rollout
+                type: string
+              stages:
+                description: Stages is the stages of the rollout
+                items:
+                  description: Stage defines the info of a stage
+                  properties:
+                    finishedAt:
+                      description: FinishedAt is the time when the stage finished
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name is the name of the stage
+                      type: string
+                    nextStage:
+                      description: NextStage is the name of next stage
+                      type: string
+                    prevStage:
+                      description: 'TODO(hengzhuo): consider whether we do need prevStage and nextStage PreviousStage is the name of previous stage'
+                      type: string
+                    startedAt:
+                      description: StartedAt is the time when the stage started
+                      format: date-time
+                      type: string
+                    successCondition:
+                      description: SuccessCondition defines the condition of the stage
+                      properties:
+                        lastTransitionTime:
+                          description: LastTransitionTime is the last time the condition transitioned from one status to another
+                          format: date-time
+                          type: string
+                        message:
+                          description: Message is the human-readable message indicating details about last transition
+                          type: string
+                        reason:
+                          description: Reason is the reason for the condition's last transition
+                          type: string
+                        status:
+                          description: Status is the status of the condition
+                          type: string
+                        type:
+                          description: Type is the type of the condition
+                          type: string
+                      required:
+                      - status
+                      - type
+                      type: object
+                    summary:
+                      description: Summary is the summary of the stage
+                      properties:
+                        replicas:
+                          format: int32
+                          type: integer
+                        updatedAvailableReplicas:
+                          format: int32
+                          type: integer
+                        updatedReadyReplicas:
+                          format: int32
+                          type: integer
+                        updatedReplicas:
+                          format: int32
+                          type: integer
+                      required:
+                      - replicas
+                      - updatedAvailableReplicas
+                      - updatedReadyReplicas
+                      - updatedReplicas
+                      type: object
+                    type:
+                      description: 'Type defines different stage type, Valid values are: - Batch: Executed batch stage. - Suspend: Control stage between executed batches.'
+                      type: string
+                    workloadDetails:
+                      description: WorkloadDetails contains release details for each workload
+                      items:
+                        description: WorkloadReleaseTaskStatus defines the status of the workload release task
+                        properties:
+                          name:
+                            description: Name is the name of the workload
+                            type: string
+                          observedGenerationUpdated:
+                            description: ObservedGenerationUpdated indicates if the observedGeneration is updated to the latest generation
+                            type: boolean
+                          replicas:
+                            description: Replicas is the number of replicas
+                            format: int32
+                            type: integer
+                          updatedAvailableReplicas:
+                            description: UpdatedAvailableReplicas is the number of updated available replicas
+                            format: int32
+                            type: integer
+                          updatedReadyReplicas:
+                            description: UpdatedReadyReplicas is the number of updated ready replicas
+                            format: int32
+                            type: integer
+                          updatedReplicas:
+                            description: UpdatedReplicas is the number of updated replicas
+                            format: int32
+                            type: integer
+                        required:
+                        - observedGenerationUpdated
+                        - replicas
+                        - updatedAvailableReplicas
+                        - updatedReadyReplicas
+                        - updatedReplicas
+                        type: object
+                      type: array
+                  required:
+                  - name
+                  type: object
+                type: array
+              startedAt:
+                description: StartedAt is the time when the rollout started
+                format: date-time
+                type: string
+              summary:
+                description: Summary is the summary of the rollout
+                properties:
+                  replicas:
+                    format: int32
+                    type: integer
+                  updatedAvailableReplicas:
+                    format: int32
+                    type: integer
+                  updatedReadyReplicas:
+                    format: int32
+                    type: integer
+                  updatedReplicas:
+                    format: int32
+                    type: integer
+                required:
+                - replicas
+                - updatedAvailableReplicas
+                - updatedReadyReplicas
+                - updatedReplicas
+                type: object
+              workflowInfo:
+                description: WorkflowInfo is the info of latest workflow
+                properties:
+                  conditions:
+                    description: Conditions of workflow
+                    items:
+                      description: 'Condition defines the condition of a resource See: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties'
+                      properties:
+                        lastTransitionTime:
+                          description: LastTransitionTime is the last time the condition transitioned from one status to another
+                          format: date-time
+                          type: string
+                        message:
+                          description: Message is the human-readable message indicating details about last transition
+                          type: string
+                        reason:
+                          description: Reason is the reason for the condition's last transition
+                          type: string
+                        status:
+                          description: Status is the status of the condition
+                          type: string
+                        type:
+                          description: Type is the type of the condition
+                          type: string
+                      required:
+                      - status
+                      - type
+                      type: object
+                    type: array
+                  name:
+                    description: Name of workflow
+                    type: string
+                required:
+                - name
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
