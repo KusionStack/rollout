@@ -1,18 +1,18 @@
 /*
-Copyright 2023.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright 2023 The KusionStack Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package main
 
@@ -101,8 +101,6 @@ func main() {
 	}
 
 	if federatedMode {
-		os.Setenv("CLUSTER_WHITE_LIST", "cluster1,cluster2,sigma-eu126-mybank-staging,sigma-ea133-mybank-sqa,sigma-sa128-sqa")
-		os.Setenv("ONLY_WATCH_CLUSTER_NAMESPACE", "metaslo")
 		setupLog.Info("federated mode enabled")
 		// multiClusterManager manages syncing clusters
 		multiClusterCfg := &multicluster.ManagerConfig{
@@ -112,7 +110,6 @@ func main() {
 			Log:           ctrl.Log.WithName("multicluster"),
 		}
 		if devMode {
-			os.Unsetenv("ONLY_WATCH_CLUSTER_NAMESPACE")
 			multiClusterCfg.ClusterToRestConfig = func(cluster string) *rest.Config {
 				switch cluster {
 				case "cluster1":
