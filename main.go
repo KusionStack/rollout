@@ -21,8 +21,8 @@ import (
 	"os"
 	"time"
 
-	"code.alipay.com/paas-core/kydra/pkg/clusterinfo"
-	"code.alipay.com/paas-core/kydra/pkg/multicluster"
+	"github.com/KusionStack/kantry/pkg/clusterinfo"
+	"github.com/KusionStack/kantry/pkg/multicluster"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"

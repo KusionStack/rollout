@@ -3,7 +3,7 @@ module github.com/KusionStack/rollout
 go 1.19
 
 require (
-	code.alipay.com/paas-core/kydra v0.2.1
+	github.com/KusionStack/kantry v0.0.0-20230731021742-c4216109eea9
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onsi/ginkgo v1.16.5

@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"code.alipay.com/paas-core/kydra/pkg/clusterinfo"
+	"github.com/KusionStack/kantry/pkg/clusterinfo"
 	multierror "github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"

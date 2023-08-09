@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/KusionStack/kantry/pkg/clusterinfo"
+	"github.com/KusionStack/kantry/pkg/multicluster"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -39,9 +41,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"code.alipay.com/paas-core/kydra/pkg/clusterinfo"
-	"code.alipay.com/paas-core/kydra/pkg/multicluster"
 
 	"github.com/KusionStack/rollout/api"
 	rolloutv1alpha1 "github.com/KusionStack/rollout/api/v1alpha1"

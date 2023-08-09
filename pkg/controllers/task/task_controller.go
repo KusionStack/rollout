@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 
-	"code.alipay.com/paas-core/kydra/pkg/clusterinfo"
+	"github.com/KusionStack/kantry/pkg/clusterinfo"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
