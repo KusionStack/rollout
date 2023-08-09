@@ -17,9 +17,9 @@
 package api
 
 const (
-	AnnoWorkflowWorkloadBasicInfo  = "kafe.kusionstack.io/rollout-workload-basic-info"
-	AnnoWorkflowBatchInfo          = "kafe.kusionstack.io/rollout-batch-info"
-	AnnoWorkflowResumeSuspendTasks = "workflow.kafe.kusionstack.io/resume-suspend-tasks"
+	AnnoWorkflowWorkloadBasicInfo  = "rollout.kusionstack.io/workload-basic-info"
+	AnnoWorkflowBatchInfo          = "rollout.kusionstack.io/batch-info"
+	AnnoWorkflowResumeSuspendTasks = "workflow.rollout.kusionstack.io/resume-suspend-tasks"
 
-	AnnoRolloutResumeContext = "kafe.kusionstack.io/rollout-resume-context"
+	AnnoRolloutResumeContext = "rollout.kusionstack.io/rollout-resume-context"
 )

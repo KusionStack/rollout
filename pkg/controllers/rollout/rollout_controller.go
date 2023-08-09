@@ -80,11 +80,11 @@ func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-//+kubebuilder:rbac:groups=rollout.kafe.kusionstack.io,resources=rollouts,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=rollout.kafe.kusionstack.io,resources=rollouts/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=rollout.kafe.kusionstack.io,resources=rollouts/finalizers,verbs=update
+//+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rollouts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rollouts/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rollouts/finalizers,verbs=update
 
-//+kubebuilder:rbac:groups=rollout.kafe.kusionstack.io,resources=rolloutstrategies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rolloutstrategies,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

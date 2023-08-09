@@ -4,4 +4,4 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: CERTIFICATE_NAMESPACE/CERTIFICATE_NAME
-  name: rollouts.rollout.kafe.kusionstack.io
+  name: rollouts.rollout.kusionstack.io

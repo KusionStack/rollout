@@ -17,7 +17,7 @@ webhooks:
   name: mworkflow.kb.io
   rules:
   - apiGroups:
-    - rollout.kafe.kusionstack.io
+    - rollout.kusionstack.io
     apiVersions:
     - v1alpha1
     operations:
@@ -45,7 +45,7 @@ webhooks:
   name: vworkflow.kb.io
   rules:
   - apiGroups:
-    - rollout.kafe.kusionstack.io
+    - rollout.kusionstack.io
     apiVersions:
     - v1alpha1
     operations:

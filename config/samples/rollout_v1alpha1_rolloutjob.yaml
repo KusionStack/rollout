@@ -1,6 +1,0 @@
-apiVersion: rollout.kafe.kusionstack.io/v1alpha1
-kind: RolloutJob
-metadata:
-  name: rolloutjob-sample
-spec:
-  # TODO(user): Add fields here

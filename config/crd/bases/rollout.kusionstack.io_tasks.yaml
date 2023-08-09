@@ -6,9 +6,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.5.0
   creationTimestamp: null
-  name: tasks.rollout.kafe.kusionstack.io
+  name: tasks.rollout.kusionstack.io
 spec:
-  group: rollout.kafe.kusionstack.io
+  group: rollout.kusionstack.io
   names:
     kind: Task
     listKind: TaskList

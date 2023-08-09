@@ -17,5 +17,5 @@
 package api
 
 const (
-	FinalizerRolloutProtection = "finalizer.kafe.kusionstack.io/rollout"
+	FinalizerRolloutProtection = "finalizer.rollout.kusionstack.io/rollout"
 )

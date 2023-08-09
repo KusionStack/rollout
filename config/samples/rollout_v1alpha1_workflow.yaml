@@ -1,4 +1,4 @@
-apiVersion: rollout.kafe.kusionstack.io/v1alpha1
+apiVersion: rollout.kusionstack.io/v1alpha1
 kind: Workflow
 metadata:
   labels:

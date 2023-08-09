@@ -7,7 +7,7 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - rollouts
   verbs:
@@ -19,13 +19,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - rollouts/finalizers
   verbs:
   - update
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - rollouts/status
   verbs:
@@ -33,7 +33,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - rolloutstrategies
   verbs:
@@ -45,7 +45,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - tasks
   verbs:
@@ -57,13 +57,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - tasks/finalizers
   verbs:
   - update
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - tasks/status
   verbs:
@@ -71,7 +71,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - workflows
   verbs:
@@ -83,13 +83,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - workflows/finalizers
   verbs:
   - update
 - apiGroups:
-  - rollout.kafe.kusionstack.io
+  - rollout.kusionstack.io
   resources:
   - workflows/status
   verbs:
