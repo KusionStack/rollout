@@ -1,0 +1,16 @@
+apiVersion: rollout.kusionstack.io/v1alpha1
+kind: Task
+metadata:
+  labels:
+    app.kubernetes.io/name: task
+    app.kubernetes.io/instance: task-sample
+    app.kubernetes.io/part-of: rollout
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: rollout
+  name: task-sample
+spec:
+  echo:
+    message: Hello from task-sample
+  params:
+  - name: "expectStatus"
+    value: "Paused"

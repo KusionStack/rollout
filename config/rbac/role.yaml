@@ -1,0 +1,98 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - rollouts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - rollouts/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - rollouts/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - rolloutstrategies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - tasks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - tasks/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - tasks/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - workflows
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - workflows/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - workflows/status
+  verbs:
+  - get
+  - patch
+  - update

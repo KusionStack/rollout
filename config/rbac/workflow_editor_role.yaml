@@ -1,0 +1,31 @@
+# permissions for end users to edit workflows.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: workflow-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: rollout
+    app.kubernetes.io/part-of: rollout
+    app.kubernetes.io/managed-by: kustomize
+  name: workflow-editor-role
+rules:
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - workflows
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - workflows/status
+  verbs:
+  - get

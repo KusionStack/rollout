@@ -1,0 +1,232 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: rolloutstrategies.rollout.kusionstack.io
+spec:
+  group: rollout.kusionstack.io
+  names:
+    kind: RolloutStrategy
+    listKind: RolloutStrategyList
+    plural: rolloutstrategies
+    singular: rolloutstrategy
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RolloutStrategy is the Schema for the rolloutstrategies API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RolloutStrategySpec defines the desired state of RolloutStrategy
+            properties:
+              batch:
+                description: Batch is the batch strategy for upgrade and operation
+                properties:
+                  analysis:
+                    description: Analysis defines the analysis of the canary strategy
+                    properties:
+                      rules:
+                        description: Rules is rules for call provider
+                        items:
+                          properties:
+                            checkPoints:
+                              description: CheckPoints is conditions for call provider
+                              items:
+                                description: CheckPointType is the type of the check point
+                                type: string
+                              type: array
+                            intervalSeconds:
+                              description: IntervalSeconds is the interval for call provider
+                              format: int32
+                              type: integer
+                            maxFailureCount:
+                              description: MaxFailureCount is the threshold for call provider
+                              format: int32
+                              type: integer
+                            provider:
+                              description: Provider is config for provider
+                              properties:
+                                address:
+                                  description: Address is the address of the provider
+                                  type: string
+                                name:
+                                  description: Name is the name of the provider
+                                  type: string
+                              required:
+                              - address
+                              - name
+                              type: object
+                          type: object
+                        type: array
+                    required:
+                    - rules
+                    type: object
+                  batchTemplate:
+                    description: BatchTemplate is the batch template of the canary strategy
+                    properties:
+                      customBatchPolicy:
+                        description: CustomizedBatchPolicy is the customized batch policy of the batch template
+                        properties:
+                          batches:
+                            description: Batches defines the batches of the custom batch policy
+                            items:
+                              description: Batch defines the batch
+                              properties:
+                                units:
+                                  description: Units defines the rollout units of the batch
+                                  items:
+                                    description: RolloutUnit defines the rollout unit, which represents rollout partition of a workload
+                                    properties:
+                                      name:
+                                        description: Name is the name of the rollout unit
+                                        type: string
+                                      replicas:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        description: Replicas is the replicas of the rollout unit, which represents the number of pods to be upgraded
+                                        x-kubernetes-int-or-string: true
+                                      selector:
+                                        description: Selector is the selector of the rollout unit, which is used to select the workload to be upgraded
+                                        properties:
+                                          matchExpressions:
+                                            description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                                            items:
+                                              description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                                              properties:
+                                                key:
+                                                  description: key is the label key that the selector applies to.
+                                                  type: string
+                                                operator:
+                                                  description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                  type: string
+                                                values:
+                                                  description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                              required:
+                                              - key
+                                              - operator
+                                              type: object
+                                            type: array
+                                          matchLabels:
+                                            additionalProperties:
+                                              type: string
+                                            description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                            type: object
+                                        type: object
+                                      targets:
+                                        description: Targets are the specific name of resources to operate.
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - name
+                                    - replicas
+                                    type: object
+                                  type: array
+                              required:
+                              - units
+                              type: object
+                            type: array
+                        required:
+                        - batches
+                        type: object
+                      fixedBatchPolicy:
+                        description: FixedBatchPolicy is the fixed batch policy of the batch template
+                        properties:
+                          batchCount:
+                            description: BatchCount indicates the number of batches, workloads across different clusters in the same batch will be upgraded at the same time
+                            format: int32
+                            type: integer
+                          betaBatch:
+                            description: BetaBatch defines the rollout policy of beta(first) batch
+                            properties:
+                              replicas:
+                                description: Replicas indicates the replicas of the beta(first) batch, which will be chosen evenly from workloads
+                                format: int32
+                                type: integer
+                              replicasPerUnit:
+                                description: ReplicasPerUnit indicates the replicas per rollout unit
+                                format: int32
+                                type: integer
+                            type: object
+                          breakpoints:
+                            description: Breakpoints is the breakpoints of the fixed batch policy, which indicates pause points before determined batch
+                            items:
+                              format: int32
+                              type: integer
+                            type: array
+                        required:
+                        - batchCount
+                        type: object
+                      partialAdaptiveFactor:
+                        description: PartialAdaptiveFactor is the special config for partial targets
+                        properties:
+                          minBatchCount:
+                            description: MinBatchCount indicates the number of min batches, default 2
+                            format: int32
+                            type: integer
+                          threshold:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: Threshold indicates how many pods can use this PartialAdaptiveFactor, default 50%
+                            x-kubernetes-int-or-string: true
+                        type: object
+                      provider:
+                        description: Provider is the provider of the batch template
+                        type: object
+                    type: object
+                  pauseMode:
+                    description: PauseMode is the pause mode of the canary strategy
+                    type: string
+                  tolerationPolicy:
+                    description: TolerationPolicy is the toleration policy of the canary strategy
+                    properties:
+                      failureThreshold:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: FailureThreshold indicates how many failed pods can be tolerated before marking the rollout batch as success If not set, the default value is 0, which means no failed pods can be tolerated
+                        x-kubernetes-int-or-string: true
+                      unitFailureThreshold:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: UnitFailureThreshold indicates how many failed resources can be tolerated in a unit. The default value is 0, which means no failed resources can be tolerated.
+                        x-kubernetes-int-or-string: true
+                      waitTimeSeconds:
+                        description: WaitTimeSeconds indicates how long to wait before starting the toleration check
+                        format: int32
+                        type: integer
+                    required:
+                    - waitTimeSeconds
+                    type: object
+                required:
+                - pauseMode
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

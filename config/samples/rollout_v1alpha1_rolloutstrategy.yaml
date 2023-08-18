@@ -1,0 +1,12 @@
+apiVersion: rollout.kusionstack.io/v1alpha1
+kind: RolloutStrategy
+metadata:
+  labels:
+    app.kubernetes.io/name: rolloutstrategy
+    app.kubernetes.io/instance: rolloutstrategy-sample
+    app.kubernetes.io/part-of: rollout
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: rollout
+  name: rolloutstrategy-sample
+spec:
+  # TODO(user): Add fields here
