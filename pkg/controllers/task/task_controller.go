@@ -1,27 +1,27 @@
 /*
- * Copyright 2023 The KusionStack Authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+Copyright 2023.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package task
 
 import (
 	"context"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 
-	"github.com/KusionStack/kantry/pkg/clusterinfo"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -29,13 +29,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/KusionStack/rollout/api/v1alpha1"
-	"github.com/KusionStack/rollout/pkg/event"
-	pkgtask "github.com/KusionStack/rollout/pkg/task"
+	"kusionstack.io/rollout/apis/workflow/v1alpha1"
+	"kusionstack.io/rollout/pkg/event"
+	pkgtask "kusionstack.io/rollout/pkg/task"
 )
 
 // TaskReconciler reconciles a Task object
@@ -78,25 +79,25 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	originStatus := task.Status.DeepCopy()
-	beforeCondition := task.Status.GetCondition(v1alpha1.ConditionSucceeded)
+	beforeCondition := task.Status.GetCondition(v1alpha1.WorkflowConditionSucceeded)
 
 	if !task.HasStarted() {
 		task.Status.Initialize()
 		r.Recorder.Eventf(&task, corev1.EventTypeNormal, "Initialized", "Initialized task %s", task.Name)
 
 		// we already send event for initialized, so we update `beforeCondition` with current condition
-		beforeCondition = task.Status.GetCondition(v1alpha1.ConditionSucceeded)
+		beforeCondition = task.Status.GetCondition(v1alpha1.WorkflowConditionSucceeded)
 	}
 
 	var d time.Duration
 	var err error
-	err, d = r.doReconcile(ctx, &task)
+	d, err = r.doReconcile(ctx, &task)
 	if err != nil {
 		logger.Error(err, "unable to reconcile Task")
 		event.EmitError(r.Recorder, err, &task)
 	}
 
-	afterCondition := task.Status.GetCondition(v1alpha1.ConditionSucceeded)
+	afterCondition := task.Status.GetCondition(v1alpha1.WorkflowConditionSucceeded)
 	event.Emit(r.Recorder, beforeCondition, afterCondition, &task)
 
 	// Update status if needed
@@ -117,44 +118,45 @@ func (r *TaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *TaskReconciler) doReconcile(ctx context.Context, task *v1alpha1.Task) (error, time.Duration) {
+func (r *TaskReconciler) doReconcile(ctx context.Context, task *v1alpha1.Task) (time.Duration, error) {
 	logger := log.FromContext(ctx)
 
 	if task.IsDone() {
-		return nil, 0
+		return 0, nil
 	}
 
-	if task.IsCancelled() {
-		task.Status.Cancel("task is cancelled")
-		return nil, 0
+	if task.IsCanceled() {
+		task.Status.Cancel("task is canceled")
+		return 0, nil
 	}
 
 	if task.IsPending() {
 		task.Status.Pending("task is pending")
-		return nil, 0
+		return 0, nil
 	}
 
 	if task.IsPaused() {
 		// TODO(common_release/rollout#16): pause tasks
 		task.Status.Pause("task is paused")
-		return nil, 0
+		return 0, nil
 	}
 
 	executor, err := pkgtask.NewTaskExecutor(r.Client, task)
 	if err != nil {
-		return errors.WithMessage(err, "NewTaskExecutor failed"), 0
+		return 0, errors.WithMessage(err, "NewTaskExecutor failed")
 	}
-	d, err := executor.Run(nil)
+
+	d, err := executor.Run(ctx)
 	if err != nil {
 		logger.Error(err, "unable to run task")
-		return err, 0
+		return 0, err
 	}
 	if d > 0 {
 		logger.Info("requeue task", "requeueDuration", d)
 	}
 
 	executor.CalculateStatus()
-	return nil, d
+	return d, nil
 }
 
 // updateStatus updates the status of the Task resource.

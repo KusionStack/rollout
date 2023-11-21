@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.21.4
+ENVTEST_K8S_VERSION = 1.24.1
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -40,33 +40,35 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	@$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	@rm -rf config/crd/bases/_.yaml
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	@$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-.PHONY: fmt
-fmt: ## Run go fmt against code.
-	go fmt ./...
-
-.PHONY: vet
-vet: ## Run go vet against code.
-	go vet ./...
+.PHONY: lint
+lint: golangci
+	$(GOLANGCI) run 
 
 .PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
+test: manifests generate lint envtest ## Run tests.
+	@KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
+
+
+.PHONY: e2e-test
+e2e-test: manifests envtest
+	@KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e -coverprofile cover.out
 
 ##@ Build
 
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+build: manifests generate lint ## Build manager binary.
+	go build -o bin/manager kusionstack.io/rollout
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go
+run: manifests generate lint ## Run a controller from your host.
+	go run kusionstack.io/rollout
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
@@ -130,6 +132,7 @@ $(LOCALBIN):
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+GOLANGCI ?= $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v4.5.7
@@ -148,10 +151,15 @@ $(KUSTOMIZE): $(LOCALBIN)
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
 $(CONTROLLER_GEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
+	@test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
 	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
-	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+	@test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: golangci
+golangci: $(GOLANGCI)
+$(GOLANGCI): $(LOCALBIN)
+	@test -s $(LOCALBIN)/golangci-lint || GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2

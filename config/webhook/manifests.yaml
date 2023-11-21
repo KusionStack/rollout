@@ -12,7 +12,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-rollout-kafe-kusionstack-io-v1alpha1-workflow
+      path: /mutate-rollout-kusionstack-io-v1alpha1-workflow
   failurePolicy: Fail
   name: mworkflow.kb.io
   rules:
@@ -40,7 +40,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-rollout-kafe-kusionstack-io-v1alpha1-workflow
+      path: /validate-rollout-kusionstack-io-v1alpha1-workflow
   failurePolicy: Fail
   name: vworkflow.kb.io
   rules:

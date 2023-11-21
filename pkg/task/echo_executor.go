@@ -1,18 +1,16 @@
-/*
- * Copyright 2023 The KusionStack Authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2023 The KusionStack Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package task
 
@@ -57,7 +55,7 @@ func (e *EchoExecutor) Run(ctx context.Context) (time.Duration, error) {
 	}
 
 	if paramRunningSeconds > 0 {
-		d := e.Task.Status.StartedAt.Add(time.Duration(paramRunningSeconds) * time.Second).Sub(time.Now())
+		d := time.Until(e.Task.Status.StartedAt.Add(time.Duration(paramRunningSeconds) * time.Second))
 		if d > 0 {
 			logger.Info("Echo task is running", "requeueDuration", d)
 			e.Result.Status = TaskResultStatusRunning
@@ -69,7 +67,7 @@ func (e *EchoExecutor) Run(ctx context.Context) (time.Duration, error) {
 
 	// do echo
 	message := fmt.Sprintf("Echo message: %q\n", e.Task.Spec.Echo.Message)
-	fmt.Printf(message)
+	logger.Info(message)
 
 	if paramExpectStatus != "" {
 		e.Result.Reason = "Expected"
@@ -87,9 +85,9 @@ func (e *EchoExecutor) Run(ctx context.Context) (time.Duration, error) {
 		case "Pending":
 			e.Result.Status = TaskResultStatusRunning
 			e.Result.Reason = "Pending"
-		case "Cancelled":
+		case "Canceled":
 			e.Result.Status = TaskResultStatusFailed
-			e.Result.Reason = "Cancelled"
+			e.Result.Reason = "Canceled"
 		default:
 			e.Result.Status = TaskResultStatusFailed
 			e.Result.Reason = "UnknownStatus"

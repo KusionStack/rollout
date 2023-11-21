@@ -24,203 +24,396 @@ spec:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
+          batch:
+            description: Batch is the batch strategy for upgrade and operation
+            properties:
+              batches:
+                description: Batches define the order of phases to execute release in canary release
+                items:
+                  description: Custom release step
+                  properties:
+                    http:
+                      properties:
+                        matches:
+                          description: Matches define conditions used for matching the incoming HTTP requests to canary service.
+                          items:
+                            properties:
+                              headers:
+                                description: Headers specifies HTTP request header matchers. Multiple match values are ANDed together, meaning, a request must match all the specified headers to select the route.
+                                items:
+                                  description: HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request headers.
+                                  properties:
+                                    name:
+                                      description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, only the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent. \n When a header is repeated in an HTTP request, it is implementation-specific behavior as to how this is represented. Generally, proxies should follow the guidance from the RFC: https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.2 regarding processing a repeated header, with special handling for \"Set-Cookie\"."
+                                      maxLength: 256
+                                      minLength: 1
+                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                      type: string
+                                    type:
+                                      default: Exact
+                                      description: "Type specifies how to match against the value of the header. \n Support: Core (Exact) \n Support: Custom (RegularExpression) \n Since RegularExpression HeaderMatchType has custom conformance, implementations can support POSIX, PCRE or any other dialects of regular expressions. Please read the implementation's documentation to determine the supported dialect."
+                                      enum:
+                                      - Exact
+                                      - RegularExpression
+                                      type: string
+                                    value:
+                                      description: Value is the value of HTTP Header to be matched.
+                                      maxLength: 4096
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  - value
+                                  type: object
+                                maxItems: 16
+                                type: array
+                            type: object
+                          type: array
+                        requestHeaderModifier:
+                          description: "RequestHeaderModifier defines a schema for a filter that modifies request headers. \n Support: Core"
+                          properties:
+                            add:
+                              description: "Add adds the given header(s) (name, value) to the request before the action. It appends to any existing values associated with the header name. \n Input:   GET /foo HTTP/1.1   my-header: foo \n Config:   add:   - name: \"my-header\"     value: \"bar,baz\" \n Output:   GET /foo HTTP/1.1   my-header: foo,bar,baz"
+                              items:
+                                description: HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+                                properties:
+                                  name:
+                                    description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent."
+                                    maxLength: 256
+                                    minLength: 1
+                                    pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                    type: string
+                                  value:
+                                    description: Value is the value of HTTP Header to be matched.
+                                    maxLength: 4096
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                - value
+                                type: object
+                              maxItems: 16
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
+                            remove:
+                              description: "Remove the given header(s) from the HTTP request before the action. The value of Remove is a list of HTTP header names. Note that the header names are case-insensitive (see https://datatracker.ietf.org/doc/html/rfc2616#section-4.2). \n Input:   GET /foo HTTP/1.1   my-header1: foo   my-header2: bar   my-header3: baz \n Config:   remove: [\"my-header1\", \"my-header3\"] \n Output:   GET /foo HTTP/1.1   my-header2: bar"
+                              items:
+                                type: string
+                              maxItems: 16
+                              type: array
+                            set:
+                              description: "Set overwrites the request with the given header (name, value) before the action. \n Input:   GET /foo HTTP/1.1   my-header: foo \n Config:   set:   - name: \"my-header\"     value: \"bar\" \n Output:   GET /foo HTTP/1.1   my-header: bar"
+                              items:
+                                description: HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+                                properties:
+                                  name:
+                                    description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent."
+                                    maxLength: 256
+                                    minLength: 1
+                                    pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                    type: string
+                                  value:
+                                    description: Value is the value of HTTP Header to be matched.
+                                    maxLength: 4096
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                - value
+                                type: object
+                              maxItems: 16
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
+                          type: object
+                      type: object
+                    matchTargets:
+                      description: Match defines condition used for matching resource cross clusterset
+                      properties:
+                        names:
+                          description: Names is a list of workload name
+                          items:
+                            description: CrossClusterObjectNameReference contains cluster and name reference to a k8s object
+                            properties:
+                              cluster:
+                                description: Cluster indicates the name of cluster
+                                type: string
+                              name:
+                                description: Name is the resource name
+                                type: string
+                            type: object
+                          type: array
+                        selector:
+                          description: Selector is a label query over a set of resources, in this case resource
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                              items:
+                                description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                      type: object
+                    pause:
+                      description: If true, rollout will be paused after this canary step complete.
+                      type: boolean
+                    properties:
+                      additionalProperties:
+                        type: string
+                      description: Properties contains additional information for step
+                      type: object
+                    replicas:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Replicas is the replicas of the rollout task, which represents the number of pods to be upgraded
+                      x-kubernetes-int-or-string: true
+                    weight:
+                      description: Weight indicate how many percentage of traffic the canary pods should receive
+                      format: int32
+                      maximum: 100
+                      minimum: 0
+                      type: integer
+                  required:
+                  - replicas
+                  type: object
+                type: array
+              fastBatch:
+                description: FastBatch indicates a fast way to create the batches
+                properties:
+                  beta:
+                    description: Beta defines the canary policy of batch release step, it will be the first step
+                    properties:
+                      http:
+                        properties:
+                          matches:
+                            description: Matches define conditions used for matching the incoming HTTP requests to canary service.
+                            items:
+                              properties:
+                                headers:
+                                  description: Headers specifies HTTP request header matchers. Multiple match values are ANDed together, meaning, a request must match all the specified headers to select the route.
+                                  items:
+                                    description: HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request headers.
+                                    properties:
+                                      name:
+                                        description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, only the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent. \n When a header is repeated in an HTTP request, it is implementation-specific behavior as to how this is represented. Generally, proxies should follow the guidance from the RFC: https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.2 regarding processing a repeated header, with special handling for \"Set-Cookie\"."
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      type:
+                                        default: Exact
+                                        description: "Type specifies how to match against the value of the header. \n Support: Core (Exact) \n Support: Custom (RegularExpression) \n Since RegularExpression HeaderMatchType has custom conformance, implementations can support POSIX, PCRE or any other dialects of regular expressions. Please read the implementation's documentation to determine the supported dialect."
+                                        enum:
+                                        - Exact
+                                        - RegularExpression
+                                        type: string
+                                      value:
+                                        description: Value is the value of HTTP Header to be matched.
+                                        maxLength: 4096
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  maxItems: 16
+                                  type: array
+                              type: object
+                            type: array
+                          requestHeaderModifier:
+                            description: "RequestHeaderModifier defines a schema for a filter that modifies request headers. \n Support: Core"
+                            properties:
+                              add:
+                                description: "Add adds the given header(s) (name, value) to the request before the action. It appends to any existing values associated with the header name. \n Input:   GET /foo HTTP/1.1   my-header: foo \n Config:   add:   - name: \"my-header\"     value: \"bar,baz\" \n Output:   GET /foo HTTP/1.1   my-header: foo,bar,baz"
+                                items:
+                                  description: HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+                                  properties:
+                                    name:
+                                      description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent."
+                                      maxLength: 256
+                                      minLength: 1
+                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                      type: string
+                                    value:
+                                      description: Value is the value of HTTP Header to be matched.
+                                      maxLength: 4096
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  - value
+                                  type: object
+                                maxItems: 16
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
+                              remove:
+                                description: "Remove the given header(s) from the HTTP request before the action. The value of Remove is a list of HTTP header names. Note that the header names are case-insensitive (see https://datatracker.ietf.org/doc/html/rfc2616#section-4.2). \n Input:   GET /foo HTTP/1.1   my-header1: foo   my-header2: bar   my-header3: baz \n Config:   remove: [\"my-header1\", \"my-header3\"] \n Output:   GET /foo HTTP/1.1   my-header2: bar"
+                                items:
+                                  type: string
+                                maxItems: 16
+                                type: array
+                              set:
+                                description: "Set overwrites the request with the given header (name, value) before the action. \n Input:   GET /foo HTTP/1.1   my-header: foo \n Config:   set:   - name: \"my-header\"     value: \"bar\" \n Output:   GET /foo HTTP/1.1   my-header: bar"
+                                items:
+                                  description: HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+                                  properties:
+                                    name:
+                                      description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent."
+                                      maxLength: 256
+                                      minLength: 1
+                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                      type: string
+                                    value:
+                                      description: Value is the value of HTTP Header to be matched.
+                                      maxLength: 4096
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  - value
+                                  type: object
+                                maxItems: 16
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
+                            type: object
+                        type: object
+                      replicas:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Replicas indicates the replicas of the beta(first) step, which will be chosen evenly from workloads
+                        x-kubernetes-int-or-string: true
+                      weight:
+                        description: Weight indicate how many percentage of traffic the canary pods should receive
+                        format: int32
+                        maximum: 100
+                        minimum: 0
+                        type: integer
+                    required:
+                    - replicas
+                    type: object
+                  count:
+                    description: Count indicates the number of batch steps, workloads across different clusters in the same batch will be upgraded at the same time
+                    format: int32
+                    type: integer
+                  pauseMode:
+                    description: PauseMode is the pause mode of the strategy
+                    type: string
+                  pausedBatches:
+                    description: PausedBatches is the breakpoints of batch release steps, which indicates pause points before determined batch.
+                    items:
+                      format: int32
+                      type: integer
+                    type: array
+                required:
+                - count
+                type: object
+              toleration:
+                description: Toleration is the toleration policy of the canary strategy
+                properties:
+                  initialDelaySeconds:
+                    description: Number of seconds after the toleration check has started before the task are initiated.
+                    format: int32
+                    type: integer
+                  taskFailureThreshold:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: FailureThreshold indicates how many failed pods can be tolerated before marking the rollout task as success If not set, the default value is 0, which means no failed pods can be tolerated This is a task level threshold.
+                    x-kubernetes-int-or-string: true
+                  workloadTotalFailureThreshold:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: WorkloadFailureThreshold indicates how many failed pods can be tolerated in all upgraded pods of one workload. The default value is 0, which means no failed pods can be tolerated. This is a workload level threshold.
+                    x-kubernetes-int-or-string: true
+                type: object
+            type: object
           kind:
             description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
-          spec:
-            description: RolloutStrategySpec defines the desired state of RolloutStrategy
-            properties:
-              batch:
-                description: Batch is the batch strategy for upgrade and operation
-                properties:
-                  analysis:
-                    description: Analysis defines the analysis of the canary strategy
-                    properties:
-                      rules:
-                        description: Rules is rules for call provider
-                        items:
-                          properties:
-                            checkPoints:
-                              description: CheckPoints is conditions for call provider
-                              items:
-                                description: CheckPointType is the type of the check point
-                                type: string
-                              type: array
-                            intervalSeconds:
-                              description: IntervalSeconds is the interval for call provider
-                              format: int32
-                              type: integer
-                            maxFailureCount:
-                              description: MaxFailureCount is the threshold for call provider
-                              format: int32
-                              type: integer
-                            provider:
-                              description: Provider is config for provider
-                              properties:
-                                address:
-                                  description: Address is the address of the provider
-                                  type: string
-                                name:
-                                  description: Name is the name of the provider
-                                  type: string
-                              required:
-                              - address
-                              - name
-                              type: object
-                          type: object
-                        type: array
-                    required:
-                    - rules
-                    type: object
-                  batchTemplate:
-                    description: BatchTemplate is the batch template of the canary strategy
-                    properties:
-                      customBatchPolicy:
-                        description: CustomizedBatchPolicy is the customized batch policy of the batch template
-                        properties:
-                          batches:
-                            description: Batches defines the batches of the custom batch policy
-                            items:
-                              description: Batch defines the batch
-                              properties:
-                                units:
-                                  description: Units defines the rollout units of the batch
-                                  items:
-                                    description: RolloutUnit defines the rollout unit, which represents rollout partition of a workload
-                                    properties:
-                                      name:
-                                        description: Name is the name of the rollout unit
-                                        type: string
-                                      replicas:
-                                        anyOf:
-                                        - type: integer
-                                        - type: string
-                                        description: Replicas is the replicas of the rollout unit, which represents the number of pods to be upgraded
-                                        x-kubernetes-int-or-string: true
-                                      selector:
-                                        description: Selector is the selector of the rollout unit, which is used to select the workload to be upgraded
-                                        properties:
-                                          matchExpressions:
-                                            description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
-                                            items:
-                                              description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
-                                              properties:
-                                                key:
-                                                  description: key is the label key that the selector applies to.
-                                                  type: string
-                                                operator:
-                                                  description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
-                                                  type: string
-                                                values:
-                                                  description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
-                                                  items:
-                                                    type: string
-                                                  type: array
-                                              required:
-                                              - key
-                                              - operator
-                                              type: object
-                                            type: array
-                                          matchLabels:
-                                            additionalProperties:
-                                              type: string
-                                            description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                            type: object
-                                        type: object
-                                      targets:
-                                        description: Targets are the specific name of resources to operate.
-                                        items:
-                                          type: string
-                                        type: array
-                                    required:
-                                    - name
-                                    - replicas
-                                    type: object
-                                  type: array
-                              required:
-                              - units
-                              type: object
-                            type: array
-                        required:
-                        - batches
-                        type: object
-                      fixedBatchPolicy:
-                        description: FixedBatchPolicy is the fixed batch policy of the batch template
-                        properties:
-                          batchCount:
-                            description: BatchCount indicates the number of batches, workloads across different clusters in the same batch will be upgraded at the same time
-                            format: int32
-                            type: integer
-                          betaBatch:
-                            description: BetaBatch defines the rollout policy of beta(first) batch
-                            properties:
-                              replicas:
-                                description: Replicas indicates the replicas of the beta(first) batch, which will be chosen evenly from workloads
-                                format: int32
-                                type: integer
-                              replicasPerUnit:
-                                description: ReplicasPerUnit indicates the replicas per rollout unit
-                                format: int32
-                                type: integer
-                            type: object
-                          breakpoints:
-                            description: Breakpoints is the breakpoints of the fixed batch policy, which indicates pause points before determined batch
-                            items:
-                              format: int32
-                              type: integer
-                            type: array
-                        required:
-                        - batchCount
-                        type: object
-                      partialAdaptiveFactor:
-                        description: PartialAdaptiveFactor is the special config for partial targets
-                        properties:
-                          minBatchCount:
-                            description: MinBatchCount indicates the number of min batches, default 2
-                            format: int32
-                            type: integer
-                          threshold:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            description: Threshold indicates how many pods can use this PartialAdaptiveFactor, default 50%
-                            x-kubernetes-int-or-string: true
-                        type: object
-                      provider:
-                        description: Provider is the provider of the batch template
-                        type: object
-                    type: object
-                  pauseMode:
-                    description: PauseMode is the pause mode of the canary strategy
+          webhooks:
+            description: Webhooks defines
+            items:
+              properties:
+                clientConfig:
+                  description: ClientConfig defines how to communicate with the hook. Required
+                  properties:
+                    caBundle:
+                      description: '`caBundle` is a PEM encoded CA bundle which will be used to validate the webhook''s server certificate. If unspecified, system trust roots on the apiserver are used.'
+                      format: byte
+                      type: string
+                    periodSeconds:
+                      description: How often (in seconds) to perform the probe. Default to 10 seconds. Minimum value is 1.
+                      format: int32
+                      type: integer
+                    timeoutSeconds:
+                      description: TimeoutSeconds specifies the timeout for this webhook. After the timeout passes, the webhook call will be ignored or the API call will fail based on the failure policy. Default to 10 seconds.
+                      format: int32
+                      type: integer
+                    url:
+                      description: "`url` gives the location of the webhook, in standard URL form (`scheme://host:port/path`). Exactly one of `url` or `service` must be specified. \n The `host` should not refer to a service running in the cluster; use the `service` field instead. The host might be resolved via external DNS in some apiservers (e.g., `kube-apiserver` cannot resolve in-cluster DNS as that would be a layering violation). `host` may also be an IP address. \n Please note that using `localhost` or `127.0.0.1` as a `host` is risky unless you take great care to run this webhook on all hosts which run an apiserver which might need to make calls to this webhook. Such installs are likely to be non-portable, i.e., not easy to turn up in a new cluster. \n The scheme must be \"https\"; the URL must begin with \"https://\". \n A path is optional, and if present may be any string permissible in a URL. You may use the path to pass an arbitrary string to the webhook, for example, a cluster identifier. \n Attempting to use a user or basic auth e.g. \"user:password@\" is not allowed. Fragments (\"#...\") and query parameters (\"?...\") are not allowed, either."
+                      type: string
+                  type: object
+                failurePolicy:
+                  description: FailurePolicy defines how unrecognized errors from the admission endpoint are handled - allowed values are Ignore or Fail. Defaults to Ignore.
+                  type: string
+                failureThreshold:
+                  description: Minimum consecutive failures for the probe to be considered failed after having succeeded. Defaults to 3. Minimum value is 1.
+                  format: int32
+                  type: integer
+                hookTypes:
+                  description: HookTypes defines when to communicate with the hook, specifies the types of events that trigger the webhook. Required
+                  items:
                     type: string
-                  tolerationPolicy:
-                    description: TolerationPolicy is the toleration policy of the canary strategy
-                    properties:
-                      failureThreshold:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        description: FailureThreshold indicates how many failed pods can be tolerated before marking the rollout batch as success If not set, the default value is 0, which means no failed pods can be tolerated
-                        x-kubernetes-int-or-string: true
-                      unitFailureThreshold:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        description: UnitFailureThreshold indicates how many failed resources can be tolerated in a unit. The default value is 0, which means no failed resources can be tolerated.
-                        x-kubernetes-int-or-string: true
-                      waitTimeSeconds:
-                        description: WaitTimeSeconds indicates how long to wait before starting the toleration check
-                        format: int32
-                        type: integer
-                    required:
-                    - waitTimeSeconds
-                    type: object
-                required:
-                - pauseMode
-                type: object
-            type: object
+                  type: array
+                name:
+                  description: Name is the identity of webhook
+                  type: string
+                properties:
+                  additionalProperties:
+                    type: string
+                  description: Properties provide additional data for webhook.
+                  type: object
+                provider:
+                  description: By default, rollout communicates with the webhook through the structure RolloutWebhookReview. If provider is set, then the protocol of the interaction will be determined by the provider
+                  type: string
+                successThreshold:
+                  description: Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
+                  format: int32
+                  type: integer
+              type: object
+            type: array
         type: object
     served: true
     storage: true

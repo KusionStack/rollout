@@ -1,6 +1,0 @@
-apiVersion: rollout.kusionstack.io/v1alpha1
-kind: Rollout
-metadata:
-  name: sample
-  namespace: default
-spec:
