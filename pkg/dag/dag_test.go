@@ -1,29 +1,29 @@
-/*
- * Copyright 2023 The KusionStack Authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2023 The KusionStack Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package dag_test
 
 import (
 	"fmt"
-	"github.com/KusionStack/rollout/api/v1alpha1"
-	"github.com/KusionStack/rollout/pkg/dag"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"reflect"
 	"sort"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
+	"kusionstack.io/rollout/apis/workflow/v1alpha1"
+	"kusionstack.io/rollout/pkg/dag"
 )
 
 func testDAG1(t *testing.T) *dag.DAG {
@@ -459,17 +459,6 @@ func TestBuild(t *testing.T) {
 			assertSameDAG(t, got, tt.want)
 		})
 	}
-}
-
-func printNodes(nodes []*dag.Node, prefix string) {
-	if len(nodes) == 0 {
-		return
-	}
-	fmt.Printf("%s: ", prefix)
-	for _, n := range nodes {
-		fmt.Printf("%s ", n.Key)
-	}
-	fmt.Println()
 }
 
 // assertSameDAG asserts that the two DAGs are the same.

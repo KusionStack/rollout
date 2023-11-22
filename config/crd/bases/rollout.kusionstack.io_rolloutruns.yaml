@@ -1,0 +1,379 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: rolloutruns.rollout.kusionstack.io
+spec:
+  group: rollout.kusionstack.io
+  names:
+    kind: RolloutRun
+    listKind: RolloutRunList
+    plural: rolloutruns
+    singular: rolloutrun
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              batch:
+                description: Batch Strategy
+                properties:
+                  batches:
+                    description: Batches define the order of phases to execute release in canary release
+                    items:
+                      properties:
+                        http:
+                          properties:
+                            matches:
+                              description: Matches define conditions used for matching the incoming HTTP requests to canary service.
+                              items:
+                                properties:
+                                  headers:
+                                    description: Headers specifies HTTP request header matchers. Multiple match values are ANDed together, meaning, a request must match all the specified headers to select the route.
+                                    items:
+                                      description: HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request headers.
+                                      properties:
+                                        name:
+                                          description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, only the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent. \n When a header is repeated in an HTTP request, it is implementation-specific behavior as to how this is represented. Generally, proxies should follow the guidance from the RFC: https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.2 regarding processing a repeated header, with special handling for \"Set-Cookie\"."
+                                          maxLength: 256
+                                          minLength: 1
+                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                          type: string
+                                        type:
+                                          default: Exact
+                                          description: "Type specifies how to match against the value of the header. \n Support: Core (Exact) \n Support: Custom (RegularExpression) \n Since RegularExpression HeaderMatchType has custom conformance, implementations can support POSIX, PCRE or any other dialects of regular expressions. Please read the implementation's documentation to determine the supported dialect."
+                                          enum:
+                                          - Exact
+                                          - RegularExpression
+                                          type: string
+                                        value:
+                                          description: Value is the value of HTTP Header to be matched.
+                                          maxLength: 4096
+                                          minLength: 1
+                                          type: string
+                                      required:
+                                      - name
+                                      - value
+                                      type: object
+                                    maxItems: 16
+                                    type: array
+                                type: object
+                              type: array
+                            requestHeaderModifier:
+                              description: "RequestHeaderModifier defines a schema for a filter that modifies request headers. \n Support: Core"
+                              properties:
+                                add:
+                                  description: "Add adds the given header(s) (name, value) to the request before the action. It appends to any existing values associated with the header name. \n Input:   GET /foo HTTP/1.1   my-header: foo \n Config:   add:   - name: \"my-header\"     value: \"bar,baz\" \n Output:   GET /foo HTTP/1.1   my-header: foo,bar,baz"
+                                  items:
+                                    description: HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+                                    properties:
+                                      name:
+                                        description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent."
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      value:
+                                        description: Value is the value of HTTP Header to be matched.
+                                        maxLength: 4096
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  maxItems: 16
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                  - name
+                                  x-kubernetes-list-type: map
+                                remove:
+                                  description: "Remove the given header(s) from the HTTP request before the action. The value of Remove is a list of HTTP header names. Note that the header names are case-insensitive (see https://datatracker.ietf.org/doc/html/rfc2616#section-4.2). \n Input:   GET /foo HTTP/1.1   my-header1: foo   my-header2: bar   my-header3: baz \n Config:   remove: [\"my-header1\", \"my-header3\"] \n Output:   GET /foo HTTP/1.1   my-header2: bar"
+                                  items:
+                                    type: string
+                                  maxItems: 16
+                                  type: array
+                                set:
+                                  description: "Set overwrites the request with the given header (name, value) before the action. \n Input:   GET /foo HTTP/1.1   my-header: foo \n Config:   set:   - name: \"my-header\"     value: \"bar\" \n Output:   GET /foo HTTP/1.1   my-header: bar"
+                                  items:
+                                    description: HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+                                    properties:
+                                      name:
+                                        description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent."
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      value:
+                                        description: Value is the value of HTTP Header to be matched.
+                                        maxLength: 4096
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  maxItems: 16
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                  - name
+                                  x-kubernetes-list-type: map
+                              type: object
+                          type: object
+                        pause:
+                          description: If true, rollout will be paused after this canary step complete.
+                          type: boolean
+                        properties:
+                          additionalProperties:
+                            type: string
+                          description: Properties contains additional information for step
+                          type: object
+                        targets:
+                          description: desired target replicas
+                          items:
+                            properties:
+                              cluster:
+                                description: Cluster indicates the name of cluster
+                                type: string
+                              name:
+                                description: Name is the resource name
+                                type: string
+                              replicas:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                description: Replicas is the replicas of the rollout task, which represents the number of pods to be upgraded
+                                x-kubernetes-int-or-string: true
+                            required:
+                            - replicas
+                            type: object
+                          type: array
+                        weight:
+                          description: Weight indicate how many percentage of traffic the canary pods should receive
+                          format: int32
+                          maximum: 100
+                          minimum: 0
+                          type: integer
+                      required:
+                      - targets
+                      type: object
+                    type: array
+                  toleration:
+                    description: Toleration is the toleration policy of the canary strategy
+                    properties:
+                      initialDelaySeconds:
+                        description: Number of seconds after the toleration check has started before the task are initiated.
+                        format: int32
+                        type: integer
+                      taskFailureThreshold:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: FailureThreshold indicates how many failed pods can be tolerated before marking the rollout task as success If not set, the default value is 0, which means no failed pods can be tolerated This is a task level threshold.
+                        x-kubernetes-int-or-string: true
+                      workloadTotalFailureThreshold:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: WorkloadFailureThreshold indicates how many failed pods can be tolerated in all upgraded pods of one workload. The default value is 0, which means no failed pods can be tolerated. This is a workload level threshold.
+                        x-kubernetes-int-or-string: true
+                    type: object
+                type: object
+              targetType:
+                description: TargetType defines the GroupVersionKind of target resource
+                properties:
+                  apiVersion:
+                    description: APIVersion is the group/version for the resource being referenced. If APIVersion is not specified, the specified Kind must be in the core API group. For any other third-party types, APIVersion is required.
+                    type: string
+                  kind:
+                    description: Kind is the type of resource being referenced
+                    type: string
+                required:
+                - kind
+                type: object
+              webhooks:
+                description: Webhooks defines rollout webhook configuration
+                items:
+                  properties:
+                    clientConfig:
+                      description: ClientConfig defines how to communicate with the hook. Required
+                      properties:
+                        caBundle:
+                          description: '`caBundle` is a PEM encoded CA bundle which will be used to validate the webhook''s server certificate. If unspecified, system trust roots on the apiserver are used.'
+                          format: byte
+                          type: string
+                        periodSeconds:
+                          description: How often (in seconds) to perform the probe. Default to 10 seconds. Minimum value is 1.
+                          format: int32
+                          type: integer
+                        timeoutSeconds:
+                          description: TimeoutSeconds specifies the timeout for this webhook. After the timeout passes, the webhook call will be ignored or the API call will fail based on the failure policy. Default to 10 seconds.
+                          format: int32
+                          type: integer
+                        url:
+                          description: "`url` gives the location of the webhook, in standard URL form (`scheme://host:port/path`). Exactly one of `url` or `service` must be specified. \n The `host` should not refer to a service running in the cluster; use the `service` field instead. The host might be resolved via external DNS in some apiservers (e.g., `kube-apiserver` cannot resolve in-cluster DNS as that would be a layering violation). `host` may also be an IP address. \n Please note that using `localhost` or `127.0.0.1` as a `host` is risky unless you take great care to run this webhook on all hosts which run an apiserver which might need to make calls to this webhook. Such installs are likely to be non-portable, i.e., not easy to turn up in a new cluster. \n The scheme must be \"https\"; the URL must begin with \"https://\". \n A path is optional, and if present may be any string permissible in a URL. You may use the path to pass an arbitrary string to the webhook, for example, a cluster identifier. \n Attempting to use a user or basic auth e.g. \"user:password@\" is not allowed. Fragments (\"#...\") and query parameters (\"?...\") are not allowed, either."
+                          type: string
+                      type: object
+                    failurePolicy:
+                      description: FailurePolicy defines how unrecognized errors from the admission endpoint are handled - allowed values are Ignore or Fail. Defaults to Ignore.
+                      type: string
+                    failureThreshold:
+                      description: Minimum consecutive failures for the probe to be considered failed after having succeeded. Defaults to 3. Minimum value is 1.
+                      format: int32
+                      type: integer
+                    hookTypes:
+                      description: HookTypes defines when to communicate with the hook, specifies the types of events that trigger the webhook. Required
+                      items:
+                        type: string
+                      type: array
+                    name:
+                      description: Name is the identity of webhook
+                      type: string
+                    properties:
+                      additionalProperties:
+                        type: string
+                      description: Properties provide additional data for webhook.
+                      type: object
+                    provider:
+                      description: By default, rollout communicates with the webhook through the structure RolloutWebhookReview. If provider is set, then the protocol of the interaction will be determined by the provider
+                      type: string
+                    successThreshold:
+                      description: Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
+                      format: int32
+                      type: integer
+                  type: object
+                type: array
+            type: object
+          status:
+            properties:
+              batchStatus:
+                description: BatchStatus describes the state of the active batch release
+                properties:
+                  currentBatchIndex:
+                    description: CurrentBatchIndex defines the current batch index of batch release progress.
+                    format: int32
+                    type: integer
+                  currentBatchState:
+                    description: CurrentBatchIndex indicates the current batch state.
+                    type: string
+                required:
+                - currentBatchIndex
+                type: object
+              conditions:
+                description: Conditions is the list of conditions
+                items:
+                  description: 'Condition defines the condition of a resource See: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties'
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transitioned from one status to another.
+                      format: date-time
+                      type: string
+                    lastUpdateTime:
+                      description: The last time this condition was updated.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human-readable message indicating details about the transition.
+                      type: string
+                    reason:
+                      description: The reason for the condition's last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      description: Type of the condition.
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              lastUpdateTime:
+                description: The last time this status was updated.
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed for this Rollout. It corresponds to the Rollout's generation, which is updated on mutation by the API Server.
+                format: int64
+                type: integer
+              phase:
+                description: Phase indecates the current phase of rollout
+                type: string
+              workloadStatuses:
+                description: WorkloadStatuses describes the referenced workloads status
+                items:
+                  properties:
+                    cluster:
+                      description: Cluster defines which cluster the workload is in.
+                      type: string
+                    generation:
+                      description: Generation is the found in workload metadata.
+                      format: int64
+                      type: integer
+                    name:
+                      description: Name is the workload name
+                      type: string
+                    observedGeneration:
+                      description: ObservedGeneration is the most recent generation observed for this workload.
+                      format: int64
+                      type: integer
+                    podTemplateHash:
+                      description: PodTemplateHash is used to distinguish different version of pod
+                      type: string
+                    replicas:
+                      description: Replicas is the desired number of pods targeted by workload
+                      format: int32
+                      type: integer
+                    stableRevision:
+                      description: StableRevision is the old stable revision used to generate pods.
+                      type: string
+                    updatedAvailableReplicas:
+                      description: UpdatedAvailableReplicas is the number of service available pods targeted by workload that have the updated template spec.
+                      format: int32
+                      type: integer
+                    updatedReadyReplicas:
+                      description: UpdatedReadyReplicas is the number of ready pods targeted by workload that have the updated template spec.
+                      format: int32
+                      type: integer
+                    updatedReplicas:
+                      description: UpdatedReplicas is the number of pods targeted by workload that have the updated template spec.
+                      format: int32
+                      type: integer
+                    updatedRevision:
+                      description: UpdatedRevision is the updated template revision used to generate pods.
+                      type: string
+                  required:
+                  - replicas
+                  - updatedAvailableReplicas
+                  - updatedReadyReplicas
+                  - updatedReplicas
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

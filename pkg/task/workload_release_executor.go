@@ -1,30 +1,32 @@
-/*
- * Copyright 2023 The KusionStack Authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2023 The KusionStack Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package task
 
 import (
 	"context"
 	"fmt"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 
-	"github.com/KusionStack/rollout/api/v1alpha1"
-	"github.com/KusionStack/rollout/pkg/workload"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	"kusionstack.io/rollout/apis/workflow/v1alpha1"
+	"kusionstack.io/rollout/pkg/workload"
+	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
 
 const defaultRequeueDuration = 10 * time.Second
@@ -50,10 +52,16 @@ func NewWorkloadReleaseExecutor(client client.Client, task *v1alpha1.Task) (Exec
 	var wi workload.Interface
 	var err error
 
-	switch task.Spec.WorkloadRelease.Workload.GroupVersionKind() {
-	// TODO: initialize wi with real workload implementation
+	gvk := schema.FromAPIVersionAndKind(task.Spec.WorkloadRelease.Workload.APIVersion, task.Spec.WorkloadRelease.Workload.Kind)
+
+	switch gvk {
+	case statefulset.GVK:
+		wi, err = statefulset.NewWorkload(client, types.NamespacedName{
+			Namespace: task.Spec.WorkloadRelease.Workload.Namespace,
+			Name:      task.Spec.WorkloadRelease.Workload.Name,
+		}, task.Spec.WorkloadRelease.Workload.Cluster)
 	default:
-		err = fmt.Errorf("unsupported workload type %s", task.Spec.WorkloadRelease.Workload.GroupVersionKind())
+		err = fmt.Errorf("unsupported workload type %s", gvk)
 	}
 	return &WorkloadReleaseExecutor{
 		TaskExecutor: TaskExecutor{Task: task},
@@ -131,7 +139,17 @@ func (e *WorkloadReleaseExecutor) Run(ctx context.Context) (d time.Duration, err
 
 // CalculateStatus calculates the status of the task
 func (e *WorkloadReleaseExecutor) CalculateStatus() {
-	e.Task.Status.WorkloadRelease = e.workload.GetReleaseStatus()
+	status := e.workload.GetStatus()
+
+	releaseStatus := &v1alpha1.WorkloadReleaseTaskStatus{
+		Name:                      status.Name,
+		ObservedGenerationUpdated: status.Generation == status.ObservedGeneration,
+		Replicas:                  status.Replicas,
+		UpdatedReplicas:           status.UpdatedReplicas,
+		UpdatedReadyReplicas:      status.UpdatedReadyReplicas,
+		UpdatedAvailableReplicas:  status.UpdatedAvailableReplicas,
+	}
+	e.Task.Status.WorkloadRelease = releaseStatus
 	e.TaskExecutor.CalculateStatus()
 }
 

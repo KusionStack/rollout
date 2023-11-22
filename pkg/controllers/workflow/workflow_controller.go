@@ -1,18 +1,18 @@
 /*
- * Copyright 2023 The KusionStack Authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+Copyright 2023.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package workflow
 
@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KusionStack/kantry/pkg/clusterinfo"
 	multierror "github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -33,16 +32,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/KusionStack/rollout/api"
-	"github.com/KusionStack/rollout/api/v1alpha1"
-	"github.com/KusionStack/rollout/pkg/dag"
-	"github.com/KusionStack/rollout/pkg/event"
-	resolvetask "github.com/KusionStack/rollout/pkg/task"
-	"github.com/KusionStack/rollout/pkg/workflow"
+	"kusionstack.io/rollout/apis/rollout"
+	"kusionstack.io/rollout/apis/workflow/v1alpha1"
+	"kusionstack.io/rollout/pkg/dag"
+	"kusionstack.io/rollout/pkg/event"
+	resolvetask "kusionstack.io/rollout/pkg/task"
+	"kusionstack.io/rollout/pkg/workflow"
 )
 
 // WorkflowReconciler reconciles a Workflow object
@@ -86,7 +86,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	originStatus := flow.Status.DeepCopy()
-	beforeCondition := flow.Status.GetCondition(v1alpha1.ConditionSucceeded)
+	beforeCondition := flow.Status.GetCondition(v1alpha1.WorkflowConditionSucceeded)
 
 	// Initialize status if necessary
 	if !flow.HasStarted() {
@@ -102,14 +102,14 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				SuccessCondition: nil,
 			}
 			if resolvedTask.Task != nil {
-				taskStatuses[i].SuccessCondition = resolvedTask.Task.Status.GetCondition(v1alpha1.ConditionSucceeded)
+				taskStatuses[i].SuccessCondition = resolvedTask.Task.Status.GetCondition(v1alpha1.WorkflowConditionSucceeded)
 			}
 		}
 		flow.Status.Initialize(taskStatuses)
 		r.Recorder.Eventf(&flow, corev1.EventTypeNormal, "Initialized", "Initialized workflow %s", flow.Name)
 
 		// we already send event for initialized, so we update `beforeCondition` with current condition
-		beforeCondition = flow.Status.GetCondition(v1alpha1.ConditionSucceeded)
+		beforeCondition = flow.Status.GetCondition(v1alpha1.WorkflowConditionSucceeded)
 	}
 
 	err := r.doReconcile(ctx, &flow)
@@ -118,7 +118,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		event.EmitError(r.Recorder, err, &flow)
 	}
 
-	afterCondition := flow.Status.GetCondition(v1alpha1.ConditionSucceeded)
+	afterCondition := flow.Status.GetCondition(v1alpha1.WorkflowConditionSucceeded)
 	event.Emit(r.Recorder, beforeCondition, afterCondition, &flow)
 
 	// update status if necessary
@@ -162,11 +162,11 @@ func (r *WorkflowReconciler) doReconcile(ctx context.Context, flow *v1alpha1.Wor
 		return nil
 	}
 
-	if flow.Status.IsCancelling() || flow.Status.IsPausing() {
+	if flow.Status.IsCanceling() || flow.Status.IsPausing() {
 		// update status and return
 		resolvedTasks, err := r.resolveTasks(ctx, flow)
 		if err != nil {
-			flow.Status.Running(v1alpha1.ConditionReasonError.String(), err.Error())
+			flow.Status.Running(v1alpha1.WorkflowReasonError.String(), err.Error())
 			logger.Error(err, "failed to resolve tasks")
 			return err
 		}
@@ -180,10 +180,10 @@ func (r *WorkflowReconciler) doReconcile(ctx context.Context, flow *v1alpha1.Wor
 		return nil
 	}
 
-	if flow.IsCancelled() {
+	if flow.IsCanceled() {
 		if err := r.cancelWorkflow(ctx, flow); err != nil {
 			logger.Error(err, "failed to cancel workflow")
-			flow.Status.Running(v1alpha1.ConditionReasonError.String(), err.Error())
+			flow.Status.Running(v1alpha1.WorkflowReasonError.String(), err.Error())
 			return err
 		}
 		return nil
@@ -199,7 +199,7 @@ func (r *WorkflowReconciler) doReconcile(ctx context.Context, flow *v1alpha1.Wor
 	// build dag
 	d, err := dag.Build(v1alpha1.WorkflowTaskList(flow.Spec.Tasks), v1alpha1.WorkflowTaskList(flow.Spec.Tasks).Deps())
 	if err != nil {
-		flow.Status.Fail(v1alpha1.ConditionReasonError.String(), err.Error())
+		flow.Status.Fail(v1alpha1.WorkflowReasonError.String(), err.Error())
 		logger.Error(err, "failed to build dag")
 		return err
 	}
@@ -207,7 +207,7 @@ func (r *WorkflowReconciler) doReconcile(ctx context.Context, flow *v1alpha1.Wor
 	// run next tasks
 	resolvedTasks, err := r.resolveTasks(ctx, flow)
 	if err != nil {
-		flow.Status.Running(v1alpha1.ConditionReasonError.String(), err.Error())
+		flow.Status.Running(v1alpha1.WorkflowReasonError.String(), err.Error())
 		logger.Error(err, "failed to resolve tasks")
 		return err
 	}
@@ -221,7 +221,7 @@ func (r *WorkflowReconciler) doReconcile(ctx context.Context, flow *v1alpha1.Wor
 
 	err = wfCtx.RunTasks(ctx, r.Client)
 	if err != nil {
-		flow.Status.Running(v1alpha1.ConditionReasonError.String(), err.Error())
+		flow.Status.Running(v1alpha1.WorkflowReasonError.String(), err.Error())
 		logger.Error(err, "failed to run tasks")
 		return err
 	}
@@ -267,7 +267,7 @@ func (r *WorkflowReconciler) resolveTasks(ctx context.Context, flow *v1alpha1.Wo
 // getTaskMap get tasks of workflow and generate a map of task generatedName -> task
 func (r *WorkflowReconciler) getTaskMap(ctx context.Context, flow *v1alpha1.Workflow) (map[string]*v1alpha1.Task, error) {
 	var taskList v1alpha1.TaskList
-	if err := r.List(ctx, &taskList, client.InNamespace(flow.Namespace), client.MatchingLabels{api.LabelGeneratedBy: flow.Name}); err != nil {
+	if err := r.List(ctx, &taskList, client.InNamespace(flow.Namespace), client.MatchingLabels{rollout.LabelGeneratedBy: flow.Name}); err != nil {
 		return nil, err
 	}
 	// filter tasks by ownerReference
@@ -289,8 +289,8 @@ func (r *WorkflowReconciler) getTaskMap(ctx context.Context, flow *v1alpha1.Work
 
 func (r *WorkflowReconciler) cancelWorkflow(ctx context.Context, flow *v1alpha1.Workflow) error {
 	logger := log.FromContext(ctx)
-	if flow.Status.IsCancelling() {
-		logger.Info("workflow is already in Cancelling status")
+	if flow.Status.IsCanceling() {
+		logger.Info("workflow is already in Canceling status")
 		return nil
 	}
 
@@ -315,7 +315,7 @@ func (r *WorkflowReconciler) cancelWorkflow(ctx context.Context, flow *v1alpha1.
 				if err := r.Client.Get(ctx, types.NamespacedName{Namespace: task.Namespace, Name: task.Name}, task); err != nil {
 					return err
 				}
-				task.Spec.Status = v1alpha1.TaskSpecStatusCancelled
+				task.Spec.Status = v1alpha1.TaskSpecStatusCanceled
 				return r.Client.Update(ctx, task)
 			}); err != nil {
 				logger.Error(err, "failed to cancel task", "task", task.Name)
@@ -331,9 +331,9 @@ func (r *WorkflowReconciler) cancelWorkflow(ctx context.Context, flow *v1alpha1.
 	}
 
 	if taskUpdated {
-		flow.Status.Cancelling("waiting for tasks to be cancelled")
+		flow.Status.Canceling("waiting for tasks to be canceled")
 	} else {
-		flow.Status.Cancel("workflow cancelled")
+		flow.Status.Cancel("workflow canceled")
 	}
 	return nil
 }

@@ -1,1 +1,0 @@
-samples in this(kind) directory can be applied in a KinD cluster.

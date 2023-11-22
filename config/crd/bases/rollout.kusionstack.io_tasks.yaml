@@ -32,9 +32,6 @@ spec:
           spec:
             description: TaskSpec defines the desired state of Task
             properties:
-              analysis:
-                description: Analysis is used to run analysis
-                type: object
               custom:
                 description: Custom is used to run custom task defined by the user
                 properties:
@@ -247,6 +244,31 @@ spec:
                     format: int64
                     type: integer
                 type: object
+              webhook:
+                description: Webhook is used to run webhook
+                properties:
+                  action:
+                    description: Action is the operation that would be executed.
+                    type: string
+                  allBatchParams:
+                    additionalProperties:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    description: AllBatchParams contains all batches parameters from rollout strategy.
+                    type: object
+                  hookType:
+                    description: HookType is the type of the check point
+                    type: string
+                  name:
+                    description: Name indicates the provider name.
+                    type: string
+                required:
+                - action
+                - allBatchParams
+                - hookType
+                - name
+                type: object
               workloadRelease:
                 description: WorkloadRelease is used to release the workload
                 properties:
@@ -267,20 +289,26 @@ spec:
                         anyOf:
                         - type: integer
                         - type: string
-                        description: FailureThreshold indicates how many failed pods can be tolerated before marking the task as success
+                        description: FailureThreshold indicates how many failed pods can be tolerated before marking the task as success in the workload scope
+                        x-kubernetes-int-or-string: true
+                      taskFailureThreshold:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: TaskFailureThreshold indicates how many failed pods can be tolerated before marking the task as success in the task scope
                         x-kubernetes-int-or-string: true
                     type: object
                   workload:
                     description: Workload is the workload of the task
                     properties:
                       apiVersion:
-                        description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                        description: APIVersion is the group/version for the resource being referenced. If APIVersion is not specified, the specified Kind must be in the core API group. For any other third-party types, APIVersion is required.
                         type: string
                       cluster:
                         description: Cluster is the cluster of the task
                         type: string
                       kind:
-                        description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                        description: Kind is the type of resource being referenced
                         type: string
                       name:
                         description: Name is the name of the workload
@@ -288,6 +316,8 @@ spec:
                       namespace:
                         description: Namespace is the namespace of the workload
                         type: string
+                    required:
+                    - kind
                     type: object
                 required:
                 - workload
@@ -302,20 +332,24 @@ spec:
                   description: 'Condition defines the condition of a resource See: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties'
                   properties:
                     lastTransitionTime:
-                      description: LastTransitionTime is the last time the condition transitioned from one status to another
+                      description: Last time the condition transitioned from one status to another.
+                      format: date-time
+                      type: string
+                    lastUpdateTime:
+                      description: The last time this condition was updated.
                       format: date-time
                       type: string
                     message:
-                      description: Message is the human-readable message indicating details about last transition
+                      description: A human-readable message indicating details about the transition.
                       type: string
                     reason:
-                      description: Reason is the reason for the condition's last transition
+                      description: The reason for the condition's last transition.
                       type: string
                     status:
-                      description: Status is the status of the condition
+                      description: Status of the condition, one of True, False, Unknown.
                       type: string
                     type:
-                      description: Type is the type of the condition
+                      description: Type of the condition.
                       type: string
                   required:
                   - status
@@ -344,6 +378,39 @@ spec:
                 description: StartedAt is the time when the task started
                 format: date-time
                 type: string
+              webhook:
+                description: Webhook is the status of webhook task.
+                properties:
+                  endTimestamp:
+                    description: EndTimestamp is the time when the task is finished
+                    format: date-time
+                    type: string
+                  hookType:
+                    description: HookType indicates the type of webhook
+                    type: string
+                  passed:
+                    description: Passed indicates whether the webhook check has passed or not.
+                    type: boolean
+                  provider:
+                    description: Provider indicates the provider name.
+                    type: string
+                  startTimestamp:
+                    description: StartTimestamp is the time when the task is started
+                    format: date-time
+                    type: string
+                  status:
+                    description: Status is the webhook check task status.
+                    type: string
+                  verdict:
+                    description: Verdict is the decision of webhook check if it is not passed.
+                    type: string
+                required:
+                - hookType
+                - passed
+                - provider
+                - status
+                - verdict
+                type: object
               workloadRelease:
                 description: WorkloadRelease is the status of the workload release task
                 properties:

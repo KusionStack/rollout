@@ -9,6 +9,32 @@ rules:
 - apiGroups:
   - rollout.kusionstack.io
   resources:
+  - rolloutruns
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - rolloutruns/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - rolloutruns/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
   - rollouts
   verbs:
   - create
