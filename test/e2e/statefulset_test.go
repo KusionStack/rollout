@@ -173,7 +173,7 @@ var _ = Describe("StatefulSet", func() {
 			}
 
 			// wait for batch 1 finished and paused at batch 2
-			if rollout.Status.BatchStatus.CurrentBatchIndex != 2 || rollout.Status.BatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepStatePaused {
+			if rollout.Status.BatchStatus.CurrentBatchIndex != 2 || rollout.Status.BatchStatus.CurrentBatchState != rolloutv1alpha1.BatchStepStatePaused {
 				return false
 			}
 

@@ -252,10 +252,6 @@ spec:
                     provider:
                       description: By default, rollout communicates with the webhook through the structure RolloutWebhookReview. If provider is set, then the protocol of the interaction will be determined by the provider
                       type: string
-                    successThreshold:
-                      description: Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
-                      format: int32
-                      type: integer
                   type: object
                 type: array
             type: object
@@ -264,6 +260,24 @@ spec:
               batchStatus:
                 description: BatchStatus describes the state of the active batch release
                 properties:
+                  context:
+                    additionalProperties:
+                      type: string
+                    description: Context contains current state context data.
+                    type: object
+                  currentBatchError:
+                    description: CurrentBatchError indicates the error info of current batch.
+                    properties:
+                      code:
+                        description: Code is a globally unique identifier
+                        type: string
+                      message:
+                        description: A human-readable message indicating details about the transition.
+                        type: string
+                      reason:
+                        description: A human-readable short word
+                        type: string
+                    type: object
                   currentBatchIndex:
                     description: CurrentBatchIndex defines the current batch index of batch release progress.
                     format: int32
@@ -271,6 +285,114 @@ spec:
                   currentBatchState:
                     description: CurrentBatchIndex indicates the current batch state.
                     type: string
+                  records:
+                    description: Records contains all batches status details.
+                    items:
+                      properties:
+                        error:
+                          description: error status
+                          properties:
+                            code:
+                              description: Code is a globally unique identifier
+                              type: string
+                            message:
+                              description: A human-readable message indicating details about the transition.
+                              type: string
+                            reason:
+                              description: A human-readable short word
+                              type: string
+                          type: object
+                        finishTime:
+                          description: FinishTime is the time when the stage finished
+                          format: date-time
+                          type: string
+                        index:
+                          description: Index is the id of the batch
+                          format: int32
+                          type: integer
+                        message:
+                          description: Message is Rollout step state message
+                          type: string
+                        startTime:
+                          description: StartTime is the time when the stage started
+                          format: date-time
+                          type: string
+                        state:
+                          description: State is Rollout step state
+                          type: string
+                        targets:
+                          description: WorkloadDetails contains release details for each workload
+                          items:
+                            properties:
+                              cluster:
+                                description: Cluster defines which cluster the workload is in.
+                                type: string
+                              generation:
+                                description: Generation is the found in workload metadata.
+                                format: int64
+                                type: integer
+                              name:
+                                description: Name is the workload name
+                                type: string
+                              observedGeneration:
+                                description: ObservedGeneration is the most recent generation observed for this workload.
+                                format: int64
+                                type: integer
+                              podTemplateHash:
+                                description: PodTemplateHash is used to distinguish different version of pod
+                                type: string
+                              replicas:
+                                description: Replicas is the desired number of pods targeted by workload
+                                format: int32
+                                type: integer
+                              stableRevision:
+                                description: StableRevision is the old stable revision used to generate pods.
+                                type: string
+                              updatedAvailableReplicas:
+                                description: UpdatedAvailableReplicas is the number of service available pods targeted by workload that have the updated template spec.
+                                format: int32
+                                type: integer
+                              updatedReadyReplicas:
+                                description: UpdatedReadyReplicas is the number of ready pods targeted by workload that have the updated template spec.
+                                format: int32
+                                type: integer
+                              updatedReplicas:
+                                description: UpdatedReplicas is the number of pods targeted by workload that have the updated template spec.
+                                format: int32
+                                type: integer
+                              updatedRevision:
+                                description: UpdatedRevision is the updated template revision used to generate pods.
+                                type: string
+                            required:
+                            - replicas
+                            - updatedAvailableReplicas
+                            - updatedReadyReplicas
+                            - updatedReplicas
+                            type: object
+                          type: array
+                        webhooks:
+                          description: Webhooks contains webhook status
+                          items:
+                            properties:
+                              code:
+                                description: Code is a globally unique identifier
+                                type: string
+                              hookType:
+                                description: Webhook Type
+                                type: string
+                              message:
+                                description: A human-readable message indicating details about the transition.
+                                type: string
+                              name:
+                                description: Webhook Name
+                                type: string
+                              reason:
+                                description: A human-readable short word
+                                type: string
+                            type: object
+                          type: array
+                      type: object
+                    type: array
                 required:
                 - currentBatchIndex
                 type: object
@@ -315,8 +437,8 @@ spec:
               phase:
                 description: Phase indecates the current phase of rollout
                 type: string
-              workloadStatuses:
-                description: WorkloadStatuses describes the referenced workloads status
+              targetStatuses:
+                description: TargetStatuses describes the referenced workloads status
                 items:
                   properties:
                     cluster:

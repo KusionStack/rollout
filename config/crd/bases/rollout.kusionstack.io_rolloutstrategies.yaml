@@ -408,10 +408,6 @@ spec:
                 provider:
                   description: By default, rollout communicates with the webhook through the structure RolloutWebhookReview. If provider is set, then the protocol of the interaction will be determined by the provider
                   type: string
-                successThreshold:
-                  description: Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
-                  format: int32
-                  type: integer
               type: object
             type: array
         type: object

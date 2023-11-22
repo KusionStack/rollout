@@ -30,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"kusionstack.io/kube-utils/multicluster"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,9 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"kusionstack.io/kube-utils/multicluster"
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 
 	"kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -49,6 +48,7 @@ import (
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
+	workflowutil "kusionstack.io/rollout/pkg/workflow"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
@@ -257,7 +257,7 @@ func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.Rol
 	for i, w := range allWorkloads {
 		workloadStatuses[i] = w.GetStatus()
 	}
-	newStatus.WorkloadStatuses = workloadStatuses
+	newStatus.TargetStatuses = workloadStatuses
 }
 
 func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, instance *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) error {
@@ -323,6 +323,18 @@ func (r *RolloutRunReconciler) syncWorkflow(obj *rolloutv1alpha1.RolloutRun, wor
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *cond)
 	}
 
+	batchStatusRecords, err := workflowutil.GetBatchStatusRecords(workflow)
+	if err != nil {
+		return err
+	}
+	if len(batchStatusRecords) > 0 {
+		batchStatus := workflowutil.GetCurrentBatch(batchStatusRecords)
+		newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+			RolloutBatchStatus: batchStatus,
+			Records:            batchStatusRecords,
+		}
+	}
+
 	// handle manual command
 	return r.handleManualCommand(obj, workflow, newStatus)
 }
@@ -341,7 +353,7 @@ func (r *RolloutRunReconciler) handleManualCommand(instance *rolloutv1alpha1.Rol
 
 	switch command {
 	case rollout.AnnoManualCommandResume:
-		if workflow.Status.IsPaused() && newStatus.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepStatePaused {
+		if workflow.Status.IsPaused() && newStatus.BatchStatus.CurrentBatchState == rolloutv1alpha1.BatchStepStatePaused {
 			taskName := getSuspendTaskNameByBatchIndex(workflow, newStatus.BatchStatus.CurrentBatchIndex)
 			if len(taskName) > 0 {
 				resumeContext := []string{taskName}

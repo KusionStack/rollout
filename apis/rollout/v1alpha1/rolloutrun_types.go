@@ -102,11 +102,51 @@ type RolloutRunStatus struct {
 	Conditions []Condition `json:"conditions,omitempty"`
 	// Phase indecates the current phase of rollout
 	Phase RolloutPhase `json:"phase,omitempty"`
-	// BatchStatus describes the state of the active batch release
-	BatchStatus *BatchStatus `json:"batchStatus,omitempty"`
-	// WorkloadStatuses describes the referenced workloads status
-	WorkloadStatuses []RolloutWorkloadStatus `json:"workloadStatuses,omitempty"`
 	// The last time this status was updated.
 	// +optional
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// BatchStatus describes the state of the active batch release
+	BatchStatus *RolloutRunBatchStatus `json:"batchStatus,omitempty"`
+	// TargetStatuses describes the referenced workloads status
+	TargetStatuses []RolloutWorkloadStatus `json:"targetStatuses,omitempty"`
+}
+
+type RolloutRunBatchStatus struct {
+	RolloutBatchStatus `json:",inline"`
+	// Context contains current state context data.
+	Context map[string]string `json:"context,omitempty"`
+	// Records contains all batches status details.
+	Records []RolloutRunBatchStatusRecord `json:"records,omitempty"`
+}
+
+type RolloutRunBatchStatusRecord struct {
+	// Index is the id of the batch
+	Index *int32 `json:"index,omitempty"`
+	// State is Rollout step state
+	State RolloutBatchStepState `json:"state,omitempty"`
+	// Message is Rollout step state message
+	Message string `json:"message,omitempty"`
+	// error status
+	Error *CodeReasonMessage `json:"error,omitempty"`
+	// StartTime is the time when the stage started
+	// +optional
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	// FinishTime is the time when the stage finished
+	// +optional
+	FinishTime *metav1.Time `json:"finishTime,omitempty"`
+	// WorkloadDetails contains release details for each workload
+	// +optional
+	Targets []RolloutWorkloadStatus `json:"targets,omitempty"`
+	// Webhooks contains webhook status
+	// +optional
+	Webhooks []BatchWebhookStatus `json:"webhooks,omitempty"`
+}
+
+type BatchWebhookStatus struct {
+	// Webhook Type
+	HookType HookType `json:"hookType,omitempty"`
+	// Webhook Name
+	Name string `json:"name,omitempty"`
+	// Webhook result
+	CodeReasonMessage `json:",inline"`
 }

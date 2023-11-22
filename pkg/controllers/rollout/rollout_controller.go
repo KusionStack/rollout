@@ -517,7 +517,9 @@ func (r *RolloutReconciler) syncRun(ctx context.Context, obj *rolloutv1alpha1.Ro
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, rolloutv1alpha1.RolloutReasonProgressingRunning, "rolloutRun is running")
 	}
 
-	newStatus.BatchStatus = run.Status.BatchStatus
+	if run.Status.BatchStatus != nil {
+		newStatus.BatchStatus = &run.Status.BatchStatus.RolloutBatchStatus
+	}
 
 	err := r.handleRunManualCommand(ctx, obj, run)
 	if err != nil {
