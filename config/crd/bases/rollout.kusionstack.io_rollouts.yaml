@@ -108,6 +108,19 @@ spec:
               batchStatus:
                 description: BatchStatus describes the state of the active batch release
                 properties:
+                  currentBatchError:
+                    description: CurrentBatchError indicates the error info of current batch.
+                    properties:
+                      code:
+                        description: Code is a globally unique identifier
+                        type: string
+                      message:
+                        description: A human-readable message indicating details about the transition.
+                        type: string
+                      reason:
+                        description: A human-readable short word
+                        type: string
+                    type: object
                   currentBatchIndex:
                     description: CurrentBatchIndex defines the current batch index of batch release progress.
                     format: int32

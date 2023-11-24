@@ -28,10 +28,6 @@ type RolloutWebhook struct {
 	// ClientConfig defines how to communicate with the hook.
 	// Required
 	ClientConfig WebhookClientConfig `json:"clientConfig,omitempty"`
-	// Minimum consecutive successes for the probe to be considered successful after having failed.
-	// Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
-	// +optional
-	SuccessThreshold int32 `json:"successThreshold,omitempty" protobuf:"varint,5,opt,name=successThreshold"`
 	// Minimum consecutive failures for the probe to be considered failed after having succeeded.
 	// Defaults to 3. Minimum value is 1.
 	// +optional
@@ -132,22 +128,18 @@ type RolloutWebhookReviewSpec struct {
 type HookType string
 
 const (
-	HookTypePreRollout    HookType = "PreRollout"
-	HookTypePostRollout   HookType = "PostRollout"
-	HookTypePreBatchStep  HookType = "PreBatchStep"
-	HookTypePostBatchStep HookType = "PostBatchStep"
+	HookTypePreBatchStep  HookType = "PreBatchStepHook"
+	HookTypePostBatchStep HookType = "PostBatchStepHook"
 )
 
 type RolloutWebhookReviewStatus struct {
-	Code    WebhookReviewCode `json:"code,omitempty"`
-	Reason  string            `json:"reason,omitempty"`
-	Message string            `json:"message,omitempty"`
+	CodeReasonMessage `json:",inline"`
 }
 
 type WebhookReviewCode string
 
 const (
-	WebhookReviewCodeOK         WebhookReviewCode = "OK"
-	WebhookReviewCodeError      WebhookReviewCode = "Error"
-	WebhookReviewCodeProcessing WebhookReviewCode = "Processing"
+	WebhookReviewCodeOK         string = "OK"
+	WebhookReviewCodeError      string = "Error"
+	WebhookReviewCodeProcessing string = "Processing"
 )
