@@ -20,13 +20,12 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"kusionstack.io/rollout/apis/workflow/v1alpha1"
+	"kusionstack.io/rollout/pkg/registry"
 	"kusionstack.io/rollout/pkg/workload"
-	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
 
 const defaultRequeueDuration = 10 * time.Second
@@ -49,26 +48,23 @@ type WorkloadReleaseExecutor struct {
 
 // NewWorkloadReleaseExecutor creates a new workload release executor
 func NewWorkloadReleaseExecutor(client client.Client, task *v1alpha1.Task) (Executor, error) {
-	var wi workload.Interface
-	var err error
-
 	gvk := schema.FromAPIVersionAndKind(task.Spec.WorkloadRelease.Workload.APIVersion, task.Spec.WorkloadRelease.Workload.Kind)
-
-	switch gvk {
-	case statefulset.GVK:
-		wi, err = statefulset.NewWorkload(client, types.NamespacedName{
-			Namespace: task.Spec.WorkloadRelease.Workload.Namespace,
-			Name:      task.Spec.WorkloadRelease.Workload.Name,
-		}, task.Spec.WorkloadRelease.Workload.Cluster)
-	default:
-		err = fmt.Errorf("unsupported workload type %s", gvk)
+	store, err := registry.WorkloadRegistry.Get(gvk)
+	if err != nil {
+		return nil, err
 	}
+
+	wi, err := store.Get(context.TODO(), task.Spec.WorkloadRelease.Workload.Cluster, task.Spec.WorkloadRelease.Workload.Namespace, task.Spec.WorkloadRelease.Workload.Name)
+	if err != nil {
+		return nil, err
+	}
+
 	return &WorkloadReleaseExecutor{
 		TaskExecutor: TaskExecutor{Task: task},
 		workload:     wi,
 		release:      task.Spec.WorkloadRelease,
 		Client:       client,
-	}, err
+	}, nil
 }
 
 // Run runs the workload release task

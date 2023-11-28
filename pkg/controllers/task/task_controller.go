@@ -26,24 +26,40 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"kusionstack.io/rollout/apis/workflow/v1alpha1"
 	"kusionstack.io/rollout/pkg/event"
 	pkgtask "kusionstack.io/rollout/pkg/task"
 )
 
+const (
+	ControllerName = "task-controller"
+)
+
 // TaskReconciler reconciles a Task object
 type TaskReconciler struct {
-	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	*mixin.ReconcilerMixin
+}
+
+func InitFunc(mgr manager.Manager) (bool, error) {
+	err := NewReconciler(mgr).SetupWithManager(mgr)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func NewReconciler(mgr manager.Manager) *TaskReconciler {
+	return &TaskReconciler{
+		ReconcilerMixin: mixin.NewReconcilerMixin(ControllerName, mgr),
+	}
 }
 
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=tasks,verbs=get;list;watch;create;update;patch;delete
@@ -65,7 +81,7 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	logger.Info("Reconciling Task")
 
 	var task v1alpha1.Task
-	if err := r.Get(ctx, req.NamespacedName, &task); err != nil {
+	if err := r.Client.Get(ctx, req.NamespacedName, &task); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -163,7 +179,7 @@ func (r *TaskReconciler) doReconcile(ctx context.Context, task *v1alpha1.Task) (
 func (r *TaskReconciler) updateStatus(ctx context.Context, task *v1alpha1.Task) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var existing v1alpha1.Task
-		if err := r.Get(ctx, client.ObjectKeyFromObject(task), &existing); err != nil {
+		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(task), &existing); err != nil {
 			return client.IgnoreNotFound(err)
 		}
 		// do not update if the status is not changed
@@ -173,6 +189,6 @@ func (r *TaskReconciler) updateStatus(ctx context.Context, task *v1alpha1.Task) 
 		task.Status.ObservedGeneration = task.Generation
 		task.Status.LastUpdatedAt = &metav1.Time{Time: time.Now()}
 		existing.Status = task.Status
-		return r.Status().Update(ctx, &existing)
+		return r.Client.Status().Update(ctx, &existing)
 	})
 }
