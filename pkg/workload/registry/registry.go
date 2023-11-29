@@ -7,14 +7,11 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/util/retry"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -83,24 +80,16 @@ func (m *workloadRegistry) Register(gvk schema.GroupVersionKind, store Store) {
 func (m *workloadRegistry) AddWatcher(mgr manager.Manager, c controller.Controller) error {
 	var retErr error
 
-	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig())
 	client := mgr.GetClient()
 	scheme := mgr.GetScheme()
 	logger := c.GetLogger()
 
 	m.workloads.Range(func(key, value any) bool {
-		gvk := key.(schema.GroupVersionKind)
 		store := value.(Store)
 
 		if !store.Watchable() {
 			// skip it
 			return true
-		}
-
-		if err := m.discoveryGVK(discoveryClient, gvk); err != nil {
-			logger.Error(err, "failed to discovery resource in cluster", "group", gvk.Group, "version", gvk.Version, "kind", gvk.Kind)
-			retErr = err
-			return false
 		}
 
 		err := c.Watch(
@@ -117,37 +106,6 @@ func (m *workloadRegistry) AddWatcher(mgr manager.Manager, c controller.Controll
 
 	if retErr != nil {
 		return retErr
-	}
-
-	return nil
-}
-
-func (m *workloadRegistry) discoveryGVK(discoveryClient discovery.DiscoveryInterface, gvk schema.GroupVersionKind) error {
-	err := retry.OnError(
-		retry.DefaultRetry,
-		func(err error) bool {
-			return !errors.IsNotFound(err)
-		},
-		func() error {
-			resources, err := discoveryClient.ServerResourcesForGroupVersion(gvk.GroupVersion().String())
-			if err != nil {
-				return err
-			}
-			found := false
-			for _, r := range resources.APIResources {
-				if gvk.Kind == r.Kind {
-					found = true
-				}
-			}
-			if !found {
-				return errors.NewNotFound(schema.GroupResource{Group: gvk.Group, Resource: gvk.Kind}, "")
-			}
-			return nil
-		},
-	)
-
-	if err != nil {
-		return err
 	}
 
 	return nil

@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"kusionstack.io/rollout/cmd/rollout/app/options"
-	"kusionstack.io/rollout/pkg/registry"
 	"kusionstack.io/rollout/pkg/utils/cli"
 )
 
@@ -124,9 +123,6 @@ func Run(opt *options.Options, initialzier initializer.Interface) error {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-
-	// init workload registry
-	registry.InitRegistry(mgr)
 
 	err = initialzier.SetupWithManager(mgr)
 	if err != nil {

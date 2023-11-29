@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package registry
+package workloadregistry
 
 import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -21,10 +21,17 @@ import (
 	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
 
-var (
-	WorkloadRegistry = registry.New()
+const (
+	InitialzierName = "__internal_workload_registry"
 )
 
-func InitRegistry(mgr manager.Manager) {
-	WorkloadRegistry.Register(statefulset.GVK, statefulset.NewStorage(mgr))
+var (
+	DefaultRegistry = registry.New()
+)
+
+func InitFunc(mgr manager.Manager) (bool, error) {
+	logger := mgr.GetLogger()
+	logger.Info("init default workload registry")
+	DefaultRegistry.Register(statefulset.GVK, statefulset.NewStorage(mgr))
+	return true, nil
 }

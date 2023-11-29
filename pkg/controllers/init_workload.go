@@ -19,11 +19,9 @@ package controllers
 import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"kusionstack.io/rollout/pkg/controllers/rollout"
-	"kusionstack.io/rollout/pkg/controllers/rolloutrun"
+	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 )
 
 func init() {
-	utilruntime.Must(Initializer.Add(rollout.ControllerName, rollout.InitFunc))
-	utilruntime.Must(Initializer.Add(rolloutrun.ControllerName, rolloutrun.InitFunc))
+	utilruntime.Must(Initializer.Add(workloadregistry.InitialzierName, workloadregistry.InitFunc))
 }
