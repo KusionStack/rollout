@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	InitialzierName = "__internal_workload_registry"
+	InitializerName = "__internal_workload_registry"
 )
 
 var (

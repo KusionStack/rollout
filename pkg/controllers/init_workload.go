@@ -24,5 +24,5 @@ import (
 )
 
 func init() {
-	utilruntime.Must(Initializer.Add(workloadregistry.InitialzierName, workloadregistry.InitFunc, initializer.WithHidden()))
+	utilruntime.Must(Initializer.Add(workloadregistry.InitializerName, workloadregistry.InitFunc, initializer.WithHidden()))
 }

@@ -62,7 +62,7 @@ func (o *Options) Validate() []error {
 	return errs
 }
 
-func (o *Options) Flags(initialzier initializer.Interface) cliflag.NamedFlagSets {
+func (o *Options) Flags(initializer initializer.Interface) cliflag.NamedFlagSets {
 	fss := cliflag.NamedFlagSets{}
 	fs := fss.FlagSet("options")
 
@@ -83,8 +83,8 @@ func (o *Options) Flags(initialzier initializer.Interface) cliflag.NamedFlagSets
 	// add feature gate flags
 	features.DefaultMutableFeatureGate.AddFlag(fs)
 
-	// bind initialzier flags
-	initialzier.BindFlag(fs)
+	// bind initializer flags
+	initializer.BindFlag(fs)
 	return fss
 }
 
