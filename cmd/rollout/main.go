@@ -12,15 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package workload
+package main
 
 import (
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	"math/rand"
+	"os"
+	"time"
+
+	"k8s.io/component-base/logs"
+
+	"kusionstack.io/rollout/cmd/rollout/app"
+	"kusionstack.io/rollout/pkg/controllers"
 )
 
-func GetClusterFromLabel(labels map[string]string) string {
-	if len(labels) == 0 {
-		return ""
+func main() {
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	command := app.NewRolloutCommand(controllers.Initialzier)
+
+	logs.InitLogs()
+	defer logs.FlushLogs()
+
+	if err := command.Execute(); err != nil {
+		os.Exit(1)
 	}
-	return labels[clusterinfo.ClusterLabelKey]
 }

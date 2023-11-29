@@ -20,7 +20,6 @@ import (
 	"math"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -171,45 +170,4 @@ func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj
 func (w *realWorkload) Matches(match rolloutv1alpha1.ResourceMatch) bool {
 	macher := workload.MatchAsMatcher(match)
 	return macher.Matches(w.info.Cluster, w.obj.Name, w.obj.Labels)
-}
-
-func NewWorkload(client client.Client, key types.NamespacedName, cluster string) (workload.Interface, error) {
-	var obj appsv1.StatefulSet
-	if err := client.Get(clusterinfo.WithCluster(context.Background(), cluster), key, &obj); err != nil {
-		return nil, err
-	}
-	return &realWorkload{
-		info:   workload.NewInfo(cluster, GVK, &obj),
-		client: client,
-		obj:    &obj,
-	}, nil
-}
-
-func NewWorkloadSet(client client.Client, namespace string, match rolloutv1alpha1.ResourceMatch) (*workload.Set, error) {
-	list, err := NewWorkloadList(client, namespace, match)
-	if err != nil {
-		return nil, err
-	}
-	return workload.NewWorkloadSet(list...), nil
-}
-
-func NewWorkloadList(c client.Client, namespace string, match rolloutv1alpha1.ResourceMatch) ([]workload.Interface, error) {
-	var list appsv1.StatefulSetList
-	if err := c.List(clusterinfo.ContextClusters, &list, &client.ListOptions{Namespace: namespace}); err != nil {
-		return nil, err
-	}
-	matcher := workload.MatchAsMatcher(match)
-	workloads := make([]workload.Interface, 0, len(list.Items))
-	for _, obj := range list.Items {
-		cluster := workload.GetClusterFromLabel(obj.Labels)
-		if !matcher.Matches(cluster, obj.GetName(), obj.Labels) {
-			continue
-		}
-		workloads = append(workloads, &realWorkload{
-			info:   workload.NewInfo(cluster, GVK, &obj),
-			client: c,
-			obj:    obj.DeepCopy(),
-		})
-	}
-	return workloads, nil
 }

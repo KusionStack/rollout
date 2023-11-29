@@ -12,20 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package controllers
 
 import (
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	workflowv1alpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
+	"kusionstack.io/kube-utils/controller/initializer"
 )
 
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
-	utilruntime.Must(rolloutv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(workflowv1alpha1.AddToScheme(scheme))
-	//+kubebuilder:scaffold:scheme
-}
+var (
+	Initialzier = initializer.New()
+)

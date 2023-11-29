@@ -18,15 +18,15 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/controller/history"
+	"kusionstack.io/kube-utils/controller/mixin"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"kusionstack.io/rollout/pkg/utils"
@@ -36,24 +36,31 @@ import (
 var controllerKind = appsv1.SchemeGroupVersion.WithKind("StatefulSet")
 
 var (
-	controllerName = "fake-sts-controller"
+	FakeStsControllerName = "fake-sts-controller"
 
 	patchCodec = scheme.Codecs.LegacyCodec(appsv1.SchemeGroupVersion)
 )
 
+func InitFakeStsControllerFunc(mgr manager.Manager) (bool, error) {
+	err := NewFakeStatefulSetController(mgr).SetupWithManager(mgr)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func NewFakeStatefulSetController(mgr manager.Manager) *FakeStatefulSetController {
+	return &FakeStatefulSetController{
+		ReconcilerMixin: mixin.NewReconcilerMixin(FakeStsControllerName, mgr),
+	}
+}
+
 type FakeStatefulSetController struct {
-	Client   client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Logger   logr.Logger
+	*mixin.ReconcilerMixin
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *FakeStatefulSetController) SetupWithManager(mgr ctrl.Manager) error {
-	r.Client = mgr.GetClient()
-	r.Scheme = mgr.GetScheme()
-	r.Recorder = mgr.GetEventRecorderFor(controllerName)
-	r.Logger = mgr.GetLogger().WithName(controllerName)
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		For(&appsv1.StatefulSet{}).

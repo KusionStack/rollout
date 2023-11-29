@@ -28,14 +28,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"kusionstack.io/rollout/apis/rollout"
 	"kusionstack.io/rollout/apis/workflow/v1alpha1"
@@ -45,11 +45,27 @@ import (
 	"kusionstack.io/rollout/pkg/workflow"
 )
 
+const (
+	ControllerName = "workflow-controller"
+)
+
 // WorkflowReconciler reconciles a Workflow object
 type WorkflowReconciler struct {
-	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	*mixin.ReconcilerMixin
+}
+
+func InitFunc(mgr manager.Manager) (bool, error) {
+	err := NewReconciler(mgr).SetupWithManager(mgr)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func NewReconciler(mgr manager.Manager) *WorkflowReconciler {
+	return &WorkflowReconciler{
+		ReconcilerMixin: mixin.NewReconcilerMixin(ControllerName, mgr),
+	}
 }
 
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=workflows,verbs=get;list;watch;create;update;patch;delete
@@ -71,7 +87,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	logger.Info("Reconciling Workflow")
 	var flow v1alpha1.Workflow
-	if err := r.Get(ctx, req.NamespacedName, &flow); err != nil {
+	if err := r.Client.Get(ctx, req.NamespacedName, &flow); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -135,7 +151,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *WorkflowReconciler) UpdateStatus(ctx context.Context, flow *v1alpha1.Workflow) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var existing v1alpha1.Workflow
-		if err := r.Get(ctx, client.ObjectKeyFromObject(flow), &existing); err != nil {
+		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(flow), &existing); err != nil {
 			return client.IgnoreNotFound(err)
 		}
 		// If there is no change, do not update
@@ -145,7 +161,7 @@ func (r *WorkflowReconciler) UpdateStatus(ctx context.Context, flow *v1alpha1.Wo
 		flow.Status.LastUpdatedAt = &metav1.Time{Time: time.Now()}
 		flow.Status.ObservedGeneration = flow.Generation
 		existing.Status = flow.Status
-		return r.Status().Update(ctx, &existing)
+		return r.Client.Status().Update(ctx, &existing)
 	})
 }
 
@@ -267,7 +283,7 @@ func (r *WorkflowReconciler) resolveTasks(ctx context.Context, flow *v1alpha1.Wo
 // getTaskMap get tasks of workflow and generate a map of task generatedName -> task
 func (r *WorkflowReconciler) getTaskMap(ctx context.Context, flow *v1alpha1.Workflow) (map[string]*v1alpha1.Task, error) {
 	var taskList v1alpha1.TaskList
-	if err := r.List(ctx, &taskList, client.InNamespace(flow.Namespace), client.MatchingLabels{rollout.LabelGeneratedBy: flow.Name}); err != nil {
+	if err := r.Client.List(ctx, &taskList, client.InNamespace(flow.Namespace), client.MatchingLabels{rollout.LabelGeneratedBy: flow.Name}); err != nil {
 		return nil, err
 	}
 	// filter tasks by ownerReference

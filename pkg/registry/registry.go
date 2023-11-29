@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package workload
+package registry
 
 import (
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"kusionstack.io/rollout/pkg/workload/registry"
+	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
 
-func GetClusterFromLabel(labels map[string]string) string {
-	if len(labels) == 0 {
-		return ""
-	}
-	return labels[clusterinfo.ClusterLabelKey]
+var (
+	WorkloadRegistry = registry.New()
+)
+
+func InitRegistry(mgr manager.Manager) {
+	WorkloadRegistry.Register(statefulset.GVK, statefulset.NewStorage(mgr))
 }

@@ -21,21 +21,20 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -50,32 +49,38 @@ import (
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	workflowutil "kusionstack.io/rollout/pkg/workflow"
 	"kusionstack.io/rollout/pkg/workload"
-	"kusionstack.io/rollout/pkg/workload/statefulset"
+	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
 )
 
 const (
-	controllerName = "rolloutrun-controller"
+	ControllerName = "rolloutrun-controller"
 )
 
 // RolloutRunReconciler reconciles a Rollout object
 type RolloutRunReconciler struct {
-	Client    client.Client
-	APIReader client.Reader
-	Scheme    *runtime.Scheme
-	Recorder  record.EventRecorder
-	Logger    logr.Logger
+	*mixin.ReconcilerMixin
+
+	workloadRegistry workloadregistry.Registry
 
 	expectation   expectations.ControllerExpectationsInterface
 	rvExpectation expectations.ResourceVersionExpectationInterface
 }
 
+func NewReconciler(mgr manager.Manager, workloadRegistry workloadregistry.Registry) *RolloutRunReconciler {
+	return &RolloutRunReconciler{
+		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
+		workloadRegistry: workloadRegistry,
+		expectation:      expectations.NewControllerExpectations(),
+		rvExpectation:    expectations.NewResourceVersionExpectation(),
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.expectation = expectations.NewControllerExpectations()
-	r.rvExpectation = expectations.NewResourceVersionExpectation()
-	r.APIReader = mgr.GetAPIReader()
-	r.Recorder = mgr.GetEventRecorderFor(controllerName)
-	r.Logger = mgr.GetLogger().WithName("rolloutrun.reconcile")
+	if r.workloadRegistry == nil {
+		return fmt.Errorf("workload manager must be set")
+	}
+
 	b := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		For(&rolloutv1alpha1.RolloutRun{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
@@ -120,7 +125,7 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// caculate new status
 	newStatus := r.caculateStatus(obj)
 
-	workloads, err := r.findWorkloadsCrossCluster(obj)
+	workloads, err := r.findWorkloadsCrossCluster(ctx, obj)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -220,7 +225,7 @@ func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rollo
 	return nil
 }
 
-func (r *RolloutRunReconciler) findWorkloadsCrossCluster(obj *rolloutv1alpha1.RolloutRun) (*workload.Set, error) {
+func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) (*workload.Set, error) {
 	all := make([]rolloutv1alpha1.CrossClusterObjectNameReference, 0)
 
 	for _, b := range obj.Spec.Batch.Batches {
@@ -233,12 +238,15 @@ func (r *RolloutRunReconciler) findWorkloadsCrossCluster(obj *rolloutv1alpha1.Ro
 	}
 
 	gvk := schema.FromAPIVersionAndKind(obj.Spec.TargetType.APIVersion, obj.Spec.TargetType.Kind)
-	switch gvk {
-	case statefulset.GVK:
-		return statefulset.NewWorkloadSet(r.Client, obj.GetNamespace(), match)
-	default:
-		return nil, fmt.Errorf("unsupported workload gvk: %s", gvk)
+	store, err := r.workloadRegistry.Get(gvk)
+	if err != nil {
+		return nil, err
 	}
+	list, err := store.List(ctx, obj.GetNamespace(), match)
+	if err != nil {
+		return nil, err
+	}
+	return workload.NewWorkloadSet(list...), nil
 }
 
 func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) {

@@ -20,28 +20,26 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/client-go/tools/record"
+	"kusionstack.io/kube-utils/controller/mixin"
+	"kusionstack.io/kube-utils/multicluster"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"kusionstack.io/kube-utils/multicluster"
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 
 	"kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -52,32 +50,41 @@ import (
 	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	"kusionstack.io/rollout/pkg/workload"
-	"kusionstack.io/rollout/pkg/workload/statefulset"
+	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
 )
 
 const (
-	controllerName = "rollout-controller"
+	ControllerName = "rollout-controller"
 )
 
 // RolloutReconciler reconciles a Rollout object
 type RolloutReconciler struct {
-	Client    client.Client
-	APIReader client.Reader
-	Scheme    *runtime.Scheme
-	Recorder  record.EventRecorder
-	Logger    logr.Logger
+	*mixin.ReconcilerMixin
+
+	workloadRegistry workloadregistry.Registry
 
 	expectation   expectations.ControllerExpectationsInterface
 	rvExpectation expectations.ResourceVersionExpectationInterface
+
+	supportedGVK sets.String
+}
+
+func NewReconciler(mgr manager.Manager, workloadRegistry workloadregistry.Registry) *RolloutReconciler {
+	return &RolloutReconciler{
+		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
+		expectation:      expectations.NewControllerExpectations(),
+		rvExpectation:    expectations.NewResourceVersionExpectation(),
+		workloadRegistry: workloadRegistry,
+		supportedGVK:     sets.NewString(),
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.expectation = expectations.NewControllerExpectations()
-	r.rvExpectation = expectations.NewResourceVersionExpectation()
-	r.APIReader = mgr.GetAPIReader()
-	r.Recorder = mgr.GetEventRecorderFor(controllerName)
-	r.Logger = mgr.GetLogger().WithName("rollout.reconcile")
+	if r.workloadRegistry == nil {
+		return fmt.Errorf("workload manager must be set")
+	}
+
 	b := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		For(&rolloutv1alpha1.Rollout{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
@@ -88,13 +95,17 @@ func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			multicluster.FedKind(&source.Kind{Type: &rolloutv1alpha1.RolloutStrategy{}}),
 			enqueueRolloutForStrategyHandler(r.Client, r.Logger),
-		).
-		Watches(
-			multicluster.ClustersKind(&source.Kind{Type: &appsv1.StatefulSet{}}),
-			enqueueRolloutForWorkloadHandler(r.Client, mgr.GetScheme(), r.Logger),
 		)
 
-	_, err := b.Build(r)
+	c, err := b.Build(r)
+	if err != nil {
+		return err
+	}
+
+	err = r.workloadRegistry.AddWatcher(mgr, c)
+	if err != nil {
+		return err
+	}
 	return err
 }
 
@@ -137,7 +148,7 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	newStatus := r.calculateStatus(instance)
 
 	// get all workloads references
-	workloads, err := r.findWorkloadsCrossCluster(instance)
+	workloads, err := r.findWorkloadsCrossCluster(ctx, instance)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -426,14 +437,13 @@ func (r *RolloutReconciler) parseUpgradeStrategy(instance *rolloutv1alpha1.Rollo
 	return strategy, nil
 }
 
-func (r *RolloutReconciler) findWorkloadsCrossCluster(instance *rolloutv1alpha1.Rollout) ([]workload.Interface, error) {
-	gvk := schema.FromAPIVersionAndKind(instance.Spec.WorkloadRef.APIVersion, instance.Spec.WorkloadRef.Kind)
-	switch gvk {
-	case statefulset.GVK:
-		return statefulset.NewWorkloadList(r.Client, instance.Namespace, instance.Spec.WorkloadRef.Match)
-	default:
-		return nil, fmt.Errorf("unsupported workload gvk: %s", gvk)
+func (r *RolloutReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.Rollout) ([]workload.Interface, error) {
+	gvk := schema.FromAPIVersionAndKind(obj.Spec.WorkloadRef.APIVersion, obj.Spec.WorkloadRef.Kind)
+	rest, err := r.workloadRegistry.Get(gvk)
+	if err != nil {
+		return nil, err
 	}
+	return rest.List(ctx, obj.GetNamespace(), obj.Spec.WorkloadRef.Match)
 }
 
 func (r *RolloutReconciler) updateStatusOnly(ctx context.Context, instance *rolloutv1alpha1.Rollout, newStatus *rolloutv1alpha1.RolloutStatus) error {
