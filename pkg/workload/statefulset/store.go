@@ -33,7 +33,7 @@ type Storage struct {
 	client client.Client
 }
 
-func NewStorage(mgr manager.Manager) *Storage {
+func NewStorage(mgr manager.Manager) registry.Store {
 	return &Storage{
 		client: mgr.GetClient(),
 	}

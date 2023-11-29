@@ -19,5 +19,5 @@ import (
 )
 
 var (
-	Initialzier = initializer.New()
+	Initializer = initializer.New()
 )

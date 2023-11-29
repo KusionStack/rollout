@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"kusionstack.io/rollout/cmd/rollout/app/options"
-	"kusionstack.io/rollout/pkg/registry"
 	"kusionstack.io/rollout/pkg/utils/cli"
 )
 
@@ -38,7 +37,7 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func NewRolloutCommand(initialzier initializer.Interface) *cobra.Command {
+func NewRolloutCommand(initializer initializer.Interface) *cobra.Command {
 	opt := options.NewOptions()
 
 	cmd := &cobra.Command{
@@ -57,16 +56,16 @@ func NewRolloutCommand(initialzier initializer.Interface) *cobra.Command {
 			verflag.PrintAndExitIfRequested()
 			cli.PrintFlags(setupLog, cmd.Flags())
 
-			return Run(opt, initialzier)
+			return Run(opt, initializer)
 		},
 	}
 
-	cli.AddFlagsAndUsage(cmd, opt.Flags(initialzier))
+	cli.AddFlagsAndUsage(cmd, opt.Flags(initializer))
 
 	return cmd
 }
 
-func Run(opt *options.Options, initialzier initializer.Interface) error {
+func Run(opt *options.Options, initializer initializer.Interface) error {
 	ctx := ctrl.SetupSignalHandler()
 
 	options := ctrl.Options{
@@ -125,10 +124,7 @@ func Run(opt *options.Options, initialzier initializer.Interface) error {
 		os.Exit(1)
 	}
 
-	// init workload registry
-	registry.InitRegistry(mgr)
-
-	err = initialzier.SetupWithManager(mgr)
+	err = initializer.SetupWithManager(mgr)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize controllers")
 	}

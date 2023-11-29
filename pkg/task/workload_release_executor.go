@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"kusionstack.io/rollout/apis/workflow/v1alpha1"
-	"kusionstack.io/rollout/pkg/registry"
+	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -49,7 +49,7 @@ type WorkloadReleaseExecutor struct {
 // NewWorkloadReleaseExecutor creates a new workload release executor
 func NewWorkloadReleaseExecutor(client client.Client, task *v1alpha1.Task) (Executor, error) {
 	gvk := schema.FromAPIVersionAndKind(task.Spec.WorkloadRelease.Workload.APIVersion, task.Spec.WorkloadRelease.Workload.Kind)
-	store, err := registry.WorkloadRegistry.Get(gvk)
+	store, err := workloadregistry.DefaultRegistry.Get(gvk)
 	if err != nil {
 		return nil, err
 	}

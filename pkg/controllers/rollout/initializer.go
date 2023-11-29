@@ -12,19 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package registry
+package rollout
 
 import (
+	"kusionstack.io/kube-utils/controller/initializer"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 	"kusionstack.io/rollout/pkg/workload/registry"
-	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
 
-var (
-	WorkloadRegistry = registry.New()
-)
+func InitFunc(mgr manager.Manager) (bool, error) {
+	return initFunc(mgr, workloadregistry.DefaultRegistry)
+}
 
-func InitRegistry(mgr manager.Manager) {
-	WorkloadRegistry.Register(statefulset.GVK, statefulset.NewStorage(mgr))
+func InitFuncWith(registry registry.Registry) initializer.InitFunc {
+	return func(m manager.Manager) (enabled bool, err error) {
+		return initFunc(m, registry)
+	}
+}
+
+func initFunc(mgr manager.Manager, registry registry.Registry) (bool, error) {
+	err := NewReconciler(mgr, registry).SetupWithManager(mgr)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

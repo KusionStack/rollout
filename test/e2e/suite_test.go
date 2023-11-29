@@ -39,7 +39,6 @@ import (
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	workflowvalpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers"
-	"kusionstack.io/rollout/pkg/registry"
 	"kusionstack.io/rollout/test/e2e/controller"
 	//+kubebuilder:scaffold:imports
 )
@@ -118,12 +117,10 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	registry.InitRegistry(k8sManager)
-
-	err = controllers.Initialzier.Add(controller.FakeStsControllerName, controller.InitFakeStsControllerFunc)
+	err = controllers.Initializer.Add(controller.FakeStsControllerName, controller.InitFakeStsControllerFunc)
 	Expect(err).ToNot(HaveOccurred())
 
-	err = controllers.Initialzier.SetupWithManager(k8sManager)
+	err = controllers.Initializer.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	go func() {
