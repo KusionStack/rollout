@@ -118,11 +118,13 @@ type RolloutWebhookReviewSpec struct {
 	// Rollout Name
 	RolloutName string `json:"rolloutName,omitempty"`
 	// Rollout Namespace
-	RolloutNamespace string            `json:"rolloutNamespace,omitempty"`
-	RolloutID        string            `json:"rolloutID,omitempty"`
-	HookType         HookType          `json:"hookType,omitempty"`
-	BatchIndex       int32             `json:"batchIndex,omitempty"`
-	Properties       map[string]string `json:"properties,omitempty"`
+	RolloutNamespace string                 `json:"rolloutNamespace,omitempty"`
+	RolloutID        string                 `json:"rolloutID,omitempty"`
+	HookType         HookType               `json:"hookType,omitempty"`
+	BatchIndex       int32                  `json:"batchIndex,omitempty"`
+	TargetType       ObjectTypeRef          `json:"targetType,omitempty"`
+	Targets          []RolloutRunStepTarget `json:"targets,omitempty"`
+	Properties       map[string]string      `json:"properties,omitempty"`
 }
 
 type HookType string

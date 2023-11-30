@@ -149,4 +149,6 @@ type BatchWebhookStatus struct {
 	Name string `json:"name,omitempty"`
 	// Webhook result
 	CodeReasonMessage `json:",inline"`
+	// Failure count
+	FailureCount int32 `json:"failureCount,omitempty"`
 }
