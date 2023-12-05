@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
@@ -20,8 +19,11 @@ import (
 )
 
 const (
+	ctxKeyLastUpgradeAt    = "LastUpgradeAt"
 	defaultRequeueDuration = 10 * time.Second
+)
 
+const (
 	CodeUpgradingError = "UpgradingError"
 
 	ReasonCheckReadyError           = "CheckReadyError"
@@ -44,9 +46,9 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 	newBatchStatus := executorContext.newStatus.BatchStatus
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
-	logger.Info(fmt.Sprintf(
-		"DefaultExecutor doUpgrading start , currentBatchIndex=%d", currentBatchIndex,
-	))
+	logger.Info(
+		"DefaultExecutor doUpgrading start", "currentBatchIndex", currentBatchIndex,
+	)
 
 	if len(currentBatch.Targets) == 0 {
 		logger.Info("DefaultExecutor doUpgrading skip since targets empty")
@@ -58,13 +60,12 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 	if err != nil {
 		newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
 			ReasonWorkloadStoreNotExist,
-			fmt.Sprintf("Store(%s) found error, err=%v", gvk, err),
+			fmt.Sprintf("gvk(%s) is unsupported, err=%v", gvk, err),
 		)
 		return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 	}
 
 	// upgrade partition
-	var lastUpdateAt *metav1.Time
 	targets := newBatchStatus.Records[currentBatchIndex].Targets
 	for _, item := range currentBatch.Targets {
 		var wi workload.Interface
@@ -72,38 +73,26 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 		if err != nil {
 			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
-				fmt.Sprintf("Workload Interface(%s) found error, err=%v", gvk, err),
+				fmt.Sprintf("get Workload Interface(%s) error, err=%v", gvk, err),
 			)
 			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 		}
 
-		target, exist := utils.Find(
+		_, exist := utils.Find(
 			targets,
 			func(s *rolloutv1alpha1.RolloutWorkloadStatus) bool {
 				return (s.Name == item.Name) && (s.Cluster == item.Cluster)
 			},
 		)
 		if !exist {
-			target = rolloutv1alpha1.RolloutWorkloadStatus{
-				Name: item.Name, Cluster: item.Cluster,
-			}
-			newBatchStatus.Records[currentBatchIndex].Targets = append(targets, target)
-		}
-
-		if target.UpdatedAt == nil {
-			var ok bool
-			ok, err = wi.UpgradePartition(&item.Replicas)
-			if ok {
-				target.UpdatedAt = &metav1.Time{Time: time.Now()}
-				if lastUpdateAt.Before(target.UpdatedAt) {
-					lastUpdateAt = target.UpdatedAt
+			_, err = wi.UpgradePartition(&item.Replicas)
+			if err == nil {
+				target := &rolloutv1alpha1.RolloutWorkloadStatus{
+					Name: item.Name, Cluster: item.Cluster,
 				}
-			} else if err == nil {
-				newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
-					ReasonUpgradePartitionError,
-					fmt.Sprintf("Upgrade partition(%v) failed", item),
-				)
-				return false, ctrl.Result{Requeue: true}, nil
+				lastUpgradeAt := time.Now().UTC().Format(time.RFC3339)
+				newBatchStatus.Context[ctxKeyLastUpgradeAt] = lastUpgradeAt
+				newBatchStatus.Records[currentBatchIndex].Targets = append(targets, *target)
 			} else {
 				newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
 					ReasonUpgradePartitionError,
@@ -115,17 +104,28 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 	}
 
 	// wait for initial delay
-	var initialDelaySeconds int32
-	var failureThreshold *intstr.IntOrString
+	var (
+		initialDelaySeconds int32
+		lastUpgradeAt       = time.Now()
+		failureThreshold    *intstr.IntOrString
+	)
+	if val, exist := newBatchStatus.Context[ctxKeyLastUpgradeAt]; exist {
+		if lastUpgradeAt, err = time.Parse(val, time.RFC3339); err != nil {
+			lastUpgradeAt = time.Now()
+			logger.Error(
+				err, "failed since err lastUpgradeAt value", ctxKeyLastUpgradeAt, val,
+			)
+		}
+	}
 	if rolloutRun.Spec.Batch.Toleration != nil {
 		initialDelaySeconds = rolloutRun.Spec.Batch.Toleration.InitialDelaySeconds
 		failureThreshold = rolloutRun.Spec.Batch.Toleration.WorkloadFailureThreshold
 	}
-	duration := time.Until(lastUpdateAt.Add(time.Duration(initialDelaySeconds) * time.Second))
+	duration := time.Until(lastUpgradeAt.Add(time.Duration(initialDelaySeconds) * time.Second))
 	if duration > 0 {
-		logger.Info(fmt.Sprintf(
-			"DefaultExecutor doUpgrading skip since wait for initialDelaySeconds %s s", duration,
-		))
+		logger.Info(
+			"skip since wait for initialDelay", "initialDelaySeconds", duration,
+		)
 		return false, ctrl.Result{RequeueAfter: duration}, nil
 	}
 
@@ -140,7 +140,7 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 		if err != nil {
 			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
-				fmt.Sprintf("Workload Interface(%s) found error, err=%v", gvk, err),
+				fmt.Sprintf("get Workload Interface(%s) error, err=%v", gvk, err),
 			)
 			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 		}
@@ -156,14 +156,17 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 
 		ready, err = wi.CheckReady(pointer.Int32((int32)(expectReadyReplicas)))
 		if err != nil {
-			logger.Info("%v CheckReady error, err=%v", item, err)
+			logger.Info("Target CheckReady error", "target", item, "error", err)
 			err = fmt.Errorf("%v CheckReady error, err=%v", item, err)
 			return false, ctrl.Result{RequeueAfter: defaultRequeueDuration}, err
 		} else if !ready {
-			logger.Info(fmt.Sprintf("%v CheckReady not ready", item))
+			logger.Info("Target CheckReady not ready", "target", item)
 			return false, ctrl.Result{RequeueAfter: defaultRequeueDuration}, nil
 		}
 	}
+
+	newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePostBatchStepHook
+	newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePostBatchStepHook
 
 	return true, ctrl.Result{Requeue: true}, nil
 }

@@ -206,8 +206,6 @@ type RolloutWorkloadStatus struct {
 	Name string `json:"name,omitempty"`
 	// Cluster defines which cluster the workload is in.
 	Cluster string `json:"cluster,omitempty"`
-	// The Updated time this workload was updated.
-	UpdatedAt *metav1.Time `json:"updatedAt,omitempty"`
 	// Generation is the found in workload metadata.
 	Generation int64 `json:"generation,omitempty"`
 	// ObservedGeneration is the most recent generation observed for this workload.
@@ -226,11 +224,11 @@ const (
 	// BatchStepStatePending means the step is pending.
 	BatchStepStatePending RolloutBatchStepState = "Pending"
 	// BatchStepStatePreBatchStepHook means the step is in pre batch hook
-	BatchStepStatePreBatchStepHook RolloutBatchStepState = "PreBatchStepHook"
+	BatchStepStatePreBatchStepHook RolloutBatchStepState = RolloutBatchStepState(HookTypePreBatchStep)
 	// BatchStepStateRunning means the step is running.
 	BatchStepStateRunning RolloutBatchStepState = "Running"
 	// BatchStepStatePostBatchStepHook means the step is in post batch hook
-	BatchStepStatePostBatchStepHook RolloutBatchStepState = "PostBatchStepHook"
+	BatchStepStatePostBatchStepHook RolloutBatchStepState = RolloutBatchStepState(HookTypePostBatchStep)
 	// BatchStepStateSucceeded means the step is completed.
 	BatchStepStateSucceeded RolloutBatchStepState = "Succeeded"
 	// BatchStepStatePaused means the step is paused.

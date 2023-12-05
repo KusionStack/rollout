@@ -14,16 +14,15 @@ func Filter[T any](items []T, predicate func(*T) bool) []T {
 }
 
 // Find find first item which meet the predicate
-func Find[T any](items []T, predicate func(*T) bool) (T, bool) {
+func Find[T any](items []T, predicate func(*T) bool) (*T, bool) {
 	if len(items) > 0 {
 		for _, e := range items {
 			if predicate(&e) {
-				return e, true
+				return &e, true
 			}
 		}
 	}
-	var zero T
-	return zero, false
+	return nil, false
 }
 
 // Any detect if item exist in the items

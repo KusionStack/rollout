@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/go-logr/logr"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,32 +21,6 @@ const (
 	ReasonWebhookExecuteError             = "WebhookExecuteError"
 	ReasonWebhookFailurePolicyInvalid     = "WebhookFailurePolicyInvalid"
 	ReasonWebhookFailureThresholdExceeded = "WebhookFailureThresholdExceeded"
-)
-
-var (
-	hookTypePredicate = func(hookType rolloutv1alpha1.HookType, webhook *rolloutv1alpha1.RolloutWebhook) bool {
-		if webhook == nil ||
-			len(hookType) == 0 ||
-			len(webhook.HookTypes) == 0 {
-			return false
-		}
-
-		for _, val := range webhook.HookTypes {
-			if val == hookType {
-				return true
-			}
-		}
-
-		return false
-	}
-
-	HookTypeAndNamePredicate = func(hookName string, hookType rolloutv1alpha1.HookType, webhook *rolloutv1alpha1.BatchWebhookStatus) bool {
-		if webhook == nil {
-			return false
-		}
-
-		return webhook.HookType == hookType && webhook.Name == hookName
-	}
 )
 
 // detectRequeueAfter detect webhook requeue interval
@@ -66,7 +41,10 @@ func moveToNextWebhook(webhookName string, hookType rolloutv1alpha1.HookType, ba
 	_, exist := utils.Find(
 		batchStatusRecord.Webhooks,
 		func(w *rolloutv1alpha1.BatchWebhookStatus) bool {
-			return HookTypeAndNamePredicate(webhookName, hookType, w)
+			if w == nil {
+				return false
+			}
+			return w.HookType == hookType && w.Name == webhookName
 		},
 	)
 	if !exist {
@@ -102,6 +80,86 @@ func makeRolloutWebhookReview(hookType rolloutv1alpha1.HookType, webhook *rollou
 	}
 }
 
+// doPreBatchHook process PreBatchHook state
+func (r *Executor) doPreBatchHook(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
+	logger := logr.FromContext(ctx)
+
+	newBatchStatus := executorContext.newStatus.BatchStatus
+
+	currentBatchIndex := newBatchStatus.CurrentBatchIndex
+	logger.Info(
+		"DefaultExecutor begin to doPreBatchHook", "currentBatchIndex", currentBatchIndex,
+	)
+
+	var (
+		done   bool
+		err    error
+		result ctrl.Result
+	)
+	task := func() {
+		done, result, err = r.runRolloutWebhooks(ctx, rolloutv1alpha1.HookTypePreBatchStep, executorContext)
+	}
+	if timeoutErr := utils.RunWithTimeout(ctx, defaultRunRolloutWebhooksTimeout, task); timeoutErr != nil {
+		if err == nil {
+			err = timeoutErr
+		}
+		logger.Error(timeoutErr, "DefaultExecutor doPreBatchHook error since timeout")
+	}
+
+	if done {
+		newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStateRunning
+		newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStateRunning
+	}
+
+	return done, result, err
+}
+
+// todo add analysis logic
+// doPostBatchHook process doPostBatchHook state
+func (r *Executor) doPostBatchHook(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
+	logger := logr.FromContext(ctx)
+
+	rolloutRun := executorContext.rolloutRun
+	newBatchStatus := executorContext.newStatus.BatchStatus
+
+	currentBatchIndex := newBatchStatus.CurrentBatchIndex
+	logger.Info(
+		"DefaultExecutor begin to doPostBatchHook,", "currentBatchIndex", currentBatchIndex,
+	)
+
+	var (
+		done   bool
+		err    error
+		result ctrl.Result
+	)
+	task := func() {
+		done, result, err = r.runRolloutWebhooks(ctx, rolloutv1alpha1.HookTypePostBatchStep, executorContext)
+	}
+	if timeoutErr := utils.RunWithTimeout(ctx, defaultRunRolloutWebhooksTimeout, task); timeoutErr != nil {
+		if err == nil {
+			err = timeoutErr
+		}
+		logger.Error(timeoutErr, "DefaultExecutor doPostBatchHook error since timeout")
+	}
+
+	if done {
+		pause := rolloutRun.Spec.Batch.Batches[currentBatchIndex].Pause
+		if pause != nil || *pause {
+			logger.Info("DefaultExecutor will pause")
+			newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePaused
+			newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePaused
+		} else {
+			newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStateSucceeded
+			if newBatchStatus.Records[currentBatchIndex].FinishTime == nil {
+				newBatchStatus.Records[currentBatchIndex].FinishTime = &metav1.Time{Time: time.Now()}
+			}
+			newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStateSucceeded
+		}
+	}
+
+	return done, result, err
+}
+
 // runRolloutWebhooks process webhooks
 // todo add backoff when status Processing or failureCount not exceed failureThreshold
 func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alpha1.HookType, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
@@ -112,8 +170,17 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 
 	webhooks := utils.Filter(
 		rolloutRun.Spec.Webhooks,
-		func(item *rolloutv1alpha1.RolloutWebhook) bool {
-			return hookTypePredicate(hookType, item)
+		func(w *rolloutv1alpha1.RolloutWebhook) bool {
+			if w != nil &&
+				len(hookType) > 0 &&
+				len(w.HookTypes) > 0 {
+				for _, item := range w.HookTypes {
+					if item == hookType {
+						return true
+					}
+				}
+			}
+			return false
 		},
 	)
 
@@ -161,7 +228,7 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 			ctx, &item, makeRolloutWebhookReview(hookType, &item, executorContext),
 		)
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("Webhook(%s) execute error", item.Name))
+			logger.Error(err, "Webhook execute error", "Webhook", item.Name)
 			if status == nil {
 				status = &rolloutv1alpha1.RolloutWebhookReviewStatus{
 					CodeReasonMessage: *newHookCodeReasonMessage(
@@ -188,9 +255,8 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 			// error
 			batchWebhookStatus.FailureCount++
 			if status.Code != rolloutv1alpha1.WebhookReviewCodeError {
-				logger.Error(
-					nil,
-					fmt.Sprintf("Webhook(%s) failed since status(%s) illegal", item.Name, status),
+				logger.Info(
+					"Webhook status illegal", "Webhook", item.Name, "status", status,
 				)
 			}
 			if batchWebhookStatus.FailureCount <= failureThreshold {
