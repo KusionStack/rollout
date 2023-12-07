@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
@@ -39,7 +38,7 @@ func newUpgradingCodeReasonMessage(reason string, msg string) *rolloutv1alpha1.C
 
 // doUpgrading process upgrading state
 func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
-	logger := logr.FromContext(ctx)
+	logger := r.Logger
 
 	rolloutRun := executorContext.rolloutRun
 	targetType := rolloutRun.Spec.TargetType

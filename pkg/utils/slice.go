@@ -4,7 +4,8 @@ package utils
 func Filter[T any](items []T, predicate func(*T) bool) []T {
 	var hits []T
 	if len(items) > 0 {
-		for _, e := range items {
+		for i := range items {
+			e := items[i]
 			if predicate(&e) {
 				hits = append(hits, e)
 			}
@@ -16,7 +17,8 @@ func Filter[T any](items []T, predicate func(*T) bool) []T {
 // Find find first item which meet the predicate
 func Find[T any](items []T, predicate func(*T) bool) (*T, bool) {
 	if len(items) > 0 {
-		for _, e := range items {
+		for i := range items {
+			e := items[i]
 			if predicate(&e) {
 				return &e, true
 			}
@@ -28,7 +30,8 @@ func Find[T any](items []T, predicate func(*T) bool) (*T, bool) {
 // Any detect if item exist in the items
 func Any[T any](items []T, predicate func(*T) bool) bool {
 	if len(items) > 0 {
-		for _, e := range items {
+		for i := range items {
+			e := items[i]
 			if predicate(&e) {
 				return true
 			}

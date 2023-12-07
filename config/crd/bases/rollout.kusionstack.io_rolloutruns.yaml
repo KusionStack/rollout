@@ -377,6 +377,10 @@ spec:
                               code:
                                 description: Code is a globally unique identifier
                                 type: string
+                              failureCount:
+                                description: Failure count
+                                format: int32
+                                type: integer
                               hookType:
                                 description: Webhook Type
                                 type: string

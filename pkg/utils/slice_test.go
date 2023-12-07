@@ -1,6 +1,8 @@
 package utils
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestFilter(t *testing.T) {
 	hits := Filter([]string{}, func(t *string) bool { return len(*t) > 2 })

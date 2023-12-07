@@ -18,9 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"kusionstack.io/rollout/pkg/utils/logging"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sort"
 	"strconv"
 
@@ -105,10 +102,8 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // move the current state of the cluster closer to the desired state.
 func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	key := req.String()
-	logger := r.Logger.WithValues(
-		"rolloutRun", key, logging.TraceId, uuid.NewString(),
-	)
-	logf.IntoContext(ctx, logger)
+
+	logger := r.Logger.WithValues("rolloutRun", key)
 
 	logger.V(2).Info("start reconciling rolloutRun")
 	defer logger.V(2).Info("finish reconciling rolloutRun")

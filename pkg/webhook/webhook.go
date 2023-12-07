@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
@@ -32,7 +33,7 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 	logger.Info(fmt.Sprintf("RunRolloutWebhook start to process. name=%s", webhook.Name))
 	defer logger.Info(
 		fmt.Sprintf(
-			"RunRolloutWebhook process finished. name=%s, status=%s", webhook.Name, status,
+			"RunRolloutWebhook process finished. name=%s, status=%v", webhook.Name, status,
 		),
 	)
 
@@ -53,9 +54,9 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 
 	var requestUrl *url.URL
 	if requestUrl, err = url.Parse(clientConfig.URL); err != nil {
-		return nil, fmt.Errorf(
-			"RunRolloutWebhook failed "+
-				"since url is invalid, url=%s err=%v", clientConfig.URL, err,
+		return nil, errors.Wrapf(
+			err,
+			"RunRolloutWebhook failed since url(%s) is invalid", clientConfig.URL,
 		)
 	}
 
@@ -66,7 +67,7 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 	if err != nil {
 		return nil, fmt.Errorf(
 			"RunRolloutWebhook failed "+
-				"since get client failed, clientConfig=%v err=%v", clientConfig, err,
+				"since get client failed, clientConfig=%v err=[%v]", clientConfig, err,
 		)
 	}
 
@@ -75,7 +76,7 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 	requestBody, err = json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"RunRolloutWebhook failed since marshal payload failed, err=%v", err,
+			"RunRolloutWebhook failed since marshal payload failed, err=[%v]", err,
 		)
 	}
 
@@ -85,7 +86,7 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"RunRolloutWebhook failed since new request failed, err=%v", err,
+			"RunRolloutWebhook failed since new request failed, err=[%v]", err,
 		)
 	}
 
@@ -107,7 +108,7 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 	response, err = client.Do(req.WithContext(requestCtx))
 	if err != nil {
 		return nil, fmt.Errorf(
-			"RunRolloutWebhook failed since request failed, err=%v", err,
+			"RunRolloutWebhook failed since request failed, err=[%v]", err,
 		)
 	}
 	defer response.Body.Close()
@@ -125,7 +126,7 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 	body, err = io.ReadAll(response.Body)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"RunRolloutWebhook failed since read body failed, err=%v", err,
+			"RunRolloutWebhook failed since read body failed, err=[%v]", err,
 		)
 	}
 
@@ -133,7 +134,7 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 	if err = json.Unmarshal(body, rolloutWebhookReviewStatus); err != nil {
 		return nil, fmt.Errorf(
 			"RunRolloutWebhook failed "+
-				"since unmarshal body failed, body=%s, err=%v", string(body), err,
+				"since unmarshal body failed, body=%s, err=[%v]", string(body), err,
 		)
 	}
 

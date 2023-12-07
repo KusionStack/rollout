@@ -2,7 +2,6 @@ package executor
 
 import (
 	"context"
-	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -13,8 +12,8 @@ import (
 )
 
 const (
-	defaultRequeueAfter              int64 = 5
-	defaultRunRolloutWebhooksTimeout       = time.Second * time.Duration(600)
+	defaultRequeueAfter int32 = 5
+	defaultRunTimeout   int32 = 5
 )
 
 // ExecutorContext context of rolloutRun
@@ -25,15 +24,16 @@ type ExecutorContext struct {
 }
 
 type Executor struct {
+	Logger logr.Logger
 }
 
-func NewDefaultExecutor() *Executor {
-	return &Executor{}
+func NewDefaultExecutor(logger logr.Logger) *Executor {
+	return &Executor{Logger: logger}
 }
 
 // Do execute the lifecycle for rollout run, and will return new status
 func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
-	logger := logr.FromContext(ctx)
+	logger := r.Logger
 
 	// init
 	rolloutRun := executorContext.rolloutRun
@@ -58,10 +58,12 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 	currentBatchIndex := executorContext.newStatus.BatchStatus.CurrentBatchIndex
 	preCurrentBatchState := executorContext.newStatus.BatchStatus.CurrentBatchState
 	logger.Info("DefaultExecutor start to process", "currentBatchIndex", currentBatchIndex)
-	defer logger.Info(
-		"DefaultExecutor process finished", "currentBatchIndex", currentBatchIndex,
-		"stateFrom", preCurrentBatchState, "stateTo", executorContext.newStatus.BatchStatus.CurrentBatchState,
-	)
+	defer func() {
+		logger.Info(
+			"DefaultExecutor process finished", "currentBatchIndex", currentBatchIndex,
+			"stateFrom", preCurrentBatchState, "stateTo", executorContext.newStatus.BatchStatus.CurrentBatchState,
+		)
+	}()
 
 	// if currentBatchError is not null, do nothing
 	currentBatchError := executorContext.rolloutRun.Status.BatchStatus.CurrentBatchError
@@ -81,7 +83,7 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 	if len(rolloutRun.Spec.Batch.Batches) > 0 {
 		switch newBatchStatus.CurrentBatchState {
 		case rolloutv1alpha1.BatchStepStatePending:
-			done, result = r.doInitialized(ctx, executorContext)
+			done, result = r.doInitialized(executorContext)
 		case rolloutv1alpha1.BatchStepStatePreBatchStepHook:
 			done, result, err = r.doPreBatchHook(ctx, executorContext)
 		case rolloutv1alpha1.BatchStepStateRunning:
@@ -89,9 +91,9 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 		case rolloutv1alpha1.BatchStepStatePostBatchStepHook:
 			done, result, err = r.doPostBatchHook(ctx, executorContext)
 		case rolloutv1alpha1.BatchStepStatePaused:
-			done, result = r.doPaused(ctx, executorContext)
+			done, result = r.doPaused(executorContext)
 		case rolloutv1alpha1.BatchStepStateSucceeded:
-			done = r.doSucceeded(ctx, executorContext)
+			done = r.doSucceeded(executorContext)
 		}
 	}
 
@@ -118,8 +120,8 @@ func isCompleted(executorContext *ExecutorContext) bool {
 }
 
 // doInitialized process Initialized state
-func (r *Executor) doInitialized(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result) {
-	logger := logr.FromContext(ctx)
+func (r *Executor) doInitialized(executorContext *ExecutorContext) (bool, ctrl.Result) {
+	logger := r.Logger
 
 	newBatchStatus := executorContext.newStatus.BatchStatus
 
@@ -128,7 +130,7 @@ func (r *Executor) doInitialized(ctx context.Context, executorContext *ExecutorC
 		"DefaultExecutor begin to doInitialized", "currentBatchIndex", currentBatchIndex,
 	)
 
-	if reflect.ValueOf(newBatchStatus.Records[currentBatchIndex]).IsZero() {
+	if newBatchStatus.Records[currentBatchIndex].IsZero() {
 		newBatchStatus.Records[currentBatchIndex] = rolloutv1alpha1.RolloutRunBatchStatusRecord{}
 		newBatchStatus.Records[currentBatchIndex].StartTime = &metav1.Time{Time: time.Now()}
 	}
@@ -140,8 +142,8 @@ func (r *Executor) doInitialized(ctx context.Context, executorContext *ExecutorC
 }
 
 // doPaused process paused state
-func (r *Executor) doPaused(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result) {
-	logger := logr.FromContext(ctx)
+func (r *Executor) doPaused(executorContext *ExecutorContext) (bool, ctrl.Result) {
+	logger := r.Logger
 
 	currentBatchIndex := executorContext.newStatus.BatchStatus.CurrentBatchIndex
 	logger.Info(
@@ -152,8 +154,8 @@ func (r *Executor) doPaused(ctx context.Context, executorContext *ExecutorContex
 }
 
 // doSucceeded process succeeded state
-func (r *Executor) doSucceeded(ctx context.Context, executorContext *ExecutorContext) bool {
-	logger := logr.FromContext(ctx)
+func (r *Executor) doSucceeded(executorContext *ExecutorContext) bool {
+	logger := r.Logger
 
 	newBatchStatus := executorContext.newStatus.BatchStatus
 
