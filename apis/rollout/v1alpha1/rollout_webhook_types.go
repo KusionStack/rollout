@@ -35,7 +35,7 @@ type RolloutWebhook struct {
 	// FailurePolicy defines how unrecognized errors from the admission endpoint are handled -
 	// allowed values are Ignore or Fail. Defaults to Ignore.
 	// +optional
-	FailurePolicy *FailurePolicyType `json:"failurePolicy,omitempty"`
+	FailurePolicy FailurePolicyType `json:"failurePolicy,omitempty"`
 	// Properties provide additional data for webhook.
 	// +optional
 	Properties map[string]string `json:"properties,omitempty"`
@@ -118,11 +118,15 @@ type RolloutWebhookReviewSpec struct {
 	// Rollout Name
 	RolloutName string `json:"rolloutName,omitempty"`
 	// Rollout Namespace
-	RolloutNamespace string            `json:"rolloutNamespace,omitempty"`
-	RolloutID        string            `json:"rolloutID,omitempty"`
-	HookType         HookType          `json:"hookType,omitempty"`
-	BatchIndex       int32             `json:"batchIndex,omitempty"`
-	Properties       map[string]string `json:"properties,omitempty"`
+	RolloutNamespace string   `json:"rolloutNamespace,omitempty"`
+	RolloutID        string   `json:"rolloutID,omitempty"`
+	HookType         HookType `json:"hookType,omitempty"`
+	// BatchIndex is index of the batch executing
+	BatchIndex int32                  `json:"batchIndex,omitempty"`
+	TargetType ObjectTypeRef          `json:"targetType,omitempty"`
+	Targets    []RolloutRunStepTarget `json:"targets,omitempty"`
+	// Properties custom param from webhook paas to server side
+	Properties map[string]string `json:"properties,omitempty"`
 }
 
 type HookType string

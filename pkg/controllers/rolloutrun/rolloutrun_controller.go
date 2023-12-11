@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -96,14 +97,16 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rolloutruns,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rolloutruns/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rolloutruns/finalizers,verbs=update
-
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rolloutstrategies,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	key := req.String()
-	logger := r.Logger.WithValues("rolloutRun", key)
+
+	logger := r.Logger.WithValues(
+		"rolloutRun", key, "traceId", uuid.New().String(),
+	)
 
 	logger.V(2).Info("start reconciling rolloutRun")
 	defer logger.V(2).Info("finish reconciling rolloutRun")

@@ -25,7 +25,7 @@ import (
 	"kusionstack.io/rollout/pkg/workload"
 )
 
-var gvk = schema.GroupVersionKind{
+var GVK = schema.GroupVersionKind{
 	Group:   "rollout.kusionstack.io",
 	Version: "v1alpha1",
 	Kind:    "FakeWorkload",
@@ -43,7 +43,7 @@ func New(cluster, namespace, name string) workload.Interface {
 			Cluster:   cluster,
 			Namespace: namespace,
 			Name:      name,
-			GVK:       gvk,
+			GVK:       GVK,
 			Labels: map[string]string{
 				"rollout.kusionstack.io/cluster": cluster,
 			},
@@ -66,12 +66,12 @@ func (w *fakeWorkload) GetObj() client.Object {
 
 // CalculateAtLeastUpdatedAvailableReplicas implements workload.Interface.
 func (*fakeWorkload) CalculateAtLeastUpdatedAvailableReplicas(failureThreshold *intstr.IntOrString) (int, error) {
-	panic("unimplemented")
+	return 0, nil
 }
 
 // CheckReady implements workload.Interface.
 func (*fakeWorkload) CheckReady(expectUpdatedReplicas *int32) (bool, error) {
-	panic("unimplemented")
+	return true, nil
 }
 
 // IsWaitingRollout implements workload.Interface.
@@ -86,5 +86,5 @@ func (*fakeWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj c
 
 // UpgradePartition implements workload.Interface.
 func (*fakeWorkload) UpgradePartition(partition *intstr.IntOrString) (bool, error) {
-	panic("unimplemented")
+	return true, nil
 }

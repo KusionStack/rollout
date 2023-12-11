@@ -223,8 +223,12 @@ type RolloutBatchStepState string
 const (
 	// BatchStepStatePending means the step is pending.
 	BatchStepStatePending RolloutBatchStepState = "Pending"
+	// BatchStepStatePreBatchStepHook means the step is in pre batch hook
+	BatchStepStatePreBatchStepHook RolloutBatchStepState = RolloutBatchStepState(HookTypePreBatchStep)
 	// BatchStepStateRunning means the step is running.
 	BatchStepStateRunning RolloutBatchStepState = "Running"
+	// BatchStepStatePostBatchStepHook means the step is in post batch hook
+	BatchStepStatePostBatchStepHook RolloutBatchStepState = RolloutBatchStepState(HookTypePostBatchStep)
 	// BatchStepStateSucceeded means the step is completed.
 	BatchStepStateSucceeded RolloutBatchStepState = "Succeeded"
 	// BatchStepStatePaused means the step is paused.
