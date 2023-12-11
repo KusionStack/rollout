@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	defaultRequeueAfter int32 = 5
 	defaultRunTimeout   int32 = 5
+	defaultRequeueAfter int32 = 5
 )
 
 // ExecutorContext context of rolloutRun
@@ -74,36 +74,40 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 		return false, ctrl.Result{}, nil
 	}
 
+	if len(rolloutRun.Spec.Batch.Batches) == 0 {
+		return true, ctrl.Result{}, nil
+	}
+
 	// lifecycle
 	var (
 		err    error
 		done   bool
 		result ctrl.Result
 	)
-	if len(rolloutRun.Spec.Batch.Batches) > 0 {
-		switch newBatchStatus.CurrentBatchState {
-		case rolloutv1alpha1.BatchStepStatePending:
-			done, result = r.doInitialized(executorContext)
-		case rolloutv1alpha1.BatchStepStatePreBatchStepHook:
-			done, result, err = r.doPreBatchHook(ctx, executorContext)
-		case rolloutv1alpha1.BatchStepStateRunning:
-			done, result, err = r.doUpgrading(ctx, executorContext)
-		case rolloutv1alpha1.BatchStepStatePostBatchStepHook:
-			done, result, err = r.doPostBatchHook(ctx, executorContext)
-		case rolloutv1alpha1.BatchStepStatePaused:
-			done, result = r.doPaused(executorContext)
-		case rolloutv1alpha1.BatchStepStateSucceeded:
-			done = r.doSucceeded(executorContext)
+	switch newBatchStatus.CurrentBatchState {
+	case rolloutv1alpha1.BatchStepStatePending:
+		done, result = r.doInitialized(executorContext)
+	case rolloutv1alpha1.BatchStepStatePreBatchStepHook:
+		done, result, err = r.doPreBatchHook(ctx, executorContext)
+	case rolloutv1alpha1.BatchStepStateRunning:
+		done, result, err = r.doUpgrading(ctx, executorContext)
+	case rolloutv1alpha1.BatchStepStatePostBatchStepHook:
+		done, result, err = r.doPostBatchHook(ctx, executorContext)
+	case rolloutv1alpha1.BatchStepStatePaused:
+		done, result = r.doPaused(executorContext)
+	case rolloutv1alpha1.BatchStepStateSucceeded:
+		result = r.doSucceeded(executorContext)
+		if isCompleted(executorContext) {
+			return true, result, nil
 		}
 	}
 
-	// default RequeueAfter
 	// todo add backoff machinery
 	if !done && err == nil && result.IsZero() {
 		result = ctrl.Result{RequeueAfter: time.Duration(defaultRequeueAfter) * time.Second}
 	}
 
-	return isCompleted(executorContext), result, err
+	return false, result, err
 }
 
 // isCompleted detect if rolloutRun is completed
@@ -130,6 +134,12 @@ func (r *Executor) doInitialized(executorContext *ExecutorContext) (bool, ctrl.R
 		"DefaultExecutor begin to doInitialized", "currentBatchIndex", currentBatchIndex,
 	)
 
+	if (len(newBatchStatus.Records) - 1) < int(currentBatchIndex) {
+		item := rolloutv1alpha1.RolloutRunBatchStatusRecord{}
+		item.StartTime = &metav1.Time{Time: time.Now()}
+		newBatchStatus.Records = append(newBatchStatus.Records, item)
+	}
+
 	if newBatchStatus.Records[currentBatchIndex].IsZero() {
 		newBatchStatus.Records[currentBatchIndex] = rolloutv1alpha1.RolloutRunBatchStatusRecord{}
 		newBatchStatus.Records[currentBatchIndex].StartTime = &metav1.Time{Time: time.Now()}
@@ -154,7 +164,7 @@ func (r *Executor) doPaused(executorContext *ExecutorContext) (bool, ctrl.Result
 }
 
 // doSucceeded process succeeded state
-func (r *Executor) doSucceeded(executorContext *ExecutorContext) bool {
+func (r *Executor) doSucceeded(executorContext *ExecutorContext) ctrl.Result {
 	logger := r.Logger
 
 	newBatchStatus := executorContext.newStatus.BatchStatus
@@ -164,15 +174,15 @@ func (r *Executor) doSucceeded(executorContext *ExecutorContext) bool {
 		"DefaultExecutor begin to doSucceeded", "currentBatchIndex", currentBatchIndex,
 	)
 
-	if int(currentBatchIndex) < (len(executorContext.rolloutRun.Spec.Batch.Batches) - 1) {
+	if int(currentBatchIndex) >= (len(executorContext.rolloutRun.Spec.Batch.Batches) - 1) {
+		// if all batch completed
+		logger.Info("DefaultExecutor complete since all batches done")
+		return ctrl.Result{}
+	} else {
 		// move to next batch
 		newBatchStatus.Context = map[string]string{}
 		newBatchStatus.CurrentBatchIndex = currentBatchIndex + 1
 		newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePending
-	} else {
-		// if all batch completed
-		logger.Info("DefaultExecutor complete since all batches done")
+		return ctrl.Result{Requeue: true}
 	}
-
-	return true
 }

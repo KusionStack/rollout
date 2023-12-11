@@ -2,10 +2,10 @@ package executor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
@@ -18,8 +18,7 @@ import (
 )
 
 const (
-	ctxKeyLastUpgradeAt    = "LastUpgradeAt"
-	defaultRequeueDuration = 10 * time.Second
+	ctxKeyLastUpgradeAt = "LastUpgradeAt"
 )
 
 const (
@@ -41,7 +40,6 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 	logger := r.Logger
 
 	rolloutRun := executorContext.rolloutRun
-	targetType := rolloutRun.Spec.TargetType
 	newBatchStatus := executorContext.newStatus.BatchStatus
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
@@ -51,9 +49,12 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 
 	if len(currentBatch.Targets) == 0 {
 		logger.Info("DefaultExecutor doUpgrading skip since targets empty")
-		return true, ctrl.Result{}, nil
+		newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePostBatchStepHook
+		newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePostBatchStepHook
+		return true, ctrl.Result{Requeue: true}, nil
 	}
 
+	targetType := rolloutRun.Spec.TargetType
 	gvk := schema.FromAPIVersionAndKind(targetType.APIVersion, targetType.Kind)
 	store, err := workloadregistry.DefaultRegistry.Get(gvk)
 	if err != nil {
@@ -73,6 +74,12 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("get Workload Interface(%s) error, err=%v", gvk, err),
+			)
+			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+		} else if wi == nil {
+			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
+				ReasonWorkloadInterfaceNotExist,
+				fmt.Sprintf("Workload Interface(%s) is not exist", gvk),
 			)
 			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 		}
@@ -109,7 +116,7 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 		failureThreshold    *intstr.IntOrString
 	)
 	if val, exist := newBatchStatus.Context[ctxKeyLastUpgradeAt]; exist {
-		if lastUpgradeAt, err = time.Parse(val, time.RFC3339); err != nil {
+		if lastUpgradeAt, err = time.Parse(time.RFC3339, val); err != nil {
 			lastUpgradeAt = time.Now()
 			logger.Error(
 				err, "failed since err lastUpgradeAt value", ctxKeyLastUpgradeAt, val,
@@ -142,6 +149,12 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 				fmt.Sprintf("get Workload Interface(%s) error, err=%v", gvk, err),
 			)
 			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+		} else if wi == nil {
+			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
+				ReasonWorkloadInterfaceNotExist,
+				fmt.Sprintf("Workload Interface(%s) is not exist", gvk),
+			)
+			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 		}
 
 		expectReadyReplicas, err = wi.CalculateAtLeastUpdatedAvailableReplicas(failureThreshold)
@@ -156,11 +169,15 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 		ready, err = wi.CheckReady(pointer.Int32((int32)(expectReadyReplicas)))
 		if err != nil {
 			logger.Info("Target CheckReady error", "target", item, "error", err)
-			err = fmt.Errorf("%v CheckReady error, err=%v", item, err)
-			return false, ctrl.Result{RequeueAfter: defaultRequeueDuration}, err
+			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
+				ReasonUpgradePartitionError,
+				fmt.Sprintf("%v CheckReady error, err=%v", item, err),
+			)
+
+			return false, ctrl.Result{RequeueAfter: time.Duration(defaultRequeueAfter) * time.Second}, err
 		} else if !ready {
 			logger.Info("Target CheckReady not ready", "target", item)
-			return false, ctrl.Result{RequeueAfter: defaultRequeueDuration}, nil
+			return false, ctrl.Result{RequeueAfter: time.Duration(defaultRequeueAfter) * time.Second}, nil
 		}
 	}
 

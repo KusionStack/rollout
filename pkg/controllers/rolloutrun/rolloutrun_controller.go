@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -103,7 +104,9 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	key := req.String()
 
-	logger := r.Logger.WithValues("rolloutRun", key)
+	logger := r.Logger.WithValues(
+		"rolloutRun", key, "traceId", uuid.New().String(),
+	)
 
 	logger.V(2).Info("start reconciling rolloutRun")
 	defer logger.V(2).Info("finish reconciling rolloutRun")

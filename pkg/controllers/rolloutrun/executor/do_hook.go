@@ -73,7 +73,7 @@ func (r *Executor) doPostBatchHook(ctx context.Context, executorContext *Executo
 
 	if done {
 		pause := rolloutRun.Spec.Batch.Batches[currentBatchIndex].Pause
-		if pause != nil || *pause {
+		if pause == nil || *pause {
 			logger.Info("DefaultExecutor will pause")
 			newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePaused
 			newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePaused
