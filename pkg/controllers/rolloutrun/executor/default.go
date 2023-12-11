@@ -40,14 +40,24 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 	newBatchStatus := executorContext.newStatus.BatchStatus
 	if newBatchStatus == nil {
 		if len(rolloutRun.Spec.Batch.Batches) > 0 {
+			var records []rolloutv1alpha1.RolloutRunBatchStatusRecord
 			recordSize := len(executorContext.rolloutRun.Spec.Batch.Batches)
+			for i := 0; i < recordSize; i++ {
+				records = append(
+					records,
+					rolloutv1alpha1.RolloutRunBatchStatusRecord{
+						StartTime: &metav1.Time{Time: time.Now()},
+					},
+				)
+			}
+
 			newBatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 				Context: map[string]string{},
 				RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 					CurrentBatchIndex: 0,
 					CurrentBatchState: rolloutv1alpha1.BatchStepStatePending,
 				},
-				Records: make([]rolloutv1alpha1.RolloutRunBatchStatusRecord, recordSize),
+				Records: records,
 			}
 			executorContext.newStatus.BatchStatus = newBatchStatus
 		} else {
@@ -68,9 +78,7 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 	// if currentBatchError is not null, do nothing
 	currentBatchError := executorContext.rolloutRun.Status.BatchStatus.CurrentBatchError
 	if currentBatchError != nil {
-		logger.Info(
-			"DefaultExecutor will terminate", "currentBatchError", currentBatchError,
-		)
+		logger.Info("DefaultExecutor will terminate", "currentBatchError", currentBatchError)
 		return false, ctrl.Result{}, nil
 	}
 
@@ -133,17 +141,6 @@ func (r *Executor) doInitialized(executorContext *ExecutorContext) (bool, ctrl.R
 	logger.Info(
 		"DefaultExecutor begin to doInitialized", "currentBatchIndex", currentBatchIndex,
 	)
-
-	if (len(newBatchStatus.Records) - 1) < int(currentBatchIndex) {
-		item := rolloutv1alpha1.RolloutRunBatchStatusRecord{}
-		item.StartTime = &metav1.Time{Time: time.Now()}
-		newBatchStatus.Records = append(newBatchStatus.Records, item)
-	}
-
-	if newBatchStatus.Records[currentBatchIndex].IsZero() {
-		newBatchStatus.Records[currentBatchIndex] = rolloutv1alpha1.RolloutRunBatchStatusRecord{}
-		newBatchStatus.Records[currentBatchIndex].StartTime = &metav1.Time{Time: time.Now()}
-	}
 
 	newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePreBatchStepHook
 	newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePreBatchStepHook

@@ -106,10 +106,7 @@ func moveToNextWebhook(webhookName string, hookType rolloutv1alpha1.HookType, ba
 	_, exist := utils.Find(
 		batchStatusRecord.Webhooks,
 		func(w *rolloutv1alpha1.BatchWebhookStatus) bool {
-			if w == nil {
-				return false
-			}
-			return w.HookType == hookType && w.Name == webhookName
+			return w != nil && w.HookType == hookType && w.Name == webhookName
 		},
 	)
 	if !exist {

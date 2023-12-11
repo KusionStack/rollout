@@ -142,26 +142,6 @@ type RolloutRunBatchStatusRecord struct {
 	Webhooks []BatchWebhookStatus `json:"webhooks,omitempty"`
 }
 
-// IsZero returns true if this result is empty.
-func (r *RolloutRunBatchStatusRecord) IsZero() bool {
-	if r == nil {
-		return true
-	}
-
-	if r.Index != nil ||
-		r.State != "" ||
-		r.Message != "" ||
-		r.Error != nil ||
-		r.StartTime != nil ||
-		r.FinishTime != nil ||
-		len(r.Targets) > 0 ||
-		len(r.Webhooks) > 0 {
-		return false
-	}
-
-	return true
-}
-
 type BatchWebhookStatus struct {
 	// Webhook Type
 	HookType HookType `json:"hookType,omitempty"`
