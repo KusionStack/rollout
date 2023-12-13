@@ -37,6 +37,9 @@ spec:
                     description: Batches define the order of phases to execute release in canary release
                     items:
                       properties:
+                        breakpoint:
+                          description: If set to true, the rollout will be paused before the step starts.
+                          type: boolean
                         http:
                           properties:
                             matches:
@@ -135,9 +138,6 @@ spec:
                                   x-kubernetes-list-type: map
                               type: object
                           type: object
-                        pause:
-                          description: If true, rollout will be paused after this canary step complete.
-                          type: boolean
                         properties:
                           additionalProperties:
                             type: string

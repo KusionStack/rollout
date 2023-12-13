@@ -591,11 +591,6 @@ func (in *RolloutRunStep) DeepCopyInto(out *RolloutRunStep) {
 		*out = make([]RolloutRunStepTarget, len(*in))
 		copy(*out, *in)
 	}
-	if in.Pause != nil {
-		in, out := &in.Pause, &out.Pause
-		*out = new(bool)
-		**out = **in
-	}
 	if in.Properties != nil {
 		in, out := &in.Properties, &out.Properties
 		*out = make(map[string]string, len(*in))
@@ -688,11 +683,6 @@ func (in *RolloutStep) DeepCopyInto(out *RolloutStep) {
 		in, out := &in.Match, &out.Match
 		*out = new(ResourceMatch)
 		(*in).DeepCopyInto(*out)
-	}
-	if in.Pause != nil {
-		in, out := &in.Pause, &out.Pause
-		*out = new(bool)
-		**out = **in
 	}
 	if in.Properties != nil {
 		in, out := &in.Properties, &out.Properties

@@ -103,7 +103,7 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 		}
 
 		step.Targets = targets
-		step.Pause = b.Pause
+		step.Breakpoint = b.Breakpoint
 		step.Properties = b.Properties
 		step.TrafficStrategy = b.TrafficStrategy
 		result = append(result, step)

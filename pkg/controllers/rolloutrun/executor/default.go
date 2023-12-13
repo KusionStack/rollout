@@ -142,8 +142,14 @@ func (r *Executor) doInitialized(executorContext *ExecutorContext) (bool, ctrl.R
 		"DefaultExecutor begin to doInitialized", "currentBatchIndex", currentBatchIndex,
 	)
 
-	newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePreBatchStepHook
-	newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePreBatchStepHook
+	if executorContext.rolloutRun.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
+		logger.Info("DefaultExecutor will pause")
+		newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePaused
+		newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePaused
+	} else {
+		newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePreBatchStepHook
+		newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePreBatchStepHook
+	}
 
 	return true, ctrl.Result{Requeue: true}
 }
