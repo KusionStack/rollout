@@ -60,7 +60,6 @@ func (r *Executor) doPreBatchHook(ctx context.Context, executorContext *Executor
 func (r *Executor) doPostBatchHook(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
 	logger := r.Logger
 
-	rolloutRun := executorContext.rolloutRun
 	newBatchStatus := executorContext.newStatus.BatchStatus
 
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
@@ -72,18 +71,11 @@ func (r *Executor) doPostBatchHook(ctx context.Context, executorContext *Executo
 	done, result, err := r.runRolloutWebhooks(ctx, hookType, executorContext)
 
 	if done {
-		pause := rolloutRun.Spec.Batch.Batches[currentBatchIndex].Pause
-		if pause == nil || *pause {
-			logger.Info("DefaultExecutor will pause")
-			newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePaused
-			newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePaused
-		} else {
-			newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStateSucceeded
-			if newBatchStatus.Records[currentBatchIndex].FinishTime == nil {
-				newBatchStatus.Records[currentBatchIndex].FinishTime = &metav1.Time{Time: time.Now()}
-			}
-			newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStateSucceeded
+		newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStateSucceeded
+		if newBatchStatus.Records[currentBatchIndex].FinishTime == nil {
+			newBatchStatus.Records[currentBatchIndex].FinishTime = &metav1.Time{Time: time.Now()}
 		}
+		newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStateSucceeded
 	}
 	return done, result, err
 }

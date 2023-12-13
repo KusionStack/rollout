@@ -997,8 +997,6 @@ k8s.io/sample-apiserver v0.22.2/go.mod h1:h+/DIV5EmuNq4vfPr5TSXy9mIBVXXlPAKQMPbj
 k8s.io/system-validators v1.5.0/go.mod h1:bPldcLgkIUK22ALflnsXk8pvkTEndYdNuaHH6gRrl0Q=
 k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a h1:8dYfu/Fc9Gz2rNJKB9IQRGgQOh2clmRzNIPPY1xLY5g=
 k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
-kusionstack.io/kube-utils v0.1.2 h1:KSF7evuX2v6TxQJ38wPcjVBebaBoZ1v3BZHZDuJXNtk=
-kusionstack.io/kube-utils v0.1.2/go.mod h1:lmWj9eLe6d0Kg/VKE4DqT3ZN7JFmNvnBovhRVnHdOpY=
 kusionstack.io/kube-utils v0.1.3-0.20231129104310-266398d27f18 h1:9cxy+OaUaJm3WmSqfQQUsz4bpW8p6l4va5uBLeIKyFo=
 kusionstack.io/kube-utils v0.1.3-0.20231129104310-266398d27f18/go.mod h1:7H0tNCfY667c1wvGP8Esyt3VEmH1g4z9jFgdnXtjK9g=
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=

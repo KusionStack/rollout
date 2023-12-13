@@ -52,48 +52,11 @@ type RolloutStrategyList struct {
 
 // BatchStrategy defines the batch strategy
 type BatchStrategy struct {
-	// FastBatch indicates a fast way to create the batches
-	FastBatch *FastBatch `json:"fastBatch,omitempty"`
 	// Batches define the order of phases to execute release in canary release
 	Batches []RolloutStep `json:"batches,omitempty"`
 	// Toleration is the toleration policy of the canary strategy
 	// +optional
 	Toleration *TolerationStrategy `json:"toleration,omitempty"`
-}
-
-// FastBatch defines a fast way to create the batches
-type FastBatch struct {
-	// Beta defines the canary policy of batch release step, it will be the first step
-	Beta *FastBetaBatch `json:"beta,omitempty"`
-	// Count indicates the number of batch steps, workloads across different clusters in the same batch will be upgraded at the same time
-	Count int32 `json:"count"`
-	// PausedBatches is the breakpoints of batch release steps, which indicates pause points before determined batch.
-	PausedBatches []int32 `json:"pausedBatches,omitempty"`
-	// PauseMode is the pause mode of the strategy
-	PauseMode PauseModeType `json:"pauseMode,omitempty"`
-}
-
-// PauseModeType is the type of the pause mode
-type PauseModeType string
-
-const (
-	// PauseModeTypeNever is the pause mode of never
-	PauseModeTypeNever PauseModeType = ""
-
-	// PauseModeTypeFirstBatch is the pause mode of first batch
-	PauseModeTypeFirstBatch PauseModeType = "FirstBatch"
-
-	// PauseModeTypeEachBatch is the pause mode of each batch
-	PauseModeTypeEachBatch PauseModeType = "EachBatch"
-)
-
-// FastBetaBatch is the first batch of fast batch
-type FastBetaBatch struct {
-	// traffic strategy
-	TrafficStrategy `json:",inline"`
-
-	// Replicas indicates the replicas of the beta(first) step, which will be chosen evenly from workloads
-	Replicas *intstr.IntOrString `json:"replicas"`
 }
 
 // TolerationStrategy defines the toleration strategy
@@ -125,8 +88,8 @@ type RolloutStep struct {
 	// Match defines condition used for matching resource cross clusterset
 	Match *ResourceMatch `json:"matchTargets,omitempty"`
 
-	// If true, rollout will be paused after this canary step complete.
-	Pause *bool `json:"pause,omitempty"`
+	// If set to true, the rollout will be paused before the step starts.
+	Breakpoint bool `json:"breakpoint,omitempty"`
 
 	// Properties contains additional information for step
 	Properties map[string]string `json:"properties,omitempty"`

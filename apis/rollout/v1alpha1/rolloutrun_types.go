@@ -80,8 +80,8 @@ type RolloutRunStep struct {
 	// desired target replicas
 	Targets []RolloutRunStepTarget `json:"targets"`
 
-	// If true, rollout will be paused after this canary step complete.
-	Pause *bool `json:"pause,omitempty"`
+	// If set to true, the rollout will be paused before the step starts.
+	Breakpoint bool `json:"breakpoint,omitempty"`
 
 	// Properties contains additional information for step
 	Properties map[string]string `json:"properties,omitempty"`
