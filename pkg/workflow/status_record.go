@@ -26,9 +26,9 @@ import (
 )
 
 type batchStatusRecord struct {
-	index         int32
-	pausedTask    *workflowv1alpha1.WorkflowTaskStatus
-	workflowTasks []*workflowv1alpha1.WorkflowTaskStatus
+	index          int32
+	breakpointTask *workflowv1alpha1.WorkflowTaskStatus
+	workflowTasks  []*workflowv1alpha1.WorkflowTaskStatus
 }
 
 func GetBatchStatusRecords(workflow *workflowv1alpha1.Workflow) ([]rolloutv1alpha1.RolloutRunBatchStatusRecord, error) {
@@ -60,7 +60,7 @@ func GetBatchStatusRecords(workflow *workflowv1alpha1.Workflow) ([]rolloutv1alph
 		if t.TaskSpec.WorkloadRelease != nil {
 			stage.workflowTasks = append(stage.workflowTasks, taskStatus)
 		} else if t.TaskSpec.Suspend != nil {
-			stage.pausedTask = taskStatus
+			stage.breakpointTask = taskStatus
 		}
 		stages[index] = stage
 	}
@@ -94,15 +94,15 @@ func (ss batchStatusRecord) Convert() rolloutv1alpha1.RolloutRunBatchStatusRecor
 	}
 
 	// the pausedTask will be first task in batch now
-	if ss.pausedTask != nil {
-		if ss.pausedTask.StartedAt == nil {
+	if ss.breakpointTask != nil {
+		if ss.breakpointTask.StartedAt == nil {
 			// paused Task is not started
 			status.State = rolloutv1alpha1.BatchStepStatePending
 			status.Message = "this batch is not started now"
 			return status
 		}
-		status.StartTime = ss.pausedTask.StartedAt
-		if !ss.pausedTask.IsSucceeded() {
+		status.StartTime = ss.breakpointTask.StartedAt
+		if !ss.breakpointTask.IsSucceeded() {
 			// paused Task is not finished
 			status.State = rolloutv1alpha1.BatchStepStatePaused
 			status.Message = "this batch is paused now"

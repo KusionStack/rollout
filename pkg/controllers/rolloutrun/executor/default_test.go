@@ -21,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -1333,7 +1332,7 @@ func TestDoPostBatchHook(t *testing.T) {
 
 	testcases := []testCase{
 		{
-			name: "Input={len(Batches)==1, len(Webhooks)==0, Pause=true, CurrentBatchState=PostBatchStepHook,}, Context={}, Output={CurrentBatchState=Paused}",
+			name: "Input={len(Batches)==1, len(Webhooks)==0, Pause=true, CurrentBatchState=PostBatchStepHook,}, Context={}, Output={CurrentBatchState=Succeeded}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					Context: map[string]string{},
@@ -1343,7 +1342,7 @@ func TestDoPostBatchHook(t *testing.T) {
 					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{State: rolloutv1alpha1.BatchStepStatePreBatchStepHook, StartTime: &metav1.Time{Time: time.Now()}}},
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Pause: pointer.Bool(true),
+					Breakpoint: true,
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
@@ -1359,15 +1358,15 @@ func TestDoPostBatchHook(t *testing.T) {
 					batchStatus.CurrentBatchError != nil ||
 					len(batchStatus.Records) != 1 ||
 					batchStatus.Records[0].StartTime == nil ||
-					batchStatus.Records[0].State != rolloutv1alpha1.BatchStepStatePaused ||
-					batchStatus.CurrentBatchState != rolloutv1alpha1.BatchStepStatePaused {
+					batchStatus.Records[0].State != rolloutv1alpha1.BatchStepStateSucceeded ||
+					batchStatus.CurrentBatchState != rolloutv1alpha1.BatchStepStateSucceeded {
 					return false, nil
 				}
 				return true, nil
 			},
 		},
 		{
-			name: "Input={len(Batches)==1, len(Webhooks)=2, Pause=true, CurrentBatchState=PostBatchStepHook,}, Context={}, Output={CurrentBatchState=Paused}",
+			name: "Input={len(Batches)==1, len(Webhooks)=2, Pause=true, CurrentBatchState=PostBatchStepHook,}, Context={}, Output={CurrentBatchState=Succeeded}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					Context: map[string]string{},
@@ -1406,7 +1405,7 @@ func TestDoPostBatchHook(t *testing.T) {
 					},
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Pause: pointer.Bool(true),
+					Breakpoint: true,
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
@@ -1422,8 +1421,8 @@ func TestDoPostBatchHook(t *testing.T) {
 					batchStatus.CurrentBatchError != nil ||
 					len(batchStatus.Records) != 1 ||
 					batchStatus.Records[0].StartTime == nil ||
-					batchStatus.Records[0].State != rolloutv1alpha1.BatchStepStatePaused ||
-					batchStatus.CurrentBatchState != rolloutv1alpha1.BatchStepStatePaused {
+					batchStatus.Records[0].State != rolloutv1alpha1.BatchStepStateSucceeded ||
+					batchStatus.CurrentBatchState != rolloutv1alpha1.BatchStepStateSucceeded {
 					return false, nil
 				}
 
@@ -1494,7 +1493,7 @@ func TestDoPostBatchHook(t *testing.T) {
 					},
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Pause: pointer.Bool(false),
+					Breakpoint: false,
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},

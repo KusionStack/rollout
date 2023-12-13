@@ -60,10 +60,19 @@ func constructRunWorkflow(obj *rolloutv1alpha1.RolloutRun, workloads *workload.S
 			return nil, fmt.Errorf("invalid batch without workload tasks")
 		}
 		var workloadTask []*workflowv1alpha1.WorkflowTask
-		var pauseTask *workflowv1alpha1.WorkflowTask
+		var breakpointTask *workflowv1alpha1.WorkflowTask
 
 		batchIndex := strconv.Itoa(index)
-		nextBatchIndex := strconv.Itoa(index + 1)
+		preIndex := index - 1
+		if preIndex < 0 {
+			preIndex = 0
+		}
+		preBatchIndex := strconv.Itoa(preIndex)
+		if batch.Breakpoint {
+			// NOTE: we put the breakPointTask before upgradeTask
+			breakpointTask = workflowutil.InitSuspendTask(batchIndex, preBatchIndex, batchIndex, taskID)
+			taskID++
+		}
 		for _, target := range batch.Targets {
 			w := workloads.Get(target.Cluster, target.Name)
 			if w == nil {
@@ -74,19 +83,11 @@ func constructRunWorkflow(obj *rolloutv1alpha1.RolloutRun, workloads *workload.S
 			workloadTask = append(workloadTask, task)
 			taskID++
 		}
-		if batch.Pause != nil && *batch.Pause {
-			// NOTE: we put the pauseTask to next batch
-			pauseTask = workflowutil.InitSuspendTask(nextBatchIndex, batchIndex, nextBatchIndex, taskID)
-			taskID++
-		}
-		workflowutil.BindTaskFlow(lastBatchEndTasks, workloadTask, []*workflowv1alpha1.WorkflowTask{pauseTask})
-		tasks = workflowutil.AggregateTasks(tasks, workloadTask, []*workflowv1alpha1.WorkflowTask{pauseTask})
 
-		if pauseTask != nil {
-			lastBatchEndTasks = []*workflowv1alpha1.WorkflowTask{pauseTask}
-		} else {
-			lastBatchEndTasks = workloadTask
-		}
+		workflowutil.BindTaskFlow(lastBatchEndTasks, []*workflowv1alpha1.WorkflowTask{breakpointTask}, workloadTask)
+		tasks = workflowutil.AggregateTasks(tasks, []*workflowv1alpha1.WorkflowTask{breakpointTask}, workloadTask)
+
+		lastBatchEndTasks = workloadTask
 	}
 
 	workflow.Spec.Tasks = make([]workflowv1alpha1.WorkflowTask, 0)

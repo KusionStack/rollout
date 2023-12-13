@@ -20,16 +20,11 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/fake"
 )
-
-func intOrStringPtr(is intstr.IntOrString) *intstr.IntOrString {
-	return &is
-}
 
 func Test_constructRolloutRunBatches(t *testing.T) {
 	tests := []struct {
@@ -44,8 +39,8 @@ func Test_constructRolloutRunBatches(t *testing.T) {
 				Batch: &rolloutv1alpha1.BatchStrategy{
 					Batches: []rolloutv1alpha1.RolloutStep{
 						{
-							Pause:    pointer.Bool(true),
-							Replicas: intstr.FromString("10%"),
+							Breakpoint: true,
+							Replicas:   intstr.FromString("10%"),
 							Match: &rolloutv1alpha1.ResourceMatch{
 								Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
 									{
@@ -56,8 +51,8 @@ func Test_constructRolloutRunBatches(t *testing.T) {
 							},
 						},
 						{
-							Pause:    pointer.Bool(true),
-							Replicas: intstr.FromString("50%"),
+							Breakpoint: true,
+							Replicas:   intstr.FromString("50%"),
 							Match: &rolloutv1alpha1.ResourceMatch{
 								Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
 									{
@@ -103,7 +98,7 @@ func Test_constructRolloutRunBatches(t *testing.T) {
 			want: []rolloutv1alpha1.RolloutRunStep{
 				{
 					// beta step
-					Pause: pointer.Bool(true),
+					Breakpoint: true,
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						{
 							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
@@ -116,7 +111,7 @@ func Test_constructRolloutRunBatches(t *testing.T) {
 				},
 				{
 					// 1 step
-					Pause: pointer.Bool(true),
+					Breakpoint: true,
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						{
 							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{

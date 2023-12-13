@@ -32,6 +32,9 @@ spec:
                 items:
                   description: Custom release step
                   properties:
+                    breakpoint:
+                      description: If set to true, the rollout will be paused before the step starts.
+                      type: boolean
                     http:
                       properties:
                         matches:
@@ -177,9 +180,6 @@ spec:
                               type: object
                           type: object
                       type: object
-                    pause:
-                      description: If true, rollout will be paused after this canary step complete.
-                      type: boolean
                     properties:
                       additionalProperties:
                         type: string
