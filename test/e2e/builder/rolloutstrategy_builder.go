@@ -17,6 +17,7 @@ package builder
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
@@ -47,12 +48,18 @@ func (b *RolloutStrategyBuilder) Build() *rolloutv1alpha1.RolloutStrategy {
 				WorkloadFailureThreshold: &intstr.IntOrString{Type: intstr.String, StrVal: "10%"},
 				InitialDelaySeconds:      2,
 			},
-			FastBatch: &rolloutv1alpha1.FastBatch{
-				Beta: &rolloutv1alpha1.FastBetaBatch{
-					Replicas: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+			Batches: []rolloutv1alpha1.RolloutStep{
+				{
+					Replicas: intstr.FromInt(1),
+					Pause:    pointer.Bool(true),
 				},
-				Count:     2,
-				PauseMode: rolloutv1alpha1.PauseModeTypeFirstBatch,
+				{
+					Replicas: intstr.FromString("50%"),
+					Pause:    pointer.Bool(true),
+				},
+				{
+					Replicas: intstr.FromString("100%"),
+				},
 			},
 		},
 	}
