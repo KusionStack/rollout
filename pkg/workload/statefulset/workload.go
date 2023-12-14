@@ -21,7 +21,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -99,7 +99,7 @@ func (w *realWorkload) UpgradePartition(partition *intstr.IntOrString) (bool, er
 	}
 
 	oldPartition := w.obj.Spec.UpdateStrategy.RollingUpdate.Partition
-	w.obj.Spec.UpdateStrategy.RollingUpdate.Partition = pointer.Int32(*w.obj.Spec.Replicas - int32(expectReplicas))
+	w.obj.Spec.UpdateStrategy.RollingUpdate.Partition = ptr.To(*w.obj.Spec.Replicas - int32(expectReplicas))
 	if oldPartition == nil ||
 		*oldPartition != *w.obj.Spec.UpdateStrategy.RollingUpdate.Partition {
 		return true, w.client.Update(clusterinfo.WithCluster(context.Background(), w.info.Cluster), w.obj)
@@ -168,6 +168,6 @@ func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj
 }
 
 func (w *realWorkload) Matches(match rolloutv1alpha1.ResourceMatch) bool {
-	macher := workload.MatchAsMatcher(match)
-	return macher.Matches(w.info.Cluster, w.obj.Name, w.obj.Labels)
+	matcher := workload.MatchAsMatcher(match)
+	return matcher.Matches(w.info.Cluster, w.obj.Name, w.obj.Labels)
 }

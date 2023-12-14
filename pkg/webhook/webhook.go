@@ -31,16 +31,18 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 	// log
 	logger := logr.FromContext(ctx)
 	logger.Info(fmt.Sprintf("RunRolloutWebhook start to process. name=%s", webhook.Name))
-	defer logger.Info(
-		fmt.Sprintf(
-			"RunRolloutWebhook process finished. name=%s, status=%v", webhook.Name, status,
-		),
-	)
+	defer func() {
+		logger.Info(
+			fmt.Sprintf(
+				"RunRolloutWebhook process finished. name=%s, status=%v", webhook.Name, status,
+			),
+		)
+	}()
 
 	// todo provider
 	if webhook.Provider != nil &&
 		len(*webhook.Provider) > 0 {
-		status := &rolloutv1alpha1.RolloutWebhookReviewStatus{
+		status = &rolloutv1alpha1.RolloutWebhookReviewStatus{
 			CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
 				Code:    rolloutv1alpha1.WebhookReviewCodeError,
 				Reason:  "ProviderIsNotSupportedYet",
@@ -128,15 +130,17 @@ func RunRolloutWebhook(ctx context.Context, webhook *rolloutv1alpha1.RolloutWebh
 		return nil, fmt.Errorf(
 			"RunRolloutWebhook failed since read body failed, err=[%v]", err,
 		)
+	} else if body == nil {
+		return nil, errors.New("RunRolloutWebhook failed since responseBody nil")
 	}
 
-	rolloutWebhookReviewStatus := &rolloutv1alpha1.RolloutWebhookReviewStatus{}
-	if err = json.Unmarshal(body, rolloutWebhookReviewStatus); err != nil {
+	status = &rolloutv1alpha1.RolloutWebhookReviewStatus{}
+	if err = json.Unmarshal(body, status); err != nil {
 		return nil, fmt.Errorf(
 			"RunRolloutWebhook failed "+
 				"since unmarshal body failed, body=%s, err=[%v]", string(body), err,
 		)
 	}
 
-	return rolloutWebhookReviewStatus, err
+	return status, err
 }

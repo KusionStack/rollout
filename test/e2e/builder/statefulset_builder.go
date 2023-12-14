@@ -18,7 +18,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
+
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 )
 
@@ -71,7 +72,7 @@ func (b *StatefulSetBuilder) Build() *appsv1.StatefulSet {
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: b.appName,
-			Replicas:    pointer.Int32(10),
+			Replicas:    ptr.To(int32(10)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app.kubernetes.io/name": b.appName,

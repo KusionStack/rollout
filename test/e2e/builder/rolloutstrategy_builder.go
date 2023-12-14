@@ -52,12 +52,12 @@ func (b *RolloutStrategyBuilder) Build() *rolloutv1alpha1.RolloutStrategy {
 					Replicas: intstr.FromInt(1),
 				},
 				{
-					Replicas: intstr.FromString("50%"),
-					Breakpoint:    true,
+					Breakpoint: true,
+					Replicas:   intstr.FromString("50%"),
 				},
 				{
-					Breakpoint:    true,
-					Replicas: intstr.FromString("100%"),
+					Breakpoint: true,
+					Replicas:   intstr.FromString("100%"),
 				},
 			},
 		},
