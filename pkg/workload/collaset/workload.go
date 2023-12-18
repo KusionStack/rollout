@@ -117,12 +117,14 @@ func (w *realWorkload) CheckReady(expectUpdatedReplicas *int32) (bool, error) {
 	}
 
 	if *w.obj.Spec.Replicas == 0 {
-		return false, nil
+		return true, nil
 	}
 
 	var expectUpdatedAvailableReplicas int32
 	if expectUpdatedReplicas != nil {
 		expectUpdatedAvailableReplicas = *expectUpdatedReplicas
+	} else if w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition != nil {
+		expectUpdatedAvailableReplicas = *w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition
 	} else {
 		expectUpdatedAvailableReplicas = *w.obj.Spec.Replicas
 	}

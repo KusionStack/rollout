@@ -138,19 +138,15 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	result := ctrl.Result{}
 	if newStatus.Phase == rolloutv1alpha1.RolloutPhaseProgressing {
 		result, err = r.handleProgressing(ctx, obj, newStatus, workloads)
-		if err != nil {
-			updateErr := r.updateStatusOnly(ctx, obj, newStatus, workloads)
-			if updateErr != nil {
-				logger.Error(err, "failed to update status")
-				return reconcile.Result{}, updateErr
-			}
-			return reconcile.Result{}, err
-		}
 	}
 
-	err = r.updateStatusOnly(ctx, obj, newStatus, workloads)
-	if err != nil {
+	updateStatus := r.updateStatusOnly(ctx, obj, newStatus, workloads)
+	if updateStatus != nil {
 		logger.Error(err, "failed to update status")
+		return reconcile.Result{}, updateStatus
+	}
+
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 

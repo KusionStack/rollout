@@ -114,7 +114,7 @@ func (w *realWorkload) CheckReady(expectUpdatedReplicas *int32) (bool, error) {
 	}
 
 	if (*w.obj.Spec.Replicas) == 0 {
-		return false, nil
+		return true, nil
 	}
 
 	var expectUpdatedAvailableReplicas int32
