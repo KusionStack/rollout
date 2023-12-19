@@ -22,16 +22,17 @@ require (
 	k8s.io/component-base v0.28.4
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kubernetes v1.22.2
-	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
+	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
+	kusionstack.io/kube-api v0.0.27
 	kusionstack.io/kube-utils v0.1.3-0.20231129104310-266398d27f18
-	sigs.k8s.io/controller-runtime v0.14.4
+	sigs.k8s.io/controller-runtime v0.15.1
 )
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/docker/distribution v2.8.1+incompatible // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
@@ -55,6 +56,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.16.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
@@ -122,6 +124,6 @@ replace (
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.22.2
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.22.2
 	k8s.io/system-validators => k8s.io/system-validators v1.5.0
-	k8s.io/utils => k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
+	//k8s.io/utils => k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.10.3
 )

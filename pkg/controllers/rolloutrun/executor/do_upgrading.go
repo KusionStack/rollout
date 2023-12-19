@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -36,11 +36,11 @@ func newUpgradingCodeReasonMessage(reason string, msg string) *rolloutv1alpha1.C
 }
 
 // doUpgrading process upgrading state
-func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
+func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorContext) (ctrl.Result, error) {
 	logger := r.Logger
 
-	rolloutRun := executorContext.rolloutRun
-	newBatchStatus := executorContext.newStatus.BatchStatus
+	rolloutRun := executorContext.RolloutRun
+	newBatchStatus := executorContext.NewStatus.BatchStatus
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
 	logger.Info(
@@ -51,7 +51,7 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 		logger.Info("DefaultExecutor doUpgrading skip since targets empty")
 		newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePostBatchStepHook
 		newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePostBatchStepHook
-		return true, ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	targetType := rolloutRun.Spec.TargetType
@@ -62,7 +62,7 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 			ReasonWorkloadStoreNotExist,
 			fmt.Sprintf("gvk(%s) is unsupported, err=%v", gvk, err),
 		)
-		return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+		return ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 	}
 
 	// upgrade partition
@@ -75,13 +75,13 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("get Workload Interface(%s) error, err=%v", gvk, err),
 			)
-			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+			return ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 		} else if wi == nil {
 			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("Workload Interface(%s) is not exist", gvk),
 			)
-			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+			return ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 		}
 
 		_, exist := utils.Find(
@@ -97,6 +97,9 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 					Name: item.Name, Cluster: item.Cluster,
 				}
 				lastUpgradeAt := time.Now().UTC().Format(time.RFC3339)
+				if newBatchStatus.Context == nil {
+					newBatchStatus.Context = map[string]string{}
+				}
 				newBatchStatus.Context[ctxKeyLastUpgradeAt] = lastUpgradeAt
 				newBatchStatus.Records[currentBatchIndex].Targets = append(targets, *target)
 			} else {
@@ -104,7 +107,7 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 					ReasonUpgradePartitionError,
 					fmt.Sprintf("Upgrade partition(%v) error, err=%v", item, err),
 				)
-				return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+				return ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 			}
 		}
 	}
@@ -132,7 +135,7 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 		logger.Info(
 			"skip since wait for initialDelay", "initialDelaySeconds", duration,
 		)
-		return false, ctrl.Result{RequeueAfter: duration}, nil
+		return ctrl.Result{RequeueAfter: duration}, nil
 	}
 
 	// check ready
@@ -148,41 +151,50 @@ func (r *Executor) doUpgrading(ctx context.Context, executorContext *ExecutorCon
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("get Workload Interface(%s) error, err=%v", gvk, err),
 			)
-			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+			return ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 		} else if wi == nil {
 			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("Workload Interface(%s) is not exist", gvk),
 			)
-			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+			return ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
 		}
 
-		expectReadyReplicas, err = wi.CalculateAtLeastUpdatedAvailableReplicas(failureThreshold)
-		if err != nil {
-			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
-				ReasonCheckReadyError,
-				fmt.Sprintf("%v Detect ExpectReadyReplicas error, err=%v", item, err),
-			)
-			return false, ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
-		}
-
-		ready, err = wi.CheckReady(pointer.Int32((int32)(expectReadyReplicas)))
+		ready, err = wi.CheckReady(nil)
 		if err != nil {
 			logger.Info("Target CheckReady error", "target", item, "error", err)
 			newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
 				ReasonUpgradePartitionError,
 				fmt.Sprintf("%v CheckReady error, err=%v", item, err),
 			)
-
-			return false, ctrl.Result{RequeueAfter: time.Duration(defaultRequeueAfter) * time.Second}, err
+			return ctrl.Result{RequeueAfter: defaultRequeueAfter}, err
 		} else if !ready {
-			logger.Info("Target CheckReady not ready", "target", item)
-			return false, ctrl.Result{RequeueAfter: time.Duration(defaultRequeueAfter) * time.Second}, nil
+			expectReadyReplicas, err = wi.CalculateAtLeastUpdatedAvailableReplicas(failureThreshold)
+			if err != nil {
+				newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
+					ReasonCheckReadyError,
+					fmt.Sprintf("%v Detect ExpectReadyReplicas error, err=%v", item, err),
+				)
+				return ctrl.Result{}, errors.New(newBatchStatus.CurrentBatchError.Message)
+			}
+
+			ready, err = wi.CheckReady(ptr.To(int32(expectReadyReplicas)))
+			if err != nil {
+				logger.Info("Target CheckReady error", "target", item, "error", err)
+				newBatchStatus.CurrentBatchError = newUpgradingCodeReasonMessage(
+					ReasonUpgradePartitionError,
+					fmt.Sprintf("%v CheckReady error, err=%v", item, err),
+				)
+				return ctrl.Result{RequeueAfter: defaultRequeueAfter}, err
+			} else if !ready {
+				logger.Info("Target CheckReady not ready", "target", item)
+				return ctrl.Result{RequeueAfter: defaultRequeueAfter}, nil
+			}
 		}
 	}
 
 	newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePostBatchStepHook
 	newBatchStatus.Records[currentBatchIndex].State = rolloutv1alpha1.BatchStepStatePostBatchStepHook
 
-	return true, ctrl.Result{Requeue: true}, nil
+	return ctrl.Result{Requeue: true}, nil
 }

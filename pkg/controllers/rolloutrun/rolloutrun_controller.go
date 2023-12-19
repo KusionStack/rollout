@@ -45,6 +45,8 @@ import (
 	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
 	workflowapi "kusionstack.io/rollout/apis/workflow"
 	workflowv1alpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
+	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
@@ -133,18 +135,22 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, err
 	}
 
-	err = r.handleProgressing(ctx, obj, newStatus, workloads)
-	if err != nil {
-		return reconcile.Result{}, err
+	result := ctrl.Result{}
+	if newStatus.Phase == rolloutv1alpha1.RolloutPhaseProgressing {
+		result, err = r.handleProgressing(ctx, obj, newStatus, workloads)
 	}
 
-	err = r.updateStatusOnly(ctx, obj, newStatus, workloads)
-	if err != nil {
+	updateStatus := r.updateStatusOnly(ctx, obj, newStatus, workloads)
+	if updateStatus != nil {
 		logger.Error(err, "failed to update status")
+		return reconcile.Result{}, updateStatus
+	}
+
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{}, nil
+	return result, nil
 }
 
 func (r *RolloutRunReconciler) satisfiedExpectations(instance *rolloutv1alpha1.RolloutRun) bool {
@@ -178,23 +184,78 @@ func (r *RolloutRunReconciler) caculateStatus(obj *rolloutv1alpha1.RolloutRun) *
 		return newStatus
 	}
 
+	newStatus.Phase = rolloutv1alpha1.RolloutPhaseProgressing
+
 	return newStatus
 }
 
-func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) error {
+// findRollout get Rollout from rolloutRun
+func (r *RolloutRunReconciler) findRollout(ctx context.Context, rolloutRun *rolloutv1alpha1.RolloutRun) (*rolloutv1alpha1.Rollout, error) {
+	ref, exist := utils.Find(
+		rolloutRun.OwnerReferences,
+		func(o *metav1.OwnerReference) bool {
+			return o.Kind == "Rollout"
+		},
+	)
+	if !exist {
+		objectKey := types.NamespacedName{Namespace: rolloutRun.Namespace, Name: rolloutRun.Name}
+		return nil, fmt.Errorf("rollout not exist in rolloutRun(%v) ownerReferences", objectKey)
+	}
+
+	rollout := &rolloutv1alpha1.Rollout{}
+	objectKey := types.NamespacedName{Namespace: rolloutRun.Namespace, Name: ref.Name}
+	if err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), objectKey, rollout); err != nil {
+		return nil, err
+	}
+
+	return rollout, nil
+}
+
+func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) (ctrl.Result, error) {
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rolloutRun", key)
 
 	currentWorkflow, err := r.getWorkflowForRun(ctx, obj)
 	if client.IgnoreNotFound(err) != nil {
 		logger.Error(err, "failed to get current workflow of rolloutRun")
-		return err
+		return ctrl.Result{}, err
 	}
 
 	// TODO: how to deal with rollout spec upgrading, continue the progressing workflow and take effect next time?
 	if currentWorkflow != nil {
 		// currentWorkflow is progressing
-		return r.syncWorkflow(obj, currentWorkflow, newStatus)
+		return ctrl.Result{}, r.syncWorkflow(obj, currentWorkflow, newStatus)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.UseDefaultExecutor) {
+		var done bool
+		var result ctrl.Result
+		var rollout *rolloutv1alpha1.Rollout
+
+		rollout, err = r.findRollout(ctx, obj)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		defaultExecutor := executor.NewDefaultExecutor(logger)
+		executorCtx := &executor.ExecutorContext{
+			Rollout: rollout, RolloutRun: obj, NewStatus: newStatus,
+		}
+		if done, result, err = defaultExecutor.Do(ctx, executorCtx); err != nil {
+			logger.Error(err, "defaultExecutor do err")
+			return ctrl.Result{}, err
+		}
+		if done {
+			newCondition := condition.NewCondition(
+				rolloutv1alpha1.RolloutConditionProgressing,
+				metav1.ConditionFalse,
+				rolloutv1alpha1.RolloutReasonProgressingCompleted,
+				"rollout is completed",
+			)
+			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCompleted
+			newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
+		}
+		return result, nil
 	}
 
 	logger.Info("about to construct workflow", "workflow", obj.Name)
@@ -203,7 +264,7 @@ func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rollo
 	if err != nil {
 		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to construct a new workflow %s: %v", obj.Name, err)
 		logger.Error(err, "failed to construct workflow", "workflow", obj.Name)
-		return err
+		return ctrl.Result{}, err
 	}
 
 	// expect a workflow creation observed in cache
@@ -215,7 +276,7 @@ func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rollo
 		r.expectation.DeleteExpectations(key)
 		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to create a new workflow %s: %v", workflow.Name, err)
 		logger.Error(err, "failed to create workflow", "workflow", workflow.Name)
-		return err
+		return ctrl.Result{}, err
 	}
 
 	r.Recorder.Eventf(obj, corev1.EventTypeNormal, "WorkflowCreated", "create a new workflow %s", workflow.Name)
@@ -225,7 +286,7 @@ func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rollo
 	cond := condition.NewCondition(rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, "WorkflowCreated", "a new workflow is created")
 	resetRolloutRunStatus(newStatus, rolloutv1alpha1.RolloutPhaseProgressing, cond)
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) (*workload.Set, error) {

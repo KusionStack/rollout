@@ -22,7 +22,7 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
@@ -119,7 +119,7 @@ var _ = Describe("StatefulSet", func() {
 			// pause update
 			sts.Spec.UpdateStrategy = v1.StatefulSetUpdateStrategy{
 				Type:          v1.RollingUpdateStatefulSetStrategyType,
-				RollingUpdate: &v1.RollingUpdateStatefulSetStrategy{Partition: pointer.Int32(*sts.Spec.Replicas)},
+				RollingUpdate: &v1.RollingUpdateStatefulSetStrategy{Partition: ptr.To(*sts.Spec.Replicas)},
 			}
 			sts.Spec.Template.Spec.Containers[0].Env = mergeEnv
 			return nil

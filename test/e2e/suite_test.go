@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -74,7 +74,7 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 	if os.Getenv("TEST_USE_EXISTING_CLUSTER") == "true" {
 		testEnv = &envtest.Environment{
-			UseExistingCluster: pointer.Bool(true),
+			UseExistingCluster: ptr.To(true),
 		}
 	} else {
 		testEnv = &envtest.Environment{

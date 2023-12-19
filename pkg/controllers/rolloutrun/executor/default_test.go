@@ -228,7 +228,7 @@ func TestDoInitialized(t *testing.T) {
 			name: "Input={len(Batches)==0}, Context={}, Output={}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutPhaseProgressing
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if !done || result.Requeue || error != nil {
@@ -252,7 +252,7 @@ func TestDoInitialized(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -282,6 +282,7 @@ func TestDoError(t *testing.T) {
 		{
 			name: "Input={len(Batches)==1, CurrentBatchState=PreBatchStepHook, error!=nil}, Context={}, Output={CurrentBatchState=PreBatchStepHook}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{}}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					Context: map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
@@ -301,7 +302,7 @@ func TestDoError(t *testing.T) {
 						},
 					}},
 				}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.IsZero() || error != nil {
@@ -360,7 +361,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -402,7 +403,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || (result.RequeueAfter != time.Duration(5)*time.Second) || error != nil {
@@ -458,7 +459,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.IsZero() || error == nil {
@@ -518,7 +519,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -578,7 +579,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || (result.RequeueAfter != time.Duration(5)*time.Second) || error != nil {
@@ -641,7 +642,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
@@ -697,7 +698,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
@@ -753,7 +754,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
@@ -809,7 +810,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -865,7 +866,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
@@ -928,7 +929,7 @@ func TestDoPreBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
@@ -1001,7 +1002,7 @@ func TestDoUpgrading(t *testing.T) {
 					},
 				}
 
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || result.Requeue || error == nil {
@@ -1057,7 +1058,7 @@ func TestDoUpgrading(t *testing.T) {
 					},
 				}
 
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || result.Requeue || error == nil {
@@ -1110,7 +1111,7 @@ func TestDoUpgrading(t *testing.T) {
 					},
 				}
 
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -1158,7 +1159,7 @@ func TestDoUpgrading(t *testing.T) {
 					},
 				}
 
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -1220,7 +1221,7 @@ func TestDoUpgrading(t *testing.T) {
 					},
 				}
 
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -1287,7 +1288,7 @@ func TestDoUpgrading(t *testing.T) {
 					},
 				}
 
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || result.RequeueAfter < 0 || result.RequeueAfter > (time.Duration(5)*time.Second) || error != nil {
@@ -1347,7 +1348,7 @@ func TestDoPostBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -1410,7 +1411,7 @@ func TestDoPostBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -1498,7 +1499,7 @@ func TestDoPostBatchHook(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {
@@ -1572,7 +1573,7 @@ func TestDoSucceeded(t *testing.T) {
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
 					},
 				}}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if !done || result.Requeue || error != nil {
@@ -1610,7 +1611,7 @@ func TestDoSucceeded(t *testing.T) {
 					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)}}},
 					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-2"}, Replicas: intstr.FromInt(1)}}},
 				}
-				return &ExecutorContext{rollout: rollout, rolloutRun: rolloutRun, newStatus: &rolloutRun.Status}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
 			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
 				if done || !result.Requeue || error != nil {

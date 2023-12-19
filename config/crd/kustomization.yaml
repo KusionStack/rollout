@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/rollout.kusionstack.io_rollouts.yaml
+- bases/rollout.kusionstack.io_rolloutruns.yaml
 - bases/rollout.kusionstack.io_rolloutstrategies.yaml
 - bases/rollout.kusionstack.io_workflows.yaml
 - bases/rollout.kusionstack.io_tasks.yaml
