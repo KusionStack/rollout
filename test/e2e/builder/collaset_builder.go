@@ -15,54 +15,54 @@
 package builder
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 )
 
-type StatefulSetBuilder struct {
+type CollsetBuilder struct {
 	builder
 }
 
-func NewStatefulSet() *StatefulSetBuilder {
-	return &StatefulSetBuilder{}
+func NewCollsetBuilder() *CollsetBuilder {
+	return &CollsetBuilder{}
 }
 
-func (b *StatefulSetBuilder) Namespace(namespace string) *StatefulSetBuilder {
+func (b *CollsetBuilder) Namespace(namespace string) *CollsetBuilder {
 	b.namespace = namespace
 	return b
 }
 
-func (b *StatefulSetBuilder) Name(name string) *StatefulSetBuilder {
+func (b *CollsetBuilder) Name(name string) *CollsetBuilder {
 	b.name = name
 	return b
 }
 
-func (b *StatefulSetBuilder) NamePrefix(namePrefix string) *StatefulSetBuilder {
+func (b *CollsetBuilder) NamePrefix(namePrefix string) *CollsetBuilder {
 	b.namePrefix = namePrefix
 	return b
 }
 
-func (b *StatefulSetBuilder) AppName(appName string) *StatefulSetBuilder {
+func (b *CollsetBuilder) AppName(appName string) *CollsetBuilder {
 	b.appName = appName
 	return b
 }
 
-func (b *StatefulSetBuilder) Cluster(cluster string) *StatefulSetBuilder {
+func (b *CollsetBuilder) Cluster(cluster string) *CollsetBuilder {
 	b.cluster = cluster
 	return b
 }
 
-func (b *StatefulSetBuilder) Build() *appsv1.StatefulSet {
+func (b *CollsetBuilder) Build() *operatingv1alpha1.CollaSet {
 	b.complete()
 
-	return &appsv1.StatefulSet{
+	return &operatingv1alpha1.CollaSet{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
+			Kind:       "CollaSet",
+			APIVersion: operatingv1alpha1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      b.name,
@@ -76,12 +76,21 @@ func (b *StatefulSetBuilder) Build() *appsv1.StatefulSet {
 				"app.kubernetes.io/instance": b.appName,
 			},
 		},
-		Spec: appsv1.StatefulSetSpec{
-			ServiceName: b.appName,
-			Replicas:    ptr.To(int32(5)),
+		Spec: operatingv1alpha1.CollaSetSpec{
+			Replicas: ptr.To(int32(5)),
+			ScaleStrategy: operatingv1alpha1.ScaleStrategy{
+				Context: "foo",
+			},
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app.kubernetes.io/name": b.appName,
+				},
+			},
+			UpdateStrategy: operatingv1alpha1.UpdateStrategy{
+				RollingUpdate: &operatingv1alpha1.RollingUpdateCollaSetStrategy{
+					ByPartition: &operatingv1alpha1.ByPartition{
+						Partition: ptr.To(int32(0)),
+					},
 				},
 			},
 			Template: corev1.PodTemplateSpec{
@@ -98,10 +107,6 @@ func (b *StatefulSetBuilder) Build() *appsv1.StatefulSet {
 						},
 					},
 				},
-			},
-			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type:          appsv1.RollingUpdateStatefulSetStrategyType,
-				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{Partition: ptr.To(int32(0))},
 			},
 		},
 	}

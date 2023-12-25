@@ -112,12 +112,29 @@ type RolloutRunStatus struct {
 }
 
 type RolloutRunBatchStatus struct {
+	// State indicates the state of progressing
+	State RolloutProgressingState `json:"state,omitempty"`
+	// RolloutBatchStatus contains status of current batch
 	RolloutBatchStatus `json:",inline"`
+	// Error indicates the error info of progressing
+	Error *CodeReasonMessage `json:"error,omitempty"`
 	// Context contains current state context data.
 	Context map[string]string `json:"context,omitempty"`
 	// Records contains all batches status details.
 	Records []RolloutRunBatchStatusRecord `json:"records,omitempty"`
 }
+
+type RolloutProgressingState string
+
+const (
+	RolloutProgressingStateInitial     RolloutProgressingState = "Initial"
+	RolloutProgressingStatePreRollout  RolloutProgressingState = "PreRollout"
+	RolloutProgressingStatePaused      RolloutProgressingState = "Paused"
+	RolloutProgressingStateRolling     RolloutProgressingState = "Rolling"
+	RolloutProgressingStatePostRollout RolloutProgressingState = "PostRollout"
+	RolloutProgressingStateCanceling   RolloutProgressingState = "Canceling"
+	RolloutProgressingStateCompleted   RolloutProgressingState = "Completed"
+)
 
 type RolloutRunBatchStatusRecord struct {
 	// Index is the id of the batch
@@ -151,4 +168,6 @@ type BatchWebhookStatus struct {
 	CodeReasonMessage `json:",inline"`
 	// Failure count
 	FailureCount int32 `json:"failureCount,omitempty"`
+	// Failure count when an error occurred
+	FailureCountAtError int32 `json:"failureCountAtError,omitempty"`
 }

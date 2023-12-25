@@ -16,34 +16,31 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"math"
 	"net/http/httptest"
 	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/utils/ptr"
+	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
-	"kusionstack.io/rollout/pkg/workload/statefulset"
+	"kusionstack.io/rollout/pkg/workload/collaset"
 	"kusionstack.io/rollout/test/e2e/builder"
 )
 
-var _ = Describe("StatefulSet", func() {
+var _ = Describe("CollaSet", func() {
 	ctx := context.Background()
 
 	var ts *httptest.Server
-	var sts = &v1.StatefulSet{}
+	var cls = &operatingv1alpha1.CollaSet{}
 	var rollout = &rolloutv1alpha1.Rollout{}
 	var rolloutRun = &rolloutv1alpha1.RolloutRun{}
 	var strategy *rolloutv1alpha1.RolloutStrategy
@@ -52,62 +49,58 @@ var _ = Describe("StatefulSet", func() {
 		// prepare http server
 		ts = httptest.NewServer(makeHandlerFunc())
 
-		// Prepare Sts
-		sts = builder.NewStatefulSet().Namespace(ns).Build()
+		// Prepare Cls
+		cls = builder.NewCollsetBuilder().Namespace(ns).Build()
 		{
-			By(fmt.Sprintf("PrepareSts: create sts %s/%s", sts.Namespace, sts.Name))
-			Expect(k8sClient.Create(ctx, sts)).Should(Succeed())
+			By(fmt.Sprintf("PrepareCls: create cls %s/%s", cls.Namespace, cls.Name))
+			Expect(k8sClient.Create(ctx, cls)).Should(Succeed())
 
 			Eventually(func() bool {
-				tmpSts := &appsv1.StatefulSet{}
-				if err := k8sClient.Get(ctx, GetNamespacedName(sts.Name, sts.Namespace), tmpSts); err != nil {
-					By(fmt.Sprintf("PrepareSts: Get sts %s/%s err %v", sts.Namespace, sts.Name, err))
+				tmpCls := &operatingv1alpha1.CollaSet{}
+				if err := k8sClient.Get(ctx, GetNamespacedName(cls.Name, cls.Namespace), tmpCls); err != nil {
+					By(fmt.Sprintf("PrepareCls: Get cls %s/%s err %v", cls.Namespace, cls.Name, err))
 					return false
 				}
 
-				if tmpSts.Status.ObservedGeneration != tmpSts.Generation {
-					By(fmt.Sprintf("PrepareSts: checkGeneration %d/%d", tmpSts.Status.ObservedGeneration, tmpSts.Generation))
+				if tmpCls.Status.ObservedGeneration != tmpCls.Generation {
+					By(fmt.Sprintf("PrepareCls: checkGeneration %d/%d", tmpCls.Status.ObservedGeneration, tmpCls.Generation))
 					return false
 				}
 
-				if val, err := json.Marshal(tmpSts.Status); err == nil {
-					fmt.Printf("tempSts: %s \n", string(val))
-				}
-
-				if tmpSts.Status.ReadyReplicas != *sts.Spec.Replicas {
-					By(fmt.Sprintf("PrepareSts: Replicas %d/%d", tmpSts.Status.ReadyReplicas, *sts.Spec.Replicas))
+				if tmpCls.Status.AvailableReplicas != *cls.Spec.Replicas {
+					By(fmt.Sprintf("PrepareCls: Replicas %d/%d", tmpCls.Status.AvailableReplicas, *cls.Spec.Replicas))
 					return false
 				}
 
 				mergeEnv := mergeEnvVar(
-					sts.Spec.Template.Spec.Containers[0].Env,
+					cls.Spec.Template.Spec.Containers[0].Env,
 					corev1.EnvVar{Name: "Foo", Value: "Bar"},
 				)
-				tmpSts.Spec.Template.Spec.Containers[0].Env = mergeEnv
-				tmpSts.Spec.UpdateStrategy.RollingUpdate.Partition = ptr.To(int32(math.MaxInt32))
-				if err := k8sClient.Update(ctx, tmpSts); err != nil {
-					By("Update sts error")
+				tmpCls.Spec.Template.Spec.Containers[0].Env = mergeEnv
+				tmpCls.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition = ptr.To(int32(0))
+				if err := k8sClient.Update(ctx, tmpCls); err != nil {
+					By("Update cls error")
 					return false
 				}
 
 				return true
-			}, "120s", "1s").Should(BeTrue())
+			}, "60s", "1s").Should(BeTrue())
 
 			Eventually(func() bool {
-				tmpSts := &appsv1.StatefulSet{}
-				if err := k8sClient.Get(ctx, GetNamespacedName(sts.Name, sts.Namespace), tmpSts); err != nil {
+				tmpCls := &operatingv1alpha1.CollaSet{}
+				if err := k8sClient.Get(ctx, GetNamespacedName(cls.Name, cls.Namespace), tmpCls); err != nil {
 					return false
 				}
 
-				if tmpSts.Status.UpdatedReplicas != 0 {
+				if tmpCls.Status.UpdatedReplicas != 0 {
 					return false
 				}
 
-				if tmpSts.Status.ObservedGeneration != tmpSts.Generation {
+				if tmpCls.Status.ObservedGeneration != tmpCls.Generation {
 					return false
 				}
 
-				sts = tmpSts
+				cls = tmpCls
 
 				return true
 			}, "60s", "1s").Should(BeTrue())
@@ -116,8 +109,8 @@ var _ = Describe("StatefulSet", func() {
 		// Prepare Rollout && Strategy
 		{
 			strategy = builder.NewRolloutStrategy().Namespace(ns).Build(ts, map[string]string{
-				"app.kubernetes.io/name":     sts.Labels["app.kubernetes.io/name"],
-				"app.kubernetes.io/instance": sts.Labels["app.kubernetes.io/instance"],
+				"app.kubernetes.io/name":     cls.Labels["app.kubernetes.io/name"],
+				"app.kubernetes.io/instance": cls.Labels["app.kubernetes.io/instance"],
 			})
 			Expect(k8sClient.Create(ctx, strategy)).Should(Succeed())
 			Eventually(func() bool {
@@ -127,9 +120,9 @@ var _ = Describe("StatefulSet", func() {
 				return true
 			}, "60s", "1s").Should(BeTrue())
 
-			rollout = builder.NewRollout().Namespace(ns).StrategyName(strategy.Name).Build(statefulset.GVK, map[string]string{
-				"app.kubernetes.io/name":     sts.Labels["app.kubernetes.io/name"],
-				"app.kubernetes.io/instance": sts.Labels["app.kubernetes.io/instance"],
+			rollout = builder.NewRollout().Namespace(ns).StrategyName(strategy.Name).Build(collaset.GVK, map[string]string{
+				"app.kubernetes.io/name":     cls.Labels["app.kubernetes.io/name"],
+				"app.kubernetes.io/instance": cls.Labels["app.kubernetes.io/instance"],
 			})
 			Expect(k8sClient.Create(ctx, rollout)).Should(Succeed())
 			Eventually(func() bool {
@@ -147,12 +140,12 @@ var _ = Describe("StatefulSet", func() {
 	AfterEach(func() {
 		defer ts.Close()
 
-		Expect(k8sClient.Delete(ctx, sts)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, cls)).Should(Succeed())
 		Expect(k8sClient.Delete(ctx, rollout)).Should(Succeed())
 		Expect(k8sClient.Delete(ctx, strategy)).Should(Succeed())
 		Eventually(func() bool {
 			clean := true
-			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(sts), sts)
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cls), cls)
 			if !apierrors.IsNotFound(err) {
 				clean = false
 			}
@@ -249,18 +242,18 @@ var _ = Describe("StatefulSet", func() {
 					return false
 				}
 
-				if err := k8sClient.Get(ctx, GetNamespacedName(sts.Name, sts.Namespace), sts); err != nil {
-					By(fmt.Sprintf("HappyPath: first batch get sts %s/%s err %v", sts.Namespace, sts.Name, err))
+				if err := k8sClient.Get(ctx, GetNamespacedName(cls.Name, cls.Namespace), cls); err != nil {
+					By(fmt.Sprintf("HappyPath: first batch get cls %s/%s err %v", cls.Namespace, cls.Name, err))
 					return false
 				}
 
-				if sts.Status.UpdatedReplicas != 1 {
-					By(fmt.Sprintf("HappyPath: first batch sts %s/%s UpdatedReplicas %d  not match", sts.Namespace, sts.Name, sts.Status.UpdatedReplicas))
+				if cls.Status.UpdatedReplicas != 1 {
+					By(fmt.Sprintf("HappyPath: first batch cls %s/%s UpdatedReplicas %d  not match", cls.Namespace, cls.Name, cls.Status.UpdatedReplicas))
 					return false
 				}
 
-				if *sts.Spec.UpdateStrategy.RollingUpdate.Partition != 4 {
-					By(fmt.Sprintf("HappyPath: first batch sts %s/%s Partition %d  not match", sts.Namespace, sts.Name, *sts.Spec.UpdateStrategy.RollingUpdate.Partition))
+				if *cls.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition != 1 {
+					By(fmt.Sprintf("HappyPath: first batch cls %s/%s Partition %d  not match", cls.Namespace, cls.Name, *cls.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition))
 					return false
 				}
 
@@ -301,18 +294,18 @@ var _ = Describe("StatefulSet", func() {
 					return false
 				}
 
-				if err := k8sClient.Get(ctx, GetNamespacedName(sts.Name, sts.Namespace), sts); err != nil {
-					By(fmt.Sprintf("HappyPath: second batch get sts %s/%s err %v", sts.Namespace, sts.Name, err))
+				if err := k8sClient.Get(ctx, GetNamespacedName(cls.Name, cls.Namespace), cls); err != nil {
+					By(fmt.Sprintf("HappyPath: second batch get cls %s/%s err %v", cls.Namespace, cls.Name, err))
 					return false
 				}
 
-				if sts.Status.UpdatedReplicas != 2 {
-					By(fmt.Sprintf("HappyPath: second batch sts %s/%s UpdatedReplicas %d  not match", sts.Namespace, sts.Name, sts.Status.UpdatedReplicas))
+				if cls.Status.UpdatedReplicas != 2 {
+					By(fmt.Sprintf("HappyPath: second batch cls %s/%s UpdatedReplicas %d  not match", cls.Namespace, cls.Name, cls.Status.UpdatedReplicas))
 					return false
 				}
 
-				if *sts.Spec.UpdateStrategy.RollingUpdate.Partition != 3 {
-					By(fmt.Sprintf("HappyPath: second batch sts %s/%s Partition %d  not match", sts.Namespace, sts.Name, *sts.Spec.UpdateStrategy.RollingUpdate.Partition))
+				if *cls.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition != 2 {
+					By(fmt.Sprintf("HappyPath: second batch cls %s/%s Partition %d  not match", cls.Namespace, cls.Name, *cls.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition))
 					return false
 				}
 
@@ -352,18 +345,18 @@ var _ = Describe("StatefulSet", func() {
 					return false
 				}
 
-				if err := k8sClient.Get(ctx, GetNamespacedName(sts.Name, sts.Namespace), sts); err != nil {
-					By(fmt.Sprintf("HappyPath: third batch get sts %s/%s err %v", sts.Namespace, sts.Name, err))
+				if err := k8sClient.Get(ctx, GetNamespacedName(cls.Name, cls.Namespace), cls); err != nil {
+					By(fmt.Sprintf("HappyPath: third batch get cls %s/%s err %v", cls.Namespace, cls.Name, err))
 					return false
 				}
 
-				if sts.Status.UpdatedReplicas != 5 {
-					By(fmt.Sprintf("HappyPath: third batch sts %s/%s UpdatedReplicas %d  not match", sts.Namespace, sts.Name, sts.Status.UpdatedReplicas))
+				if cls.Status.UpdatedReplicas != 5 {
+					By(fmt.Sprintf("HappyPath: third batch cls %s/%s UpdatedReplicas %d  not match", cls.Namespace, cls.Name, cls.Status.UpdatedReplicas))
 					return false
 				}
 
-				if *sts.Spec.UpdateStrategy.RollingUpdate.Partition != 0 {
-					By(fmt.Sprintf("HappyPath: third batch sts %s/%s Partition %d  not match", sts.Namespace, sts.Name, *sts.Spec.UpdateStrategy.RollingUpdate.Partition))
+				if *cls.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition != 5 {
+					By(fmt.Sprintf("HappyPath: third batch cls %s/%s Partition %d  not match", cls.Namespace, cls.Name, *cls.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition))
 					return false
 				}
 
