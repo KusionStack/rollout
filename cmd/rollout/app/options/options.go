@@ -29,12 +29,13 @@ import (
 )
 
 type Options struct {
-	MetricsBindAddress     string
-	HealthProbeBindAddress string
-	LeaderElect            bool
-	FederatedMode          bool
-	Logger                 string
-	ZapOptions             *zap.Options
+	MetricsBindAddress          string
+	HealthProbeBindAddress      string
+	LeaderElect                 bool
+	FederatedMode               bool
+	Logger                      string
+	ZapOptions                  *zap.Options
+	ControllerConcurrentWorkers int
 }
 
 func NewOptions() *Options {
@@ -47,6 +48,7 @@ func NewOptions() *Options {
 		ZapOptions: &zap.Options{
 			Development: true,
 		},
+		ControllerConcurrentWorkers: 5,
 	}
 }
 
@@ -73,6 +75,7 @@ func (o *Options) Flags(initializer initializer.Interface) cliflag.NamedFlagSets
 			"Enabling this will ensure there is only one active controller manager.")
 	fs.BoolVar(&o.FederatedMode, "federated-mode", o.FederatedMode, "Enable federated mode for controller manager.")
 	fs.StringVar(&o.Logger, "logger", o.Logger, "The logger provider, Options are:\n"+strings.Join([]string{"zap", "klog"}, "\n"))
+	fs.IntVar(&o.ControllerConcurrentWorkers, "controller-concurrent-workers", o.ControllerConcurrentWorkers, "The number of concurrent workers for the controller.")
 
 	// bind zap flags
 	zapFs := flag.NewFlagSet("zap", flag.ExitOnError)
