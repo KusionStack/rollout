@@ -106,7 +106,7 @@ func Run(opt *options.Options, initializer initializer.Interface) error {
 		options.NewCache = newMultiClusterCache
 
 		go func() {
-			if err := multiClusterManager.Run(1, ctx); err != nil {
+			if err := multiClusterManager.Run(opt.ControllerConcurrentWorkers, ctx); err != nil {
 				setupLog.Error(err, "unable to run multiClusterManager")
 				os.Exit(1)
 			}
