@@ -32,6 +32,11 @@ func NewRollout() *RolloutBuilder {
 	return &RolloutBuilder{}
 }
 
+func (b *RolloutBuilder) Namespace(namespace string) *RolloutBuilder {
+	b.namespace = namespace
+	return b
+}
+
 // StrategyName sets the rollout strategy name
 func (b *RolloutBuilder) StrategyName(name string) *RolloutBuilder {
 	b.strategyName = name
@@ -48,6 +53,7 @@ func (b *RolloutBuilder) Build(gvk schema.GroupVersionKind, labels map[string]st
 			Namespace: b.namespace,
 		},
 		Spec: rolloutv1alpha1.RolloutSpec{
+			TriggerPolicy: rolloutv1alpha1.ManualTriggerPolicy,
 			WorkloadRef: rolloutv1alpha1.WorkloadRef{
 				APIVersion: gvk.GroupVersion().String(),
 				Kind:       gvk.Kind,

@@ -285,6 +285,19 @@ spec:
                   currentBatchState:
                     description: CurrentBatchIndex indicates the current batch state.
                     type: string
+                  error:
+                    description: Error indicates the error info of progressing
+                    properties:
+                      code:
+                        description: Code is a globally unique identifier
+                        type: string
+                      message:
+                        description: A human-readable message indicating details about the transition.
+                        type: string
+                      reason:
+                        description: A human-readable short word
+                        type: string
+                    type: object
                   records:
                     description: Records contains all batches status details.
                     items:
@@ -381,6 +394,10 @@ spec:
                                 description: Failure count
                                 format: int32
                                 type: integer
+                              failureCountAtError:
+                                description: Failure count when an error occurred
+                                format: int32
+                                type: integer
                               hookType:
                                 description: Webhook Type
                                 type: string
@@ -397,6 +414,9 @@ spec:
                           type: array
                       type: object
                     type: array
+                  state:
+                    description: State indicates the state of progressing
+                    type: string
                 required:
                 - currentBatchIndex
                 type: object

@@ -53,7 +53,7 @@ lint: golangci
 
 .PHONY: test
 test: manifests generate lint envtest ## Run tests.
-	@KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
+	@KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./pkg/... -coverprofile cover.out
 
 
 .PHONY: e2e-test
@@ -133,10 +133,14 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI ?= $(LOCALBIN)/golangci-lint
+GINKGO ?= $(LOCALBIN)/ginkgo
+HELM ?= $(LOCALBIN)/helm
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v4.5.7
 CONTROLLER_TOOLS_VERSION ?= v0.5.0
+GINKGO_VERSION ?= 1.16.5
+HELM_VERSION ?= 3.13.1
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -163,3 +167,15 @@ $(ENVTEST): $(LOCALBIN)
 golangci: $(GOLANGCI)
 $(GOLANGCI): $(LOCALBIN)
 	@test -s $(LOCALBIN)/golangci-lint || GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2
+
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo locally if necessary. If wrong version is installed, it will be overwritten.
+$(GINKGO): $(LOCALBIN)
+	test -s $(LOCALBIN)/ginkgo && $(LOCALBIN)/ginkgo version | grep -q $(GINKGO_VERSION) || \
+	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/ginkgo@v$(GINKGO_VERSION)
+
+.PHONY: helm
+helm: $(HELM) ## Download helm locally if necessary. If wrong version is installed, it will be overwritten.
+$(HELM): $(LOCALBIN)
+	test -s $(LOCALBIN)/helm && $(LOCALBIN)/helm version | grep -q $(HELM_VERSION) || \
+	GOBIN=$(LOCALBIN) go install helm.sh/helm/v3/cmd/helm@v$(HELM_VERSION)

@@ -136,6 +136,7 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	result := ctrl.Result{}
+	cmd := obj.Annotations[rollout.AnnoManualCommandKey]
 	if newStatus.Phase == rolloutv1alpha1.RolloutPhaseProgressing {
 		result, err = r.handleProgressing(ctx, obj, newStatus, workloads)
 	}
@@ -144,6 +145,14 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if updateStatus != nil {
 		logger.Error(err, "failed to update status")
 		return reconcile.Result{}, updateStatus
+	}
+
+	if _, exist := obj.Annotations[rollout.AnnoManualCommandKey]; !exist && len(cmd) > 0 {
+		patch := utils.DeleteAnnotation(types.JSONPatchType, rollout.AnnoManualCommandKey)
+		if patchError := r.Client.Patch(clusterinfo.ContextFed, obj, patch); patchError != nil {
+			logger.Error(err, "failed to patch status")
+			return reconcile.Result{}, patchError
+		}
 	}
 
 	if err != nil {

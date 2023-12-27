@@ -29,6 +29,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
+	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -39,7 +40,7 @@ import (
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	workflowvalpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers"
-	"kusionstack.io/rollout/test/e2e/controller"
+	"kusionstack.io/rollout/pkg/features"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -62,7 +63,7 @@ func TestAPIs(t *testing.T) {
 
 var rolloutSystemNamespace = &corev1.Namespace{
 	ObjectMeta: metav1.ObjectMeta{
-		Name: "rollout-system",
+		Name: "rollout-demo",
 	},
 }
 
@@ -80,7 +81,6 @@ var _ = BeforeSuite(func() {
 		testEnv = &envtest.Environment{
 			CRDDirectoryPaths: []string{
 				filepath.Join("..", "..", "config", "crd", "bases"),
-				filepath.Join("..", "..", "config", "crd", "cafed"),
 			},
 			ErrorIfCRDPathMissing: true,
 		}
@@ -100,7 +100,11 @@ var _ = BeforeSuite(func() {
 
 	err = rolloutv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
+
 	err = workflowvalpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = operatingv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme
@@ -112,13 +116,16 @@ var _ = BeforeSuite(func() {
 	// create rollout-system namespace
 	Expect(ensureNamespace(k8sClient)).Should(Succeed())
 
-	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
+	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
 
-	err = controllers.Initializer.Add(controller.FakeStsControllerName, controller.InitFakeStsControllerFunc)
-	Expect(err).ToNot(HaveOccurred())
+	//err = controllers.Initializer.Add(controller.FakeStsControllerName, controller.InitFakeStsControllerFunc)
+	//Expect(err).ToNot(HaveOccurred())
+
+	featureGates := os.Getenv("FEATURE_GATES")
+	if len(featureGates) > 0 {
+		features.DefaultMutableFeatureGate.Set(featureGates)
+	}
 
 	err = controllers.Initializer.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())

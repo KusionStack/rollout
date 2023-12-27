@@ -18,6 +18,8 @@ const (
 	// LabelRolloutManualCommand is set in Rollout for users to manipulate workflow
 	AnnoManualCommandKey    = "rollout.kusionstack.io/manual-command"
 	AnnoManualCommandResume = "resume"
+	AnnoManualCommandRetry  = "retry"
+	AnnoManualCommandSkip   = "skip"
 	AnnoManualCommandPause  = "pause"
 	AnnoManualCommandCancel = "cancel"
 
