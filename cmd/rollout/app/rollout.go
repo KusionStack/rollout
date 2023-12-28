@@ -97,7 +97,7 @@ func Run(opt *options.Options, initializer initializer.Interface) error {
 			ResyncPeriod:  0 * time.Second,
 			Log:           ctrl.Log.WithName("multicluster"),
 		}
-		multiClusterManager, newMultiClusterCache, newMultiClusterClient, err := multicluster.NewManager(multiClusterCfg)
+		multiClusterManager, newMultiClusterCache, newMultiClusterClient, err := multicluster.NewManager(multiClusterCfg, multicluster.Options{})
 		if err != nil {
 			setupLog.Error(err, "unable to start multiClusterManager")
 			os.Exit(1)
