@@ -86,11 +86,14 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	b := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
-		For(&rolloutv1alpha1.RolloutRun{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(
+		For(&rolloutv1alpha1.RolloutRun{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
+
+	if !features.DefaultFeatureGate.Enabled(features.UseDefaultExecutor) {
+		b.Watches(
 			multicluster.FedKind(&source.Kind{Type: &workflowv1alpha1.Workflow{}}),
 			eventhandler.EqueueRequestForOwnerWithCreationObserved(&rolloutv1alpha1.RolloutRun{}, true, r.expectation),
 		)
+	}
 
 	_, err := b.Build(r)
 	return err
@@ -224,18 +227,7 @@ func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rollo
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rolloutRun", key)
 
-	currentWorkflow, err := r.getWorkflowForRun(ctx, obj)
-	if client.IgnoreNotFound(err) != nil {
-		logger.Error(err, "failed to get current workflow of rolloutRun")
-		return ctrl.Result{}, err
-	}
-
-	// TODO: how to deal with rollout spec upgrading, continue the progressing workflow and take effect next time?
-	if currentWorkflow != nil {
-		// currentWorkflow is progressing
-		return ctrl.Result{}, r.syncWorkflow(obj, currentWorkflow, newStatus)
-	}
-
+	var err error
 	if features.DefaultFeatureGate.Enabled(features.UseDefaultExecutor) {
 		var done bool
 		var result ctrl.Result
@@ -265,6 +257,19 @@ func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rollo
 			newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
 		}
 		return result, nil
+	}
+
+	var currentWorkflow *workflowv1alpha1.Workflow
+	currentWorkflow, err = r.getWorkflowForRun(ctx, obj)
+	if client.IgnoreNotFound(err) != nil {
+		logger.Error(err, "failed to get current workflow of rolloutRun")
+		return ctrl.Result{}, err
+	}
+
+	// TODO: how to deal with rollout spec upgrading, continue the progressing workflow and take effect next time?
+	if currentWorkflow != nil {
+		// currentWorkflow is progressing
+		return ctrl.Result{}, r.syncWorkflow(obj, currentWorkflow, newStatus)
 	}
 
 	logger.Info("about to construct workflow", "workflow", obj.Name)
