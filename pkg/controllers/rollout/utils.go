@@ -41,7 +41,7 @@ func resetRolloutStatus(status *rolloutv1alpha1.RolloutStatus, rolloutID string,
 }
 
 func isRolloutRunCompleted(run *rolloutv1alpha1.RolloutRun) bool {
-	return run.Status.Phase == rolloutv1alpha1.RolloutRunPhaseCompleted
+	return run.Status.Phase == rolloutv1alpha1.RolloutRunPhaseSucceeded || run.Status.Phase == rolloutv1alpha1.RolloutRunPhaseCanceled
 }
 
 func setStatusCondition(newStatus *rolloutv1alpha1.RolloutStatus, ctype rolloutv1alpha1.ConditionType, status metav1.ConditionStatus, reason, message string) {

@@ -183,8 +183,6 @@ type RolloutBatchStatus struct {
 	CurrentBatchIndex int32 `json:"currentBatchIndex"`
 	// CurrentBatchIndex indicates the current batch state.
 	CurrentBatchState RolloutBatchStepState `json:"currentBatchState,omitempty"`
-	// CurrentBatchError indicates the error info of current batch.
-	CurrentBatchError *CodeReasonMessage `json:"currentBatchError,omitempty"`
 }
 
 type RolloutReplicasSummary struct {

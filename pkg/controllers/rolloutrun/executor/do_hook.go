@@ -40,8 +40,8 @@ func newHookCodeReasonMessage(webhookStatus *rolloutv1alpha1.BatchWebhookStatus,
 func (r *Executor) doBatchPreBatchHook(ctx context.Context, executorContext *ExecutorContext) (ctrl.Result, error) {
 	logger := r.logger
 
-	newProgressingStatus := executorContext.NewStatus.BatchStatus
-	currentBatchIndex := newProgressingStatus.CurrentBatchIndex
+	newBatchStatus := executorContext.NewStatus.BatchStatus
+	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	logger.Info(
 		"DefaultExecutor begin to doPreBatchHook", "currentBatchIndex", currentBatchIndex,
 	)
@@ -49,10 +49,10 @@ func (r *Executor) doBatchPreBatchHook(ctx context.Context, executorContext *Exe
 	hookType := rolloutv1alpha1.HookTypePreBatchStep
 	done, result, err := r.runRolloutWebhooks(ctx, hookType, executorContext)
 	if done {
-		newProgressingStatus.CurrentBatchState = BatchStateUpgrading
+		newBatchStatus.CurrentBatchState = BatchStateUpgrading
 	}
 
-	newProgressingStatus.Records[currentBatchIndex].State = newProgressingStatus.CurrentBatchState
+	newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
 
 	return result, err
 }
@@ -60,8 +60,8 @@ func (r *Executor) doBatchPreBatchHook(ctx context.Context, executorContext *Exe
 // todo add analysis logic
 // doBatchPostBatchHook process doPostBatchHook state
 func (r *Executor) doBatchPostBatchHook(ctx context.Context, executorContext *ExecutorContext) (ctrl.Result, error) {
-	newProgressingStatus := executorContext.NewStatus.BatchStatus
-	currentBatchIndex := newProgressingStatus.CurrentBatchIndex
+	newBatchStatus := executorContext.NewStatus.BatchStatus
+	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	r.logger.Info(
 		"DefaultExecutor begin to doPostBatchHook,", "currentBatchIndex", currentBatchIndex,
 	)
@@ -70,12 +70,12 @@ func (r *Executor) doBatchPostBatchHook(ctx context.Context, executorContext *Ex
 	done, result, err := r.runRolloutWebhooks(ctx, hookType, executorContext)
 
 	if done {
-		newProgressingStatus.CurrentBatchState = BatchStateSucceeded
-		if newProgressingStatus.Records[currentBatchIndex].FinishTime == nil {
-			newProgressingStatus.Records[currentBatchIndex].FinishTime = &metav1.Time{Time: time.Now()}
+		newBatchStatus.CurrentBatchState = BatchStateSucceeded
+		if newBatchStatus.Records[currentBatchIndex].FinishTime == nil {
+			newBatchStatus.Records[currentBatchIndex].FinishTime = &metav1.Time{Time: time.Now()}
 		}
 	}
-	newProgressingStatus.Records[currentBatchIndex].State = newProgressingStatus.CurrentBatchState
+	newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
 
 	return result, err
 }
@@ -113,7 +113,7 @@ func moveToNextWebhook(webhookName string, hookType rolloutv1alpha1.HookType, ba
 func makeRolloutWebhookReview(hookType rolloutv1alpha1.HookType, webhook *rolloutv1alpha1.RolloutWebhook, executorContext *ExecutorContext) *rolloutv1alpha1.RolloutWebhookReview {
 	rollout := executorContext.Rollout
 	rolloutRun := executorContext.RolloutRun
-	newProgressingStatus := executorContext.NewStatus.BatchStatus
+	newBatchStatus := executorContext.NewStatus.BatchStatus
 	return &rolloutv1alpha1.RolloutWebhookReview{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   rollout.Namespace,
@@ -126,10 +126,10 @@ func makeRolloutWebhookReview(hookType rolloutv1alpha1.HookType, webhook *rollou
 			RolloutNamespace: rollout.Namespace,
 			RolloutID:        rolloutRun.Name,
 			HookType:         hookType,
-			BatchIndex:       newProgressingStatus.CurrentBatchIndex,
+			BatchIndex:       newBatchStatus.CurrentBatchIndex,
 			Properties:       webhook.Properties,
 			TargetType:       rolloutRun.Spec.TargetType,
-			Targets:          rolloutRun.Spec.Batch.Batches[newProgressingStatus.CurrentBatchIndex].Targets,
+			Targets:          rolloutRun.Spec.Batch.Batches[newBatchStatus.CurrentBatchIndex].Targets,
 		},
 	}
 }
@@ -155,9 +155,9 @@ func detectWebhooks(hookType rolloutv1alpha1.HookType, rolloutRun *rolloutv1alph
 
 // detectLatestWebhookStatus detect latest webhook to invoke
 func detectLatestWebhookStatus(hookType rolloutv1alpha1.HookType, webhooks []rolloutv1alpha1.RolloutWebhook, executorContext *ExecutorContext) *rolloutv1alpha1.BatchWebhookStatus {
-	newProgressingStatus := executorContext.NewStatus.BatchStatus
-	currentBatchIndex := newProgressingStatus.CurrentBatchIndex
-	currentBatchRecord := &newProgressingStatus.Records[currentBatchIndex]
+	newBatchStatus := executorContext.NewStatus.BatchStatus
+	currentBatchIndex := newBatchStatus.CurrentBatchIndex
+	currentBatchRecord := &newBatchStatus.Records[currentBatchIndex]
 	if len(currentBatchRecord.Webhooks) == 0 {
 		firstHook := rolloutv1alpha1.BatchWebhookStatus{}
 		firstHook.HookType = hookType
@@ -191,7 +191,7 @@ func detectLatestWebhookStatus(hookType rolloutv1alpha1.HookType, webhooks []rol
 			},
 		)
 		if !exists {
-			newProgressingStatus.Error = newHookCodeReasonMessage(
+			newBatchStatus.Error = newHookCodeReasonMessage(
 				nil,
 				hookType,
 				ReasonWebhookNotExist,
@@ -214,12 +214,12 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 	}
 
 	// detect webhook to invoke
-	newProgressingStatus := executorContext.NewStatus.BatchStatus
-	currentBatchIndex := newProgressingStatus.CurrentBatchIndex
-	currentBatchRecord := &newProgressingStatus.Records[currentBatchIndex]
+	newBatchStatus := executorContext.NewStatus.BatchStatus
+	currentBatchIndex := newBatchStatus.CurrentBatchIndex
+	currentBatchRecord := &newBatchStatus.Records[currentBatchIndex]
 	webhookStatus := detectLatestWebhookStatus(hookType, webhooks, executorContext)
-	if newProgressingStatus.Error != nil {
-		return false, ctrl.Result{}, fmt.Errorf(newProgressingStatus.Error.Message)
+	if newBatchStatus.Error != nil {
+		return false, ctrl.Result{}, fmt.Errorf(newBatchStatus.Error.Message)
 	}
 
 	// invoke webhook iteratively
@@ -299,7 +299,7 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 					moveToNextWebhook(webhooks[idx+1].Name, hookType, currentBatchRecord)
 					webhookStatus = &currentBatchRecord.Webhooks[len(currentBatchRecord.Webhooks)-1]
 				} else if rolloutv1alpha1.Fail == failurePolicy {
-					newProgressingStatus.Error = newHookCodeReasonMessage(
+					newBatchStatus.Error = newHookCodeReasonMessage(
 						webhookStatus,
 						hookType,
 						ReasonWebhookFailureThresholdExceeded,
@@ -308,9 +308,9 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 							item.Name, webhookStatus.FailureCount,
 						),
 					)
-					return false, ctrl.Result{}, fmt.Errorf(newProgressingStatus.Error.Message)
+					return false, ctrl.Result{}, fmt.Errorf(newBatchStatus.Error.Message)
 				} else {
-					newProgressingStatus.Error = newHookCodeReasonMessage(
+					newBatchStatus.Error = newHookCodeReasonMessage(
 						webhookStatus,
 						hookType,
 						ReasonWebhookFailurePolicyInvalid,
@@ -318,7 +318,7 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 							"webhook(%s) failed since FailurePolicy(%s) invalid", item.Name, failurePolicy,
 						),
 					)
-					return false, ctrl.Result{}, fmt.Errorf(newProgressingStatus.Error.Message)
+					return false, ctrl.Result{}, fmt.Errorf(newBatchStatus.Error.Message)
 				}
 			}
 		}

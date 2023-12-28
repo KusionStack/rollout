@@ -484,7 +484,7 @@ func (r *RolloutReconciler) getCurrentRolloutRun(ctx context.Context, instance *
 		}
 		for i := range wList.Items {
 			w := &wList.Items[i]
-			if w.Status.Phase != rolloutv1alpha1.RolloutRunPhaseCompleted {
+			if !isRolloutRunCompleted(w) {
 				return w, nil
 			}
 		}
