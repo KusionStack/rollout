@@ -167,6 +167,9 @@ func (r *Executor) doBatchUpgrading(ctx context.Context, executorContext *Execut
 			)
 			return ctrl.Result{RequeueAfter: defaultRequeueAfter}, err
 		} else if !ready {
+			if failureThreshold == nil {
+				failureThreshold = ptr.To(intstr.FromInt(0))
+			}
 			expectReadyReplicas, err = wi.CalculateAtLeastUpdatedAvailableReplicas(failureThreshold)
 			if err != nil {
 				newProgressingStatus.Error = newUpgradingCodeReasonMessage(

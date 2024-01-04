@@ -109,6 +109,9 @@ func (r *Executor) doBatch(ctx context.Context, executorContext *ExecutorContext
 		if len(rolloutRun.Spec.Batch.Batches) > 0 {
 			recordSize := len(executorContext.RolloutRun.Spec.Batch.Batches)
 			records := make([]rolloutv1alpha1.RolloutRunBatchStatusRecord, recordSize)
+			for idx := range records {
+				records[idx] = rolloutv1alpha1.RolloutRunBatchStatusRecord{State: BatchStateInitial}
+			}
 			newProgressingStatus.Records = records
 			newBatchStatus := rolloutv1alpha1.RolloutBatchStatus{
 				CurrentBatchIndex: 0, CurrentBatchState: BatchStateInitial,
