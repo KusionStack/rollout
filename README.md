@@ -1,59 +1,46 @@
-# Rollout
-Rollout is a general-purpose orchestration engine for release and operations. It addresses cross-cluster deployment and operations issues.
+# KusionStack Rollout
 
 ## Overview
-![Rollout](docs/resources/rollout_arch.png)
 
-## Features
+KusionStack Rollout is a progressive delivery controller that automates the release process for applications running on Kubernetes **Clusterset**.
+It provides several delivery strategies such as Canary release, Blue/Green mirroring, A/B testing to reduce the risk of introducing a new version in production. It can also integrates with GatewayAPI, leveraging its traffic shaping ablibities to gradually shift traffic to the new version.  
 
-## Documentation
+> The terminology **clusterset** is defined in [KEP-1645: Multi-Cluster Services API](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api). 
+> 
+> clusterset - A placeholder name for a group of clusters with a high degree of mutual trust and shared ownership that share services amongst themselves. Membership in a clusterset is symmetric and transitive. The set of member clusters are mutually aware, and agree about their collective association. Within a clusterset, namespace sameness applies and all namespaces with a given name are considered to be the same namespace. Implementations of this API are responsible for defining and tracking membership in a clusterset. The specific mechanism is out of scope of this proposal.
+
+![overview](docs/image/overview.jpg)
+
+## Key Features
+
+- Supports progressive delivery for **Applications with multiple components cross Multi Clusters**.
+- Supports various kinds of workload, such as StatefulSet, CollaSet.
+- Supports several delivery strategies, such as Canary release, Multi Batch, Blue/Green mirroring, A/B testing.
+- Supports fine-grained traffic shifting with [GatewayAPI](https://gateway-api.sigs.k8s.io)
+- Extends rollout progress with webhook
+
+## Quick Start
+
+See [Getting Started Guide](docs/en/quick_start.md) to walk through creating and then updating the rollout in local kind cluster.
+
+Please refer to [official website](https://www.kusionstack.io/docs/) for more information.
 
 ## Contributing
-Rollout is an open-source project, and we welcome contributions from the community. Please read this guide before submitting any pull requests.
 
-### Guidelines for Contributing Code
-To contribute code to Rollout, please follow these guidelines:
+Please refer to [Contributing](CONTRIBUTING.md)
 
-1. Fork the repository and create a new branch from **master**.
-2. Write your code and tests.
-3. Ensure that all tests pass by running `make test`.
-4. Run `make` to format your code and ensure your code can be built successfully.
-5. Use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) to format your commit messages.
-6. Submit a pull request to the **master** branch.
+## Code of Conduct
 
-### Commit Convention
-Rollout uses conventional commits to format commit messages. This helps us keep our commit history clean and organized.
-The format of a conventional commit message is:
-```bash
-<type>[optional scope]: <description>
+Please refer to [Code of Conduct](CODE_OF_CONDUCT.md) for more details.
 
-[optional body]
+## Contact us
+- Twitter: [KusionStack](https://twitter.com/KusionStack)
+- Slack: [Kusionstack](https://join.slack.com/t/kusionstack/shared_invite/zt-19lqcc3a9-_kTNwagaT5qwBE~my5Lnxg)
+- DingTalk (Chinese): 42753001
+- Wechat Group (Chinese)
 
-[optional footer]
-```
-- `<type>` is required and specifies the type of the commit, such as feat (new feature), fix (bug fix), or docs (documentation).
-- `[optional scope]` is a short, specific context for the commit, such as a filename or module name.
-- `<description>` is a brief summary of the changes.
-- `[optional body]` provides more detailed information about the changes.
-- `[optional footer]` includes any additional information, such as links to issues or pull requests.
-Here are some examples of conventional commit messages:
-```bash
-feat(config): Add support for YAML configuration files
+  <img src="docs/image/wx_spark.jpg" width="200" height="200"/>
 
-This commit adds a new YAML configuration parser to Rollout. The parser has been tested extensively and is now ready for use.
+## License
 
-Closes #123
-```
-
-If you use Goland or Vscode, you can install the plugin or extension to help you format your commit messages.
-- [Goland Conventional Commit](https://plugins.jetbrains.com/plugin/13389-conventional-commit)
-- [VSCode Conventional Commit](https://marketplace.visualstudio.com/items?itemName=vivaxy.vscode-conventional-commits)
-
-### Unit Tests
-All contributions to Rollout must include appropriate unit tests.
-
-To run all tests, use the `make test` command.
-
-
-
-
+This project follows [Apache-2.0 License](LICENSE).
