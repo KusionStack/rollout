@@ -186,7 +186,7 @@ func (r *RolloutRunReconciler) handleFinalizer(rolloutRun *rolloutv1alpha1.Rollo
 		return nil
 	}
 
-	if rolloutRun.IsRolloutRunCompleted() {
+	if rolloutRun.IsCompleted() {
 		if err := utils.RemoveAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
 			return err
 		}

@@ -195,7 +195,7 @@ var _ = Describe("CollaSet", func() {
 				}
 
 				if rolloutRun.Status.BatchStatus == nil ||
-					rolloutRun.Status.Phase != rolloutv1alpha1.RolloutRunPhaseRolling {
+					rolloutRun.Status.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false
 				}
 

@@ -127,8 +127,9 @@ type RolloutRunPhase string
 const (
 	RolloutRunPhaseInitial     RolloutRunPhase = "Initial"
 	RolloutRunPhasePreRollout  RolloutRunPhase = "PreRollout"
+	RolloutRunPhasePausing     RolloutRunPhase = "Pausing"
 	RolloutRunPhasePaused      RolloutRunPhase = "Paused"
-	RolloutRunPhaseRolling     RolloutRunPhase = "Rolling"
+	RolloutRunPhaseProgressing RolloutRunPhase = "Progressing"
 	RolloutRunPhasePostRollout RolloutRunPhase = "PostRollout"
 	RolloutRunPhaseCanceling   RolloutRunPhase = "Canceling"
 	RolloutRunPhaseCanceled    RolloutRunPhase = "Canceled"
@@ -171,7 +172,7 @@ type BatchWebhookStatus struct {
 	FailureCountAtError int32 `json:"failureCountAtError,omitempty"`
 }
 
-func (r *RolloutRun) IsRolloutRunCompleted() bool {
+func (r *RolloutRun) IsCompleted() bool {
 	if r == nil {
 		return false
 	}

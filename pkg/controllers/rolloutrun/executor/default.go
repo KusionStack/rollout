@@ -35,9 +35,16 @@ func NewDefaultExecutor(logger logr.Logger) *Executor {
 
 // Do execute the lifecycle for rollout run, and will return new status
 func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
-	// init BatchStatus
 	newStatus := executorContext.NewStatus
 	rolloutRun := executorContext.RolloutRun
+	if !rolloutRun.DeletionTimestamp.IsZero() &&
+		newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
+		r.logger.Info("DefaultExecutor will cancel since DeletionTimestamp is not nil")
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
+		return false, ctrl.Result{Requeue: true}, nil
+	}
+
+	// init BatchStatus
 	if len(newStatus.Phase) == 0 || newStatus.BatchStatus == nil {
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
 
@@ -66,12 +73,6 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 		return false, r.doCommand(executorContext), nil
 	}
 
-	if !rolloutRun.DeletionTimestamp.IsZero() {
-		r.logger.Info("DefaultExecutor will cancel since DeletionTimestamp is not nil")
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
-		return false, ctrl.Result{Requeue: true}, nil
-	}
-
 	// if paused, do nothing
 	if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 		r.logger.Info("DefaultExecutor will terminate since paused")
@@ -95,6 +96,9 @@ func (r *Executor) lifecycle(ctx context.Context, executorContext *ExecutorConte
 	case rolloutv1alpha1.RolloutRunPhaseInitial:
 		result = ctrl.Result{Requeue: true}
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePreRollout
+	case rolloutv1alpha1.RolloutRunPhasePausing:
+		result = ctrl.Result{Requeue: true}
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePaused
 	case rolloutv1alpha1.RolloutRunPhasePaused:
 		result = ctrl.Result{}
 	case rolloutv1alpha1.RolloutRunPhaseSucceeded:
@@ -105,8 +109,8 @@ func (r *Executor) lifecycle(ctx context.Context, executorContext *ExecutorConte
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceled
 	case rolloutv1alpha1.RolloutRunPhasePreRollout:
 		result = ctrl.Result{Requeue: true}
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseRolling
-	case rolloutv1alpha1.RolloutRunPhaseRolling:
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+	case rolloutv1alpha1.RolloutRunPhaseProgressing:
 		result, err = r.doBatch(ctx, executorContext)
 	case rolloutv1alpha1.RolloutRunPhasePostRollout:
 		done = true
@@ -145,9 +149,9 @@ func (r *Executor) doBatch(ctx context.Context, executorContext *ExecutorContext
 	)
 	rolloutRun := executorContext.RolloutRun
 	if len(rolloutRun.Spec.Batch.Batches) == 0 {
-		result = ctrl.Result{Requeue: true}
 		r.logger.Info("DefaultExecutor doBatch fast done since batches empty")
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	switch currentBatchStatus.CurrentBatchState {
@@ -172,7 +176,7 @@ func (r *Executor) doBatch(ctx context.Context, executorContext *ExecutorContext
 	return result, err
 }
 
-// doBatchInitial process Initialized sta--feature-gates=UseDefaultExecutor=true
+// doBatchInitial process Initialized
 func (r *Executor) doBatchInitial(executorContext *ExecutorContext) ctrl.Result {
 	newBatchStatus := executorContext.NewStatus.BatchStatus
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex

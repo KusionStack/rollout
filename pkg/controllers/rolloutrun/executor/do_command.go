@@ -22,7 +22,7 @@ func (r *Executor) doCommand(executorContext *ExecutorContext) ctrl.Result {
 	switch cmd {
 	case rolloutapis.AnnoManualCommandResume:
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
-			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseRolling
+			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 		}
 		if currentBatchState == BatchStatePaused {
 			newBatchStatus.CurrentBatchState = BatchStatePreBatchHook
@@ -33,7 +33,7 @@ func (r *Executor) doCommand(executorContext *ExecutorContext) ctrl.Result {
 			newBatchStatus.Error = nil
 		}
 	case rolloutapis.AnnoManualCommandPause:
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePaused
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePausing
 	case rolloutapis.AnnoManualCommandCancel:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
 	case rolloutapis.AnnoManualCommandSkip:
