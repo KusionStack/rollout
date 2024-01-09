@@ -1,24 +1,22 @@
 # Contributing 
 
+- [Contributing](#contributing)
+	- [Code of Conduct](#code-of-conduct)
+	- [Reporting security issues](#reporting-security-issues)
+	- [Reporting general issues](#reporting-general-issues)
+	- [Code and doc contribution](#code-and-doc-contribution)
+		- [Workspace Preparation](#workspace-preparation)
+		- [Branch Definition](#branch-definition)
+		- [Commit Rules](#commit-rules)
+			- [Commit Message](#commit-message)
+			- [Commit Content](#commit-content)
+		- [PR Description](#pr-description)
+	- [Engage to help anything](#engage-to-help-anything)
+
+
 ## Code of Conduct
 
 Please do check our [Code of Conduct](CODE_OF_CONDUCT.md) before making contributions.
-
-## Topics
-
-- [Contributing](#contributing)
-- [Code of Conduct](#code-of-conduct)
-- [Topics](#topics)
-- [Reporting security issues](#reporting-security-issues)
-- [Reporting general issues](#reporting-general-issues)
-- [Code and doc contribution](#code-and-doc-contribution)
-- [Workspace Preparation](#workspace-preparation)
-- [Branch Definition](#branch-definition)
-- [Commit Rules](#commit-rules)
-- [Commit Message](#commit-message)
-- [Commit Content](#commit-content)
-- [PR Description](#pr-description)
-- [Engage to help anything](#engage-to-help-anything)
 
 ## Reporting security issues
 
@@ -71,7 +69,7 @@ We assume you have a GitHub ID already, then you could finish the preparation in
 
 1. **FORK** KusionStack Rollout to your repository. To make this work, you just need to click the button `Fork` in top-right corner of [rollout](https://github.com/KusionStack/rollout) main page. Then you will end up with your repository in `https://github.com/<username>/rollout`, in which `username` is your GitHub ID.
 1. **CLONE** your own repository to develop locally. Use `git clone https://github.com/<username>/rollout.git` to clone repository to your local machine. Then you can create new branches to finish the change you wish to make.
-1. **Set Remote** upstream to be kube-gateway using the following two commands:
+1. **Set Remote** upstream to be rollout using the following two commands:
 
 ```
 git remote add upstream https://github.com/KusionStack/rollout.git
@@ -84,7 +82,7 @@ With this remote setting, you can check your git remote configuration like this:
 $ git remote -v
 origin     https://github.com/<username>/rollout.git (fetch)
 origin     https://github.com/<username>/rollout.git (push)
-upstream   https://github.com/kubewharf/rollout.git (fetch)
+upstream   https://github.com/KusionStack/rollout.git (fetch)
 upstream   no-pushing (push)
 ```
 

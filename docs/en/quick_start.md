@@ -28,13 +28,30 @@ The script performs the following tasks:
 
 After script finished:
 - you can check statefulsets in default namespace by 
-```bash
-kubectl --context kind-kusionstack-rollout -n default get statefulsets
+```shell
+kubectl --context kind-kusionstack-rollout -n default get statefulsets                                
 ```
+
 - you can check rollout in default namespace by 
 ```bash
-kubectl --context kind-kusionstack-rollout -n default get rollouts
+kubectl --context kind-kusionstack-rollout -n default get rollouts -oyaml
 ```
+The status should be
+
+```yaml
+status:
+  conditions:
+  - lastTransitionTime: "2024-01-09T12:08:02Z"
+    lastUpdateTime: "2024-01-09T12:08:02Z"
+    message: rollout is not triggered
+    reason: UnTriggered
+    status: "False"
+    type: Progressing
+  lastUpdateTime: "2024-01-09T12:08:02Z"
+  observedGeneration: 1
+  phase: Initialized
+```
+
 
 Then update all statefulsets by:
 ```bash
@@ -50,8 +67,8 @@ If you see the following status, that means the rollout is paused now.
 ```yaml
 status:
   batchStatus:
-	currentBatchIndex: 1
-	currentBatchState: Paused
+    currentBatchIndex: 1
+    currentBatchState: Paused
 ```
 
 Run following command to let rollout continue:
@@ -64,10 +81,15 @@ Check status again, finally you can see:
 status:
   batchStatus:
     currentBatchIndex: 2
-	currentBatchState: Succeeded
+    currentBatchState: Succeeded
 conditions:
 - message: rolloutRun is complated
   reason: Completed
   status: "False"
   type: Progressing
+```
+
+Finally, you can clean up the whole test enviroment:
+```bash
+kind delete cluster --name kusionstack-rollout
 ```

@@ -13,7 +13,7 @@ It provides several delivery strategies such as Canary release, Blue/Green mirro
 
 ## Key Features
 
-- Supports progressive delivery for **Multi Cluster application** with multiple components.
+- Supports progressive delivery for **Applications with multiple components cross Multi Clusters**.
 - Supports various kinds of workload, such as StatefulSet, CollaSet.
 - Supports several delivery strategies, suck as Canary release, Multi Batch, Blue/Green mirroring, A/B testing.
 - Supports fine-grained traffic shifting with [GatewayAPI](https://gateway-api.sigs.k8s.io)
@@ -22,6 +22,8 @@ It provides several delivery strategies such as Canary release, Blue/Green mirro
 ## Quick Start
 
 See [Getting Started Guide](docs/en/quick_start.md) to walk through creating and then updating the rollout in local kind cluster.
+
+Please refer to [official website](https://www.kusionstack.io/docs/) for more information.
 
 ## Contributing
 
