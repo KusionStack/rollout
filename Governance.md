@@ -4,7 +4,7 @@ The governance model adopted in KusionStack Rollout is influenced by many CNCF p
 
 ## Principles
 
-- **Open**: KusionStack Rollout is open source community. See (TODO: add Contributor License Agreement).
+- **Open**: KusionStack Rollout is open source community. See ([Contributor License Agreement](https://github.com/KusionStack/.github/blob/main/CLA.md)).
 - **Welcoming and respectful**: See [Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md).
 - **Transparent and accessible**: Work and collaboration should be done in public.
 - **Merit**: Ideas and contributions are accepted according to their technical merit

@@ -7,9 +7,7 @@
 	- [Code and doc contribution](#code-and-doc-contribution)
 		- [Workspace Preparation](#workspace-preparation)
 		- [Branch Definition](#branch-definition)
-		- [Commit Rules](#commit-rules)
-			- [Commit Message](#commit-message)
-			- [Commit Content](#commit-content)
+		- [Code Review](#code-review)
 		- [PR Description](#pr-description)
 	- [Engage to help anything](#engage-to-help-anything)
 
@@ -96,20 +94,20 @@ Before officially releasing a version, we may checkout a rc (release candidate) 
 When officially releasing a version, there may be a release branch before tagging which will be deleted after tagging.
 When backporting some fixes to existing released version, we will checkout backport branches.
 
-### Commit Rules
 
-we take two rules seriously for submitted PRs:
+### Code Review
 
-* [Commit Message](#commit-message)
-* [Commit Content](#commit-content)
 
-#### Commit Message
+For a brief description of the importance of code review, please read [On Code Review](/contributors/guide/expectations.md#code-review).  
+There are two aspects of code review: giving and receiving.
 
-TODO
+To make it easier for your PR to receive reviews, consider the reviewers will need you to:
 
-#### Commit Content
+* Follow the project [coding conventions]([coding-conventions.md](https://github.com/kubernetes/community/blob/master/contributors/guide/coding-conventions.md))
+* Write [good commit messages](https://chris.beams.io/posts/git-commit/)
+* Break large changes into a logical series of smaller patches which individually make easily understandable changes, and in aggregate solve a broader issue
 
-TODO
+Reviewers, the people giving the review, are highly encouraged to revisit the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ### PR Description
 

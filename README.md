@@ -15,7 +15,7 @@ It provides several delivery strategies such as Canary release, Blue/Green mirro
 
 - Supports progressive delivery for **Applications with multiple components cross Multi Clusters**.
 - Supports various kinds of workload, such as StatefulSet, CollaSet.
-- Supports several delivery strategies, suck as Canary release, Multi Batch, Blue/Green mirroring, A/B testing.
+- Supports several delivery strategies, such as Canary release, Multi Batch, Blue/Green mirroring, A/B testing.
 - Supports fine-grained traffic shifting with [GatewayAPI](https://gateway-api.sigs.k8s.io)
 - Extends rollout progress with webhook
 
