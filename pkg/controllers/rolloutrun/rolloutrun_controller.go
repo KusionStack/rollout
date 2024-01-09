@@ -125,6 +125,11 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, nil
 	}
 
+	if err = r.handleFinalizer(obj); err != nil {
+		logger.Error(err, "handleFinalizer failed")
+		return ctrl.Result{}, nil
+	}
+
 	newStatus := obj.Status.DeepCopy()
 
 	workloads, err := r.findWorkloadsCrossCluster(ctx, obj)
@@ -134,7 +139,7 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	var result ctrl.Result
 	cmd := obj.Annotations[rollout.AnnoManualCommandKey]
-	result, err = r.sync(ctx, obj, newStatus)
+	result, err = r.syncRolloutRun(ctx, obj, newStatus)
 
 	updateStatus := r.updateStatusOnly(ctx, obj, newStatus, workloads)
 	if updateStatus != nil {
@@ -173,8 +178,25 @@ func (r *RolloutRunReconciler) satisfiedExpectations(instance *rolloutv1alpha1.R
 	return true
 }
 
-// sync
-func (r *RolloutRunReconciler) sync(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus) (ctrl.Result, error) {
+func (r *RolloutRunReconciler) handleFinalizer(rolloutRun *rolloutv1alpha1.RolloutRun) error {
+	if rolloutRun.DeletionTimestamp.IsZero() {
+		if err := utils.AddAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if rolloutRun.IsRolloutRunCompleted() {
+		if err := utils.RemoveAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return nil
+}
+
+func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus) (ctrl.Result, error) {
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rolloutRun", key)
 
@@ -209,7 +231,7 @@ func (r *RolloutRunReconciler) sync(ctx context.Context, obj *rolloutv1alpha1.Ro
 		newCondition := condition.NewCondition(
 			rolloutv1alpha1.RolloutConditionProgressing,
 			metav1.ConditionFalse,
-			rolloutv1alpha1.RolloutReasonProgressingCanceled,
+			rolloutv1alpha1.RolloutReasonProgressingError,
 			"rollout stop rolling since error exist",
 		)
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)

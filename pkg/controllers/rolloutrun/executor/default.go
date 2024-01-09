@@ -66,6 +66,12 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 		return false, r.doCommand(executorContext), nil
 	}
 
+	if !rolloutRun.DeletionTimestamp.IsZero() {
+		r.logger.Info("DefaultExecutor will cancel since DeletionTimestamp is not nil")
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
+		return false, ctrl.Result{Requeue: true}, nil
+	}
+
 	// if paused, do nothing
 	if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 		r.logger.Info("DefaultExecutor will terminate since paused")
@@ -112,6 +118,9 @@ func (r *Executor) lifecycle(ctx context.Context, executorContext *ExecutorConte
 
 // doBatch process batch one-by-one
 func (r *Executor) doBatch(ctx context.Context, executorContext *ExecutorContext) (ctrl.Result, error) {
+	// todo resize records when rolloutRun.spec changed
+	// https://github.com/KusionStack/rollout/issues/27
+
 	// init BatchStatus
 	newStatus := executorContext.NewStatus
 	newBatchStatus := newStatus.BatchStatus
@@ -139,25 +148,25 @@ func (r *Executor) doBatch(ctx context.Context, executorContext *ExecutorContext
 		result = ctrl.Result{Requeue: true}
 		r.logger.Info("DefaultExecutor doBatch fast done since batches empty")
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
-	} else {
-		switch currentBatchStatus.CurrentBatchState {
-		case BatchStateInitial:
-			result = r.doBatchInitial(executorContext)
-		case BatchStatePaused:
-			result = r.doBatchPaused(executorContext)
-		case BatchStatePreBatchHook:
-			result, err = r.doBatchPreBatchHook(ctx, executorContext)
-		case BatchStateUpgrading:
-			result, err = r.doBatchUpgrading(ctx, executorContext)
-		case BatchStatePostBatchHook:
-			result, err = r.doBatchPostBatchHook(ctx, executorContext)
-		case BatchStateSucceeded:
-			result = r.doBatchSucceeded(executorContext)
-			if currentBatchStatus.CurrentBatchState == BatchStateSucceeded &&
-				int(currentBatchStatus.CurrentBatchIndex) >= (len(rolloutRun.Spec.Batch.Batches)-1) {
-				result = ctrl.Result{Requeue: true}
-				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
-			}
+	}
+
+	switch currentBatchStatus.CurrentBatchState {
+	case BatchStateInitial:
+		result = r.doBatchInitial(executorContext)
+	case BatchStatePaused:
+		result = r.doBatchPaused(executorContext)
+	case BatchStatePreBatchHook:
+		result, err = r.doBatchPreBatchHook(ctx, executorContext)
+	case BatchStateUpgrading:
+		result, err = r.doBatchUpgrading(ctx, executorContext)
+	case BatchStatePostBatchHook:
+		result, err = r.doBatchPostBatchHook(ctx, executorContext)
+	case BatchStateSucceeded:
+		result = r.doBatchSucceeded(executorContext)
+		if currentBatchStatus.CurrentBatchState == BatchStateSucceeded &&
+			int(currentBatchStatus.CurrentBatchIndex) >= (len(rolloutRun.Spec.Batch.Batches)-1) {
+			result = ctrl.Result{Requeue: true}
+			newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 		}
 	}
 	return result, err

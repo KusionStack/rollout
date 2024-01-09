@@ -170,3 +170,10 @@ type BatchWebhookStatus struct {
 	// Failure count when an error occurred
 	FailureCountAtError int32 `json:"failureCountAtError,omitempty"`
 }
+
+func (r *RolloutRun) IsRolloutRunCompleted() bool {
+	if r == nil {
+		return false
+	}
+	return r.Status.Phase == RolloutRunPhaseSucceeded || r.Status.Phase == RolloutRunPhaseCanceled
+}

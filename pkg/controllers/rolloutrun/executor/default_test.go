@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -294,6 +295,31 @@ func TestDo(t *testing.T) {
 					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseInitial {
+					return false, nil
+				}
+				return true, nil
+			},
+		},
+		{
+			name: "Input={ProgressingStatus.State==Initial, ProgressingStatus.Error!=nil}, Context={DeletionTimestamp is not nil}, Output={ProgressingStatus.State==Canceled}",
+			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
+				rolloutRun.DeletionTimestamp = ptr.To(metav1.Now())
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
+			},
+			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || error != nil {
+					return false, nil
+				}
+
+				newStatus := rolloutRun.Status
+				newBatchStatus := newStatus.BatchStatus
+				if newBatchStatus.Error != nil ||
+					len(newBatchStatus.Records) != 0 ||
+					len(newBatchStatus.Context) != 0 ||
+					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
+					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
 					return false, nil
 				}
 				return true, nil
