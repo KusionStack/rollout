@@ -38,6 +38,9 @@ spec:
               strategyRef:
                 description: StrategyRef is the reference to the rollout strategy
                 type: string
+              trafficTopologyRef:
+                description: TrafficTopologies defines the networking traffic relationships between workloads, backend services, and routes.
+                type: string
               triggerPolicy:
                 description: TriggerPolicy defines when rollout will be triggered
                 type: string
@@ -64,6 +67,8 @@ spec:
                             name:
                               description: Name is the resource name
                               type: string
+                          required:
+                          - name
                           type: object
                         type: array
                       selector:
@@ -101,6 +106,8 @@ spec:
                 - kind
                 - match
                 type: object
+            required:
+            - trafficTopologyRef
             type: object
           status:
             description: RolloutStatus defines the observed state of Rollout

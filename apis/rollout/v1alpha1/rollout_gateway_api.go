@@ -57,5 +57,5 @@ type HTTPRouteRule struct {
 	// Matches define conditions used for matching the incoming HTTP requests to canary service.
 	Matches []HTTPRouteMatch `json:"matches,omitempty"`
 	// Filter defines a filter for the canary service.
-	Filters []HTTPRouteFilter `json:"filters,omitempty"`
+	Filter HTTPRouteFilter `json:"filter,omitempty"`
 }

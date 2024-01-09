@@ -1,0 +1,348 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: backendroutings.rollout.kusionstack.io
+spec:
+  group: rollout.kusionstack.io
+  names:
+    kind: BackendRouting
+    listKind: BackendRoutingList
+    plural: backendroutings
+    singular: backendrouting
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: BackendRouting defines defines the association between frontend routes and backend service, and it allows the user to define forwarding rules for canary scenario.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              backend:
+                description: Backend defines the reference to a kind of backend
+                properties:
+                  apiVersion:
+                    description: APIVersion is the group/version for the resource being referenced. If APIVersion is not specified, the specified Kind must be in the core API group. For any other third-party types, APIVersion is required.
+                    type: string
+                  cluster:
+                    description: Cluster indicates the name of cluster
+                    type: string
+                  kind:
+                    description: Kind is the type of resource being referenced
+                    type: string
+                  name:
+                    description: Name is the resource name
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+              forwarding:
+                description: Forwarding defines the forwarding rules for canary scenario
+                properties:
+                  canary:
+                    properties:
+                      http:
+                        properties:
+                          filter:
+                            description: Filter defines a filter for the canary service.
+                            properties:
+                              requestHeaderModifier:
+                                description: "RequestHeaderModifier defines a schema for a filter that modifies request headers. \n Support: Core"
+                                properties:
+                                  add:
+                                    description: "Add adds the given header(s) (name, value) to the request before the action. It appends to any existing values associated with the header name. \n Input:   GET /foo HTTP/1.1   my-header: foo \n Config:   add:   - name: \"my-header\"     value: \"bar,baz\" \n Output:   GET /foo HTTP/1.1   my-header: foo,bar,baz"
+                                    items:
+                                      description: HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+                                      properties:
+                                        name:
+                                          description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent."
+                                          maxLength: 256
+                                          minLength: 1
+                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                          type: string
+                                        value:
+                                          description: Value is the value of HTTP Header to be matched.
+                                          maxLength: 4096
+                                          minLength: 1
+                                          type: string
+                                      required:
+                                      - name
+                                      - value
+                                      type: object
+                                    maxItems: 16
+                                    type: array
+                                    x-kubernetes-list-map-keys:
+                                    - name
+                                    x-kubernetes-list-type: map
+                                  remove:
+                                    description: "Remove the given header(s) from the HTTP request before the action. The value of Remove is a list of HTTP header names. Note that the header names are case-insensitive (see https://datatracker.ietf.org/doc/html/rfc2616#section-4.2). \n Input:   GET /foo HTTP/1.1   my-header1: foo   my-header2: bar   my-header3: baz \n Config:   remove: [\"my-header1\", \"my-header3\"] \n Output:   GET /foo HTTP/1.1   my-header2: bar"
+                                    items:
+                                      type: string
+                                    maxItems: 16
+                                    type: array
+                                    x-kubernetes-list-type: set
+                                  set:
+                                    description: "Set overwrites the request with the given header (name, value) before the action. \n Input:   GET /foo HTTP/1.1   my-header: foo \n Config:   set:   - name: \"my-header\"     value: \"bar\" \n Output:   GET /foo HTTP/1.1   my-header: bar"
+                                    items:
+                                      description: HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+                                      properties:
+                                        name:
+                                          description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent."
+                                          maxLength: 256
+                                          minLength: 1
+                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                          type: string
+                                        value:
+                                          description: Value is the value of HTTP Header to be matched.
+                                          maxLength: 4096
+                                          minLength: 1
+                                          type: string
+                                      required:
+                                      - name
+                                      - value
+                                      type: object
+                                    maxItems: 16
+                                    type: array
+                                    x-kubernetes-list-map-keys:
+                                    - name
+                                    x-kubernetes-list-type: map
+                                type: object
+                            type: object
+                          matches:
+                            description: Matches define conditions used for matching the incoming HTTP requests to canary service.
+                            items:
+                              properties:
+                                headers:
+                                  description: Headers specifies HTTP request header matchers. Multiple match values are ANDed together, meaning, a request must match all the specified headers to select the route.
+                                  items:
+                                    description: HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request headers.
+                                    properties:
+                                      name:
+                                        description: "Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2). \n If multiple entries specify equivalent header names, only the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent header name MUST be ignored. Due to the case-insensitivity of header names, \"foo\" and \"Foo\" are considered equivalent. \n When a header is repeated in an HTTP request, it is implementation-specific behavior as to how this is represented. Generally, proxies should follow the guidance from the RFC: https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.2 regarding processing a repeated header, with special handling for \"Set-Cookie\"."
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      type:
+                                        default: Exact
+                                        description: "Type specifies how to match against the value of the header. \n Support: Core (Exact) \n Support: Implementation-specific (RegularExpression) \n Since RegularExpression HeaderMatchType has implementation-specific conformance, implementations can support POSIX, PCRE or any other dialects of regular expressions. Please read the implementation's documentation to determine the supported dialect."
+                                        enum:
+                                        - Exact
+                                        - RegularExpression
+                                        type: string
+                                      value:
+                                        description: Value is the value of HTTP Header to be matched.
+                                        maxLength: 4096
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  maxItems: 16
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                  - name
+                                  x-kubernetes-list-type: map
+                                queryParams:
+                                  description: "QueryParams specifies HTTP query parameter matchers. Multiple match values are ANDed together, meaning, a request must match all the specified query parameters to select the route. \n Support: Extended"
+                                  items:
+                                    description: HTTPQueryParamMatch describes how to select a HTTP route by matching HTTP query parameters.
+                                    properties:
+                                      name:
+                                        description: "Name is the name of the HTTP query param to be matched. This must be an exact string match. (See https://tools.ietf.org/html/rfc7230#section-2.7.3). \n If multiple entries specify equivalent query param names, only the first entry with an equivalent name MUST be considered for a match. Subsequent entries with an equivalent query param name MUST be ignored. \n If a query param is repeated in an HTTP request, the behavior is purposely left undefined, since different data planes have different capabilities. However, it is *recommended* that implementations should match against the first value of the param if the data plane supports it, as this behavior is expected in other load balancing contexts outside of the Gateway API. \n Users SHOULD NOT route traffic based on repeated query params to guard themselves against potential differences in the implementations."
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      type:
+                                        default: Exact
+                                        description: "Type specifies how to match against the value of the query parameter. \n Support: Extended (Exact) \n Support: Implementation-specific (RegularExpression) \n Since RegularExpression QueryParamMatchType has Implementation-specific conformance, implementations can support POSIX, PCRE or any other dialects of regular expressions. Please read the implementation's documentation to determine the supported dialect."
+                                        enum:
+                                        - Exact
+                                        - RegularExpression
+                                        type: string
+                                      value:
+                                        description: Value is the value of HTTP query param to be matched.
+                                        maxLength: 1024
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  maxItems: 16
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                  - name
+                                  x-kubernetes-list-type: map
+                              type: object
+                            type: array
+                        type: object
+                      name:
+                        description: the temporary canary backend service name, generally it is the {originServiceName}-canary
+                        type: string
+                      weight:
+                        description: Weight indicate how many percentage of traffic the canary pods should receive
+                        format: int32
+                        maximum: 100
+                        minimum: 0
+                        type: integer
+                    type: object
+                  stable:
+                    properties:
+                      name:
+                        description: the temporary stable backend service name, generally it is the {originServiceName}-stable
+                        type: string
+                    type: object
+                type: object
+              routes:
+                description: Routes defines the list of routes
+                items:
+                  description: CrossClusterObjectReference is a reference to a kubernetes object in a different cluster.
+                  properties:
+                    apiVersion:
+                      description: APIVersion is the group/version for the resource being referenced. If APIVersion is not specified, the specified Kind must be in the core API group. For any other third-party types, APIVersion is required.
+                      type: string
+                    cluster:
+                      description: Cluster indicates the name of cluster
+                      type: string
+                    kind:
+                      description: Kind is the type of resource being referenced
+                      type: string
+                    name:
+                      description: Name is the resource name
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  type: object
+                type: array
+              trafficType:
+                description: TrafficType defines the type of traffic
+                type: string
+            required:
+            - backend
+            - trafficType
+            type: object
+          status:
+            properties:
+              backends:
+                description: current backends routing
+                properties:
+                  canary:
+                    description: Canary backend status
+                    properties:
+                      conditions:
+                        description: Conditions represents the current condition of an backend.
+                        properties:
+                          ready:
+                            description: ready indicates that this endpoint is prepared to receive traffic, according to whatever system is managing the endpoint. A nil value indicates an unknown state. In most cases consumers should interpret this unknown state as ready. For compatibility reasons, ready should never be "true" for terminating endpoints.
+                            type: boolean
+                          terminating:
+                            description: terminating indicates that this endpoint is terminating. A nil value indicates an unknown state. Consumers should interpret this unknown state to mean that the endpoint is not terminating.
+                            type: boolean
+                        type: object
+                      name:
+                        description: Name is the name of the referent.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  origin:
+                    description: Origin backend status
+                    properties:
+                      conditions:
+                        description: Conditions represents the current condition of an backend.
+                        properties:
+                          ready:
+                            description: ready indicates that this endpoint is prepared to receive traffic, according to whatever system is managing the endpoint. A nil value indicates an unknown state. In most cases consumers should interpret this unknown state as ready. For compatibility reasons, ready should never be "true" for terminating endpoints.
+                            type: boolean
+                          terminating:
+                            description: terminating indicates that this endpoint is terminating. A nil value indicates an unknown state. Consumers should interpret this unknown state to mean that the endpoint is not terminating.
+                            type: boolean
+                        type: object
+                      name:
+                        description: Name is the name of the referent.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  stable:
+                    description: Stable backend status
+                    properties:
+                      conditions:
+                        description: Conditions represents the current condition of an backend.
+                        properties:
+                          ready:
+                            description: ready indicates that this endpoint is prepared to receive traffic, according to whatever system is managing the endpoint. A nil value indicates an unknown state. In most cases consumers should interpret this unknown state as ready. For compatibility reasons, ready should never be "true" for terminating endpoints.
+                            type: boolean
+                          terminating:
+                            description: terminating indicates that this endpoint is terminating. A nil value indicates an unknown state. Consumers should interpret this unknown state to mean that the endpoint is not terminating.
+                            type: boolean
+                        type: object
+                      name:
+                        description: Name is the name of the referent.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed.
+                format: int64
+                type: integer
+              phase:
+                description: Phase indicates the current phase of this object.
+                type: string
+              routeStatuses:
+                description: route statuses
+                items:
+                  description: BackendRouteStatus defines the status of a backend route.
+                  properties:
+                    apiVersion:
+                      description: APIVersion is the group/version for the resource being referenced. If APIVersion is not specified, the specified Kind must be in the core API group. For any other third-party types, APIVersion is required.
+                      type: string
+                    cluster:
+                      description: Cluster indicates the name of cluster
+                      type: string
+                    kind:
+                      description: Kind is the type of resource being referenced
+                      type: string
+                    name:
+                      description: Name is the resource name
+                      type: string
+                    synced:
+                      description: Synced indicates whether the backend route is synced.
+                      type: boolean
+                  required:
+                  - kind
+                  - name
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

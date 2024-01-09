@@ -1,0 +1,267 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: traffictopologies.rollout.kusionstack.io
+spec:
+  group: rollout.kusionstack.io
+  names:
+    kind: TrafficTopology
+    listKind: TrafficTopologyList
+    plural: traffictopologies
+    singular: traffictopology
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: TrafficTopologies defines the networking traffic relationships between workloads, backend services, and routes.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TrafficTopologySpec is the spec for a TrafficTopology resource.
+            properties:
+              trafficTopologies:
+                description: TrafficTopologies defines the networking traffic relationships between workloads, backend services, and routes.
+                items:
+                  properties:
+                    backend:
+                      description: Backend defines the reference to a kind of backend
+                      properties:
+                        apiVersion:
+                          default: ""
+                          description: Group is the group of the referent. For example, "gateway.networking.k8s.io". When unspecified or empty string, core API group is inferred.
+                          type: string
+                        kind:
+                          default: Service
+                          description: "Kind is the Kubernetes resource kind of the referent. For example \"Service\". \n Defaults to \"Service\" when not specified. \n ExternalName services can refer to CNAME DNS records that may live outside of the cluster and as such are difficult to reason about in terms of conformance. They also may not be safe to forward to (see CVE-2021-25740 for more information). Implementations SHOULD NOT support ExternalName Services. \n Support: Core (Services with a type other than ExternalName) \n Support: Implementation-specific (Services with type ExternalName)"
+                          type: string
+                        name:
+                          description: Name is the name of the referent.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    routes:
+                      description: Routes defines the list of routes
+                      items:
+                        properties:
+                          apiVersion:
+                            default: gateway.networking.k8s.io/v1
+                            description: "APIVersion is the group/version of the referent. For example, \"gateway.networking.k8s.io/v1\". \n Defaults to \"gateway.networking.k8s.io/v1\" when not specified."
+                            type: string
+                          kind:
+                            default: HTTPRoute
+                            description: "Kind is the Kubernetes resource kind of the referent. For example \"HTTPRoute\". \n Defaults to \"HTTPRoute\" when not specified."
+                            type: string
+                          name:
+                            description: Name is the name of the custom route.
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      type: array
+                    trafficType:
+                      description: TrafficType defines the type of traffic
+                      type: string
+                    workloads:
+                      description: workloads is a subset match of all workloads
+                      properties:
+                        names:
+                          description: Names is a list of workload name
+                          items:
+                            description: CrossClusterObjectNameReference contains cluster and name reference to a k8s object
+                            properties:
+                              cluster:
+                                description: Cluster indicates the name of cluster
+                                type: string
+                              name:
+                                description: Name is the resource name
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          type: array
+                        selector:
+                          description: Selector is a label query over a set of resources, in this case resource
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                              items:
+                                description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                      type: object
+                  required:
+                  - backend
+                  - trafficType
+                  type: object
+                type: array
+              workloadRef:
+                description: WorkloadRef is the reference to a kind of workloads
+                properties:
+                  apiVersion:
+                    description: APIVersion is the group/version for the resource being referenced. If APIVersion is not specified, the specified Kind must be in the core API group. For any other third-party types, APIVersion is required.
+                    type: string
+                  kind:
+                    description: Kind is the type of resource being referenced
+                    type: string
+                  match:
+                    description: Match indicates how to match workloads. only one workload should be matches in one cluster
+                    properties:
+                      names:
+                        description: Names is a list of workload name
+                        items:
+                          description: CrossClusterObjectNameReference contains cluster and name reference to a k8s object
+                          properties:
+                            cluster:
+                              description: Cluster indicates the name of cluster
+                              type: string
+                            name:
+                              description: Name is the resource name
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                      selector:
+                        description: Selector is a label query over a set of resources, in this case resource
+                        properties:
+                          matchExpressions:
+                            description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                            items:
+                              description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                              properties:
+                                key:
+                                  description: key is the label key that the selector applies to.
+                                  type: string
+                                operator:
+                                  description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                  type: string
+                                values:
+                                  description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - key
+                              - operator
+                              type: object
+                            type: array
+                          matchLabels:
+                            additionalProperties:
+                              type: string
+                            description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                            type: object
+                        type: object
+                    type: object
+                required:
+                - kind
+                - match
+                type: object
+            required:
+            - workloadRef
+            type: object
+          status:
+            properties:
+              conditions:
+                description: Conditions is the list of conditions
+                items:
+                  description: 'Condition defines the condition of a resource See: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties'
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transitioned from one status to another.
+                      format: date-time
+                      type: string
+                    lastUpdateTime:
+                      description: The last time this condition was updated.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human-readable message indicating details about the transition.
+                      type: string
+                    reason:
+                      description: The reason for the condition's last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      description: Type of the condition.
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed.
+                format: int64
+                type: integer
+              topologies:
+                description: Topologies information aggregated by workload
+                items:
+                  properties:
+                    backendRoutings:
+                      description: backend routing references
+                      items:
+                        type: string
+                      type: array
+                    workloadRef:
+                      description: workload reference name and cluster
+                      properties:
+                        cluster:
+                          description: Cluster indicates the name of cluster
+                          type: string
+                        name:
+                          description: Name is the resource name
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

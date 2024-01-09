@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // +genclient
@@ -12,7 +11,8 @@ import (
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 
-// TrafficTopology is a specification for a TrafficTopology resource.
+// TrafficTopologies defines the networking traffic relationships between
+// workloads, backend services, and routes.
 type TrafficTopology struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -21,24 +21,43 @@ type TrafficTopology struct {
 	Status TrafficTopologyStatus `json:"status,omitempty"`
 }
 
+// TrafficTopologyList is a list of TrafficTopology resources.
+type TrafficTopologyList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []TrafficTopology `json:"items"`
+}
+
 // TrafficTopologySpec is the spec for a TrafficTopology resource.
 type TrafficTopologySpec struct {
-	WorkloadRef WorkloadRef              `json:"workloadRef"`
-	Topologies  []TrafficBackendTopology `json:"topologies"`
+	// WorkloadRef is the reference to a kind of workloads
+	WorkloadRef WorkloadRef `json:"workloadRef"`
+
+	// TrafficTopologies defines the networking traffic relationships between
+	// workloads, backend services, and routes.
+	TrafficTopologies []TrafficBackendTopology `json:"trafficTopologies,omitempty"`
 }
 
 type TrafficBackendTopology struct {
-	TrafficType TrafficType    `json:"trafficType"`
-	Backend     BackendRef     `json:"backend,omitempty"`
-	Workloads   *ResourceMatch `json:"workloads"`
-	Routes      []RouteRef     `json:"routes,omitempty"`
+	// TrafficType defines the type of traffic
+	TrafficType TrafficType `json:"trafficType"`
+
+	// Backend defines the reference to a kind of backend
+	Backend BackendRef `json:"backend"`
+
+	// Routes defines the list of routes
+	Routes []RouteRef `json:"routes,omitempty"`
+
+	// workloads is a subset match of all workloads
+	Workloads *ResourceMatch `json:"workloads,omitempty"`
 }
 
 type TrafficType string
 
 const (
-	MultiClusterTraffic TrafficType = "MultiCluster"
-	InClusterTraffic    TrafficType = "InCluster"
+	MultiClusterTrafficType TrafficType = "MultiCluster"
+	InClusterTrafficType    TrafficType = "InCluster"
 )
 
 type BackendRef struct {
@@ -93,50 +112,72 @@ type RouteRef struct {
 }
 
 type TrafficTopologyStatus struct {
-	ObservedGeneration int64          `json:"observedGeneration,omitempty"`
-	Conditions         []Condition    `json:"conditions,omitempty"`
-	Topologies         []TopologyInfo `json:"topologies,omitempty"`
+	// ObservedGeneration is the most recent generation observed.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// Conditions is the list of conditions
+	Conditions []Condition `json:"conditions,omitempty"`
+	// Topologies information aggregated by workload
+	Topologies []TopologyInfo `json:"topologies,omitempty"`
 }
 
 type TopologyInfo struct {
-	WorkloadRef  CrossClusterObjectNameReference `json:"workloadRef,omitempty"`
-	BackendRules []string                        `json:"backendRules,omitempty"`
+	// workload reference name and cluster
+	WorkloadRef CrossClusterObjectNameReference `json:"workloadRef,omitempty"`
+	// backend routing references
+	BackendRoutings []string `json:"backendRoutings,omitempty"`
 }
 
-// TrafficTopologyList is a list of TrafficTopology resources.
-type TrafficTopologyList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+// +genclient
+// +k8s:openapi-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +kubebuilder:storageversion
+// +kubebuilder:subresource:status
 
-	Items []TrafficTopology `json:"items"`
-}
-
-type BackendControlRule struct {
+// BackendRouting defines defines the association between frontend routes and
+// backend service, and it allows the user to define forwarding rules for canary scenario.
+type BackendRouting struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   BackendControlRuleSpec   `json:"spec,omitempty"`
-	Status BackendControlRuleStatus `json:"status,omitempty"`
+	Spec   BackendRoutingSpec   `json:"spec,omitempty"`
+	Status BackendRoutingStatus `json:"status,omitempty"`
 }
 
-type BackendControlRuleSpec struct {
-	TrafficType TrafficType                   `json:"trafficType"`
-	Backend     CrossClusterObjectReference   `json:"backend"`
-	Routes      []CrossClusterObjectReference `json:"routes,omitempty"`
-	Canary      *BackendCanaryRule            `json:"canary,omitempty"`
+// BackendRoutingList is a list of BackendRouting resources.
+type BackendRoutingList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []BackendRouting `json:"items"`
 }
 
-type BackendCanaryRule struct {
-	CanaryStep      string          `json:"canaryStep,omitempty"`
+type BackendRoutingSpec struct {
+	// TrafficType defines the type of traffic
+	TrafficType TrafficType `json:"trafficType"`
+	// Backend defines the reference to a kind of backend
+	Backend CrossClusterObjectReference `json:"backend"`
+	// Routes defines the list of routes
+	Routes []CrossClusterObjectReference `json:"routes,omitempty"`
+	// Forwarding defines the forwarding rules for canary scenario
+	Forwarding *BackendForwarding `json:"forwarding,omitempty"`
+}
+
+type BackendForwarding struct {
+	Stable StableBackendRule `json:"stable,omitempty"`
+	Canary CanaryBackendRule `json:"canary,omitempty"`
+}
+
+type StableBackendRule struct {
+	// the temporary stable backend service name, generally it is the {originServiceName}-stable
+	Name string `json:"name,omitempty"`
+}
+
+type CanaryBackendRule struct {
+	// the temporary canary backend service name, generally it is the {originServiceName}-canary
+	Name            string          `json:"name,omitempty"`
 	TrafficStrategy TrafficStrategy `json:",inline"`
 }
-
-type BackendCanaryStep string
-
-const (
-	TrafficCanaryStepInitialize BackendCanaryStep = "Initialize"
-	TrafficCanaryStepDoCanary   BackendCanaryStep = "DoCanary"
-)
 
 type TrafficStrategy struct {
 	// Weight indicate how many percentage of traffic the canary pods should receive
@@ -146,25 +187,31 @@ type TrafficStrategy struct {
 	HTTPRule *HTTPRouteRule `json:"http,omitempty"`
 }
 
-type BackendControlRuleStatus struct {
+type BackendRoutingStatus struct {
+	// ObservedGeneration is the most recent generation observed.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-
-	Conditions []Condition `json:"conditions,omitempty"`
-
-	HTTPBackends HTTPBackends `json:"httpBackend,omitempty"`
-
-	Phase BackendControlRulePhase `json:"phase,omitempty"`
+	// Phase indicates the current phase of this object.
+	Phase BackendRoutingPhase `json:"phase,omitempty"`
+	// current backends routing
+	Backends BackendStatuses `json:"backends,omitempty"`
+	// route statuses
+	RouteStatuses []BackendRouteStatus `json:"routeStatuses,omitempty"`
 }
 
-type HTTPBackends struct {
-	StableBackend gatewayapiv1.BackendRef `json:"stable,omitempty"`
-	CanaryBackend CanaryHTTPBackend       `json:"canary,omitempty"`
+type BackendStatuses struct {
+	// Origin backend status
+	Origin BackendStatus `json:"origin,omitempty"`
+	// Stable backend status
+	Stable BackendStatus `json:"stable,omitempty"`
+	// Canary backend status
+	Canary BackendStatus `json:"canary,omitempty"`
 }
 
-type CanaryHTTPBackend struct {
-	gatewayapiv1.BackendRef `json:",inline"`
-	HTTPRouteRule           `json:",inline"`
-	Conditions              BackendConditions `json:"conditions,omitempty"`
+type BackendStatus struct {
+	// Name is the name of the referent.
+	Name string `json:"name"`
+	// Conditions represents the current condition of an backend.
+	Conditions BackendConditions `json:"conditions,omitempty"`
 }
 
 // Backendonditions represents the current condition of an backend.
@@ -184,4 +231,18 @@ type BackendConditions struct {
 	Terminating *bool `json:"terminating,omitempty" protobuf:"bytes,3,name=terminating"`
 }
 
-type BackendControlRulePhase string
+type BackendRoutingPhase string
+
+const (
+	BackendUpgrading BackendRoutingPhase = "BackendUpgrading"
+	RouteUpgrading   BackendRoutingPhase = "RouteSyncing"
+	Ready            BackendRoutingPhase = "Ready"
+)
+
+// BackendRouteStatus defines the status of a backend route.
+type BackendRouteStatus struct {
+	// CrossClusterObjectReference defines the reference to a kind of route resource.
+	CrossClusterObjectReference `json:",inline"`
+	// Synced indicates whether the backend route is synced.
+	Synced bool `json:"synced,omitempty"`
+}

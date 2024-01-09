@@ -60,6 +60,10 @@ type RolloutSpec struct {
 
 	// WorkloadRef is a reference to a kind of workloads
 	WorkloadRef WorkloadRef `json:"workloadRef,omitempty"`
+
+	// TrafficTopologies defines the networking traffic relationships between
+	// workloads, backend services, and routes.
+	TrafficTopologyRef string `json:"trafficTopologyRef"`
 }
 
 type RolloutTriggerPolicy string

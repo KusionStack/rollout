@@ -25,12 +25,18 @@ type ResourceMatch struct {
 	Names []CrossClusterObjectNameReference `json:"names,omitempty"`
 }
 
+// CrossClusterObjectReference is a reference to a kubernetes object in a different cluster.
+type CrossClusterObjectReference struct {
+	ObjectTypeRef                   `json:",inline"`
+	CrossClusterObjectNameReference `json:",inline"`
+}
+
 type ObjectTypeRef struct {
 	// APIVersion is the group/version for the resource being referenced.
 	// If APIVersion is not specified, the specified Kind must be in the core API group.
 	// For any other third-party types, APIVersion is required.
 	// +optional
-	APIVersion string `json:"apiVersion"`
+	APIVersion string `json:"apiVersion,omitempty"`
 	// Kind is the type of resource being referenced
 	Kind string `json:"kind"`
 }
@@ -44,7 +50,7 @@ type CrossClusterObjectNameReference struct {
 	// Cluster indicates the name of cluster
 	Cluster string `json:"cluster,omitempty"`
 	// Name is the resource name
-	Name string `json:"name,omitempty"`
+	Name string `json:"name"`
 }
 
 func (r CrossClusterObjectNameReference) Matches(cluster, name string) bool {
@@ -57,11 +63,6 @@ func (r CrossClusterObjectNameReference) Matches(cluster, name string) bool {
 		return true
 	}
 	return r.Cluster == cluster
-}
-
-type CrossClusterObjectReference struct {
-	ObjectTypeRef                   `json:",inline"`
-	CrossClusterObjectNameReference `json:",inline"`
 }
 
 type CodeReasonMessage struct {
