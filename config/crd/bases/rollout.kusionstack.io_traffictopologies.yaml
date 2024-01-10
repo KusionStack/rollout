@@ -32,103 +32,45 @@ spec:
           spec:
             description: TrafficTopologySpec is the spec for a TrafficTopology resource.
             properties:
-              trafficTopologies:
-                description: TrafficTopologies defines the networking traffic relationships between workloads, backend services, and routes.
+              backend:
+                description: Backend defines the reference to a kind of backend
+                properties:
+                  apiVersion:
+                    default: ""
+                    description: Group is the group of the referent. For example, "gateway.networking.k8s.io". When unspecified or empty string, core API group is inferred.
+                    type: string
+                  kind:
+                    default: Service
+                    description: "Kind is the Kubernetes resource kind of the referent. For example \"Service\". \n Defaults to \"Service\" when not specified. \n ExternalName services can refer to CNAME DNS records that may live outside of the cluster and as such are difficult to reason about in terms of conformance. They also may not be safe to forward to (see CVE-2021-25740 for more information). Implementations SHOULD NOT support ExternalName Services. \n Support: Core (Services with a type other than ExternalName) \n Support: Implementation-specific (Services with type ExternalName)"
+                    type: string
+                  name:
+                    description: Name is the name of the referent.
+                    type: string
+                required:
+                - name
+                type: object
+              routes:
+                description: Routes defines the list of routes
                 items:
                   properties:
-                    backend:
-                      description: Backend defines the reference to a kind of backend
-                      properties:
-                        apiVersion:
-                          default: ""
-                          description: Group is the group of the referent. For example, "gateway.networking.k8s.io". When unspecified or empty string, core API group is inferred.
-                          type: string
-                        kind:
-                          default: Service
-                          description: "Kind is the Kubernetes resource kind of the referent. For example \"Service\". \n Defaults to \"Service\" when not specified. \n ExternalName services can refer to CNAME DNS records that may live outside of the cluster and as such are difficult to reason about in terms of conformance. They also may not be safe to forward to (see CVE-2021-25740 for more information). Implementations SHOULD NOT support ExternalName Services. \n Support: Core (Services with a type other than ExternalName) \n Support: Implementation-specific (Services with type ExternalName)"
-                          type: string
-                        name:
-                          description: Name is the name of the referent.
-                          type: string
-                      required:
-                      - name
-                      type: object
-                    routes:
-                      description: Routes defines the list of routes
-                      items:
-                        properties:
-                          apiVersion:
-                            default: gateway.networking.k8s.io/v1
-                            description: "APIVersion is the group/version of the referent. For example, \"gateway.networking.k8s.io/v1\". \n Defaults to \"gateway.networking.k8s.io/v1\" when not specified."
-                            type: string
-                          kind:
-                            default: HTTPRoute
-                            description: "Kind is the Kubernetes resource kind of the referent. For example \"HTTPRoute\". \n Defaults to \"HTTPRoute\" when not specified."
-                            type: string
-                          name:
-                            description: Name is the name of the custom route.
-                            type: string
-                        required:
-                        - name
-                        type: object
-                      type: array
-                    trafficType:
-                      description: TrafficType defines the type of traffic
+                    apiVersion:
+                      default: gateway.networking.k8s.io/v1
+                      description: "APIVersion is the group/version of the referent. For example, \"gateway.networking.k8s.io/v1\". \n Defaults to \"gateway.networking.k8s.io/v1\" when not specified."
                       type: string
-                    workloads:
-                      description: workloads is a subset match of all workloads
-                      properties:
-                        names:
-                          description: Names is a list of workload name
-                          items:
-                            description: CrossClusterObjectNameReference contains cluster and name reference to a k8s object
-                            properties:
-                              cluster:
-                                description: Cluster indicates the name of cluster
-                                type: string
-                              name:
-                                description: Name is the resource name
-                                type: string
-                            required:
-                            - name
-                            type: object
-                          type: array
-                        selector:
-                          description: Selector is a label query over a set of resources, in this case resource
-                          properties:
-                            matchExpressions:
-                              description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
-                              items:
-                                description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
-                                properties:
-                                  key:
-                                    description: key is the label key that the selector applies to.
-                                    type: string
-                                  operator:
-                                    description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
-                                    type: string
-                                  values:
-                                    description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
-                                    items:
-                                      type: string
-                                    type: array
-                                required:
-                                - key
-                                - operator
-                                type: object
-                              type: array
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
-                              type: object
-                          type: object
-                      type: object
+                    kind:
+                      default: HTTPRoute
+                      description: "Kind is the Kubernetes resource kind of the referent. For example \"HTTPRoute\". \n Defaults to \"HTTPRoute\" when not specified."
+                      type: string
+                    name:
+                      description: Name is the name of the custom route.
+                      type: string
                   required:
-                  - backend
-                  - trafficType
+                  - name
                   type: object
                 type: array
+              trafficType:
+                description: TrafficType defines the type of traffic
+                type: string
               workloadRef:
                 description: WorkloadRef is the reference to a kind of workloads
                 properties:
@@ -192,6 +134,8 @@ spec:
                 - match
                 type: object
             required:
+            - backend
+            - trafficType
             - workloadRef
             type: object
           status:

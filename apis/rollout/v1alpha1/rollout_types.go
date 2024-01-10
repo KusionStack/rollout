@@ -63,7 +63,7 @@ type RolloutSpec struct {
 
 	// TrafficTopologies defines the networking traffic relationships between
 	// workloads, backend services, and routes.
-	TrafficTopologyRef string `json:"trafficTopologyRef"`
+	TrafficTopologyRefs []string `json:"trafficTopologyRefs"`
 }
 
 type RolloutTriggerPolicy string

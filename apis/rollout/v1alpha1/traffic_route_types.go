@@ -34,12 +34,6 @@ type TrafficTopologySpec struct {
 	// WorkloadRef is the reference to a kind of workloads
 	WorkloadRef WorkloadRef `json:"workloadRef"`
 
-	// TrafficTopologies defines the networking traffic relationships between
-	// workloads, backend services, and routes.
-	TrafficTopologies []TrafficBackendTopology `json:"trafficTopologies,omitempty"`
-}
-
-type TrafficBackendTopology struct {
 	// TrafficType defines the type of traffic
 	TrafficType TrafficType `json:"trafficType"`
 
@@ -48,9 +42,6 @@ type TrafficBackendTopology struct {
 
 	// Routes defines the list of routes
 	Routes []RouteRef `json:"routes,omitempty"`
-
-	// workloads is a subset match of all workloads
-	Workloads *ResourceMatch `json:"workloads,omitempty"`
 }
 
 type TrafficType string
