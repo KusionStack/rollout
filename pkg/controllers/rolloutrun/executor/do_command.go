@@ -13,37 +13,38 @@ func (r *Executor) doCommand(executorContext *ExecutorContext) ctrl.Result {
 	cmd := rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey]
 	r.logger.Info("DefaultExecutor begin to doCommand", "command", cmd)
 
-	newProgressingStatus := executorContext.NewStatus.BatchStatus
+	newStatus := executorContext.NewStatus
+	newBatchStatus := executorContext.NewStatus.BatchStatus
 
-	batchError := newProgressingStatus.Error
-	currentBatchIndex := newProgressingStatus.CurrentBatchIndex
-	currentBatchState := newProgressingStatus.CurrentBatchState
+	batchError := newBatchStatus.Error
+	currentBatchIndex := newBatchStatus.CurrentBatchIndex
+	currentBatchState := newBatchStatus.CurrentBatchState
 	switch cmd {
 	case rolloutapis.AnnoManualCommandResume:
-		if newProgressingStatus.State == rolloutv1alpha1.RolloutProgressingStatePaused {
-			newProgressingStatus.State = rolloutv1alpha1.RolloutProgressingStateRolling
+		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
+			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 		}
 		if currentBatchState == BatchStatePaused {
-			newProgressingStatus.CurrentBatchState = BatchStatePreBatchHook
-			newProgressingStatus.Records[currentBatchIndex].State = newProgressingStatus.CurrentBatchState
+			newBatchStatus.CurrentBatchState = BatchStatePreBatchHook
+			newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
 		}
 	case rolloutapis.AnnoManualCommandRetry:
 		if batchError != nil {
-			newProgressingStatus.Error = nil
+			newBatchStatus.Error = nil
 		}
 	case rolloutapis.AnnoManualCommandPause:
-		newProgressingStatus.State = rolloutv1alpha1.RolloutProgressingStatePaused
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePausing
 	case rolloutapis.AnnoManualCommandCancel:
-		newProgressingStatus.State = rolloutv1alpha1.RolloutProgressingStateCanceling
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
 	case rolloutapis.AnnoManualCommandSkip:
 		if batchError != nil {
-			newProgressingStatus.Error = nil
+			newBatchStatus.Error = nil
 			if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
 				currentBatchIndex++
-				newProgressingStatus.CurrentBatchIndex = currentBatchIndex
-				newProgressingStatus.CurrentBatchState = BatchStateInitial
+				newBatchStatus.CurrentBatchIndex = currentBatchIndex
+				newBatchStatus.CurrentBatchState = BatchStateInitial
 			} else {
-				newProgressingStatus.State = rolloutv1alpha1.RolloutProgressingStatePostRollout
+				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 			}
 		}
 	default:

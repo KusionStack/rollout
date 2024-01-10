@@ -40,10 +40,6 @@ func resetRolloutStatus(status *rolloutv1alpha1.RolloutStatus, rolloutID string,
 	status.Conditions = []rolloutv1alpha1.Condition{}
 }
 
-func isRolloutRunCompleted(run *rolloutv1alpha1.RolloutRun) bool {
-	return run.Status.Phase == rolloutv1alpha1.RolloutRunPhaseCompleted
-}
-
 func setStatusCondition(newStatus *rolloutv1alpha1.RolloutStatus, ctype rolloutv1alpha1.ConditionType, status metav1.ConditionStatus, reason, message string) {
 	cond := condition.NewCondition(ctype, status, reason, message)
 	newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *cond)

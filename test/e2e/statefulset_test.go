@@ -202,7 +202,7 @@ var _ = Describe("StatefulSet", func() {
 				}
 
 				if rolloutRun.Status.BatchStatus == nil ||
-					rolloutRun.Status.BatchStatus.State != rolloutv1alpha1.RolloutProgressingStateRolling {
+					rolloutRun.Status.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false
 				}
 
@@ -364,6 +364,34 @@ var _ = Describe("StatefulSet", func() {
 
 				if *sts.Spec.UpdateStrategy.RollingUpdate.Partition != 0 {
 					By(fmt.Sprintf("HappyPath: third batch sts %s/%s Partition %d  not match", sts.Namespace, sts.Name, *sts.Spec.UpdateStrategy.RollingUpdate.Partition))
+					return false
+				}
+
+				return true
+			}, "60s", "1s").Should(BeTrue())
+		}
+
+		// rollout
+		{
+			By("HappyPath: check rollout")
+			Eventually(func() bool {
+				if err := k8sClient.Get(ctx, GetNamespacedName(rollout.Name, rollout.Namespace), rollout); err != nil {
+					By(fmt.Sprintf("HappyPath: check rollout get rollout %s/%s error %v", rollout.Namespace, rollout.Name, err))
+					return false
+				}
+
+				if rollout.Status.Phase != rolloutv1alpha1.RolloutPhaseInitialized {
+					By(fmt.Sprintf("HappyPath: check rollout get rollout %s/%s phase %s", rollout.Namespace, rollout.Name, rollout.Status.Phase))
+					return false
+				}
+
+				if err := k8sClient.Get(ctx, GetNamespacedName(rollout.Status.RolloutID, rollout.Namespace), rolloutRun); err != nil {
+					By(fmt.Sprintf("HappyPath: check rollout get rolloutRun %s/%s error %v", rolloutRun.Namespace, rolloutRun.Name, err))
+					return false
+				}
+
+				if rolloutRun.Status.Phase != rolloutv1alpha1.RolloutRunPhaseSucceeded {
+					By(fmt.Sprintf("HappyPath: check rollout get rolloutRun %s/%s phase %s", rolloutRun.Namespace, rolloutRun.Name, rolloutRun.Status.Phase))
 					return false
 				}
 

@@ -310,7 +310,7 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, instance *rol
 		return err
 	}
 
-	if run != nil && !isRolloutRunCompleted(run) {
+	if run != nil && !run.IsCompleted() {
 		// NOTE: rollout will not sync strategy modification to running rolloutRun
 		return r.syncRun(ctx, instance, run, workloads, newStatus)
 	}
@@ -484,7 +484,7 @@ func (r *RolloutReconciler) getCurrentRolloutRun(ctx context.Context, instance *
 		}
 		for i := range wList.Items {
 			w := &wList.Items[i]
-			if w.Status.Phase != rolloutv1alpha1.RolloutRunPhaseCompleted {
+			if !w.IsCompleted() {
 				return w, nil
 			}
 		}
@@ -519,7 +519,7 @@ func (r *RolloutReconciler) syncRun(ctx context.Context, obj *rolloutv1alpha1.Ro
 	newStatus.RolloutID = run.Name
 	newStatus.Phase = rolloutv1alpha1.RolloutPhaseProgressing
 
-	if isRolloutRunCompleted(run) {
+	if run.IsCompleted() {
 		// wait for next trigger event
 		resetRolloutStatus(newStatus, run.Name, rolloutv1alpha1.RolloutPhaseInitialized)
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingCompleted, "rolloutRun is complated")
@@ -551,7 +551,7 @@ func (r *RolloutReconciler) handleRunManualCommand(ctx context.Context, obj *rol
 	if !ok {
 		return nil
 	}
-	if isRolloutRunCompleted(run) {
+	if run.IsCompleted() {
 		return nil
 	}
 
@@ -586,7 +586,7 @@ func (r *RolloutReconciler) cleanupAnnotation(ctx context.Context, obj *rolloutv
 }
 
 func (r *RolloutReconciler) applyOneTimeStrategy(obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []workload.Interface, newStatus *rolloutv1alpha1.RolloutStatus) error {
-	if run == nil || isRolloutRunCompleted(run) {
+	if run == nil || run.IsCompleted() {
 		return nil
 	}
 	// run is progressing

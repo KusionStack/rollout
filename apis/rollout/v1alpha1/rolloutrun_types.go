@@ -101,7 +101,7 @@ type RolloutRunStatus struct {
 	// Conditions is the list of conditions
 	Conditions []Condition `json:"conditions,omitempty"`
 	// Phase indecates the current phase of rollout
-	Phase RolloutPhase `json:"phase,omitempty"`
+	Phase RolloutRunPhase `json:"phase,omitempty"`
 	// The last time this status was updated.
 	// +optional
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
@@ -112,8 +112,6 @@ type RolloutRunStatus struct {
 }
 
 type RolloutRunBatchStatus struct {
-	// State indicates the state of progressing
-	State RolloutProgressingState `json:"state,omitempty"`
 	// RolloutBatchStatus contains status of current batch
 	RolloutBatchStatus `json:",inline"`
 	// Error indicates the error info of progressing
@@ -124,16 +122,18 @@ type RolloutRunBatchStatus struct {
 	Records []RolloutRunBatchStatusRecord `json:"records,omitempty"`
 }
 
-type RolloutProgressingState string
+type RolloutRunPhase string
 
 const (
-	RolloutProgressingStateInitial     RolloutProgressingState = "Initial"
-	RolloutProgressingStatePreRollout  RolloutProgressingState = "PreRollout"
-	RolloutProgressingStatePaused      RolloutProgressingState = "Paused"
-	RolloutProgressingStateRolling     RolloutProgressingState = "Rolling"
-	RolloutProgressingStatePostRollout RolloutProgressingState = "PostRollout"
-	RolloutProgressingStateCanceling   RolloutProgressingState = "Canceling"
-	RolloutProgressingStateCompleted   RolloutProgressingState = "Completed"
+	RolloutRunPhaseInitial     RolloutRunPhase = "Initial"
+	RolloutRunPhasePreRollout  RolloutRunPhase = "PreRollout"
+	RolloutRunPhasePausing     RolloutRunPhase = "Pausing"
+	RolloutRunPhasePaused      RolloutRunPhase = "Paused"
+	RolloutRunPhaseProgressing RolloutRunPhase = "Progressing"
+	RolloutRunPhasePostRollout RolloutRunPhase = "PostRollout"
+	RolloutRunPhaseCanceling   RolloutRunPhase = "Canceling"
+	RolloutRunPhaseCanceled    RolloutRunPhase = "Canceled"
+	RolloutRunPhaseSucceeded   RolloutRunPhase = "Succeeded"
 )
 
 type RolloutRunBatchStatusRecord struct {
@@ -170,4 +170,11 @@ type BatchWebhookStatus struct {
 	FailureCount int32 `json:"failureCount,omitempty"`
 	// Failure count when an error occurred
 	FailureCountAtError int32 `json:"failureCountAtError,omitempty"`
+}
+
+func (r *RolloutRun) IsCompleted() bool {
+	if r == nil {
+		return false
+	}
+	return r.Status.Phase == RolloutRunPhaseSucceeded || r.Status.Phase == RolloutRunPhaseCanceled
 }

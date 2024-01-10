@@ -213,6 +213,5 @@ func GetCurrentBatch(ss []rolloutv1alpha1.RolloutRunBatchStatusRecord) rolloutv1
 	return rolloutv1alpha1.RolloutBatchStatus{
 		CurrentBatchIndex: int32(currentIndex),
 		CurrentBatchState: currentBatch.State,
-		CurrentBatchError: currentBatch.Error,
 	}
 }

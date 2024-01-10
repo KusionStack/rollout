@@ -16,10 +16,8 @@ package rolloutrun
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +31,6 @@ import (
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -43,14 +40,12 @@ import (
 	"kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
-	workflowapi "kusionstack.io/rollout/apis/workflow"
 	workflowv1alpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
-	workflowutil "kusionstack.io/rollout/pkg/workflow"
 	"kusionstack.io/rollout/pkg/workload"
 	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
 )
@@ -130,19 +125,21 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, nil
 	}
 
-	// caculate new status
-	newStatus := r.caculateStatus(obj)
+	if err = r.handleFinalizer(obj); err != nil {
+		logger.Error(err, "handleFinalizer failed")
+		return ctrl.Result{}, nil
+	}
+
+	newStatus := obj.Status.DeepCopy()
 
 	workloads, err := r.findWorkloadsCrossCluster(ctx, obj)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	result := ctrl.Result{}
+	var result ctrl.Result
 	cmd := obj.Annotations[rollout.AnnoManualCommandKey]
-	if newStatus.Phase == rolloutv1alpha1.RolloutPhaseProgressing {
-		result, err = r.handleProgressing(ctx, obj, newStatus, workloads)
-	}
+	result, err = r.syncRolloutRun(ctx, obj, newStatus)
 
 	updateStatus := r.updateStatusOnly(ctx, obj, newStatus, workloads)
 	if updateStatus != nil {
@@ -181,28 +178,77 @@ func (r *RolloutRunReconciler) satisfiedExpectations(instance *rolloutv1alpha1.R
 	return true
 }
 
-func (r *RolloutRunReconciler) caculateStatus(obj *rolloutv1alpha1.RolloutRun) *rolloutv1alpha1.RolloutRunStatus {
-	newStatus := obj.Status.DeepCopy()
-	newStatus.ObservedGeneration = obj.Generation
-
-	// TODO: calculate rollout run template hash
-
-	if obj.DeletionTimestamp != nil {
-		if newStatus.Phase != rolloutv1alpha1.RolloutPhaseTerminating {
-			newStatus.Phase = rolloutv1alpha1.RolloutPhaseTerminating
-			termnatingCond := condition.NewCondition(rolloutv1alpha1.RolloutConditionTerminating, metav1.ConditionTrue, "Terminating", "rolloutRun is deleted")
-			newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *termnatingCond)
+func (r *RolloutRunReconciler) handleFinalizer(rolloutRun *rolloutv1alpha1.RolloutRun) error {
+	if rolloutRun.DeletionTimestamp.IsZero() {
+		if err := utils.AddAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
+			return err
 		}
-		return newStatus
+		return nil
 	}
 
-	newStatus.Phase = rolloutv1alpha1.RolloutPhaseProgressing
+	if rolloutRun.IsCompleted() {
+		if err := utils.RemoveAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
+			return err
+		}
+		return nil
+	}
 
-	return newStatus
+	return nil
+}
+
+func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus) (ctrl.Result, error) {
+	key := utils.ObjectKeyString(obj)
+	logger := r.Logger.WithValues("rolloutRun", key)
+
+	rollout := &rolloutv1alpha1.Rollout{}
+	if err := r.findRollout(ctx, obj, rollout); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	var (
+		done   bool
+		err    error
+		result ctrl.Result
+	)
+	defaultExecutor := executor.NewDefaultExecutor(logger)
+	executorCtx := &executor.ExecutorContext{
+		Rollout: rollout, RolloutRun: obj, NewStatus: newStatus,
+	}
+	if done, result, err = defaultExecutor.Do(ctx, executorCtx); err != nil {
+		logger.Error(err, "defaultExecutor do err")
+		return ctrl.Result{}, err
+	}
+	if done {
+		newCondition := condition.NewCondition(
+			rolloutv1alpha1.RolloutConditionProgressing,
+			metav1.ConditionFalse,
+			rolloutv1alpha1.RolloutReasonProgressingCompleted,
+			"rollout is completed",
+		)
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseSucceeded
+		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
+	} else if newStatus.BatchStatus.Error != nil {
+		newCondition := condition.NewCondition(
+			rolloutv1alpha1.RolloutConditionProgressing,
+			metav1.ConditionFalse,
+			rolloutv1alpha1.RolloutReasonProgressingError,
+			"rollout stop rolling since error exist",
+		)
+		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
+	} else if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseCanceled {
+		newCondition := condition.NewCondition(
+			rolloutv1alpha1.RolloutConditionProgressing,
+			metav1.ConditionFalse,
+			rolloutv1alpha1.RolloutReasonProgressingCanceled,
+			"rollout is canceled",
+		)
+		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
+	}
+	return result, nil
 }
 
 // findRollout get Rollout from rolloutRun
-func (r *RolloutRunReconciler) findRollout(ctx context.Context, rolloutRun *rolloutv1alpha1.RolloutRun) (*rolloutv1alpha1.Rollout, error) {
+func (r *RolloutRunReconciler) findRollout(ctx context.Context, rolloutRun *rolloutv1alpha1.RolloutRun, rollout *rolloutv1alpha1.Rollout) error {
 	ref, exist := utils.Find(
 		rolloutRun.OwnerReferences,
 		func(o *metav1.OwnerReference) bool {
@@ -211,96 +257,15 @@ func (r *RolloutRunReconciler) findRollout(ctx context.Context, rolloutRun *roll
 	)
 	if !exist {
 		objectKey := types.NamespacedName{Namespace: rolloutRun.Namespace, Name: rolloutRun.Name}
-		return nil, fmt.Errorf("rollout not exist in rolloutRun(%v) ownerReferences", objectKey)
+		return fmt.Errorf("rollout not exist in rolloutRun(%v) ownerReferences", objectKey)
 	}
 
-	rollout := &rolloutv1alpha1.Rollout{}
 	objectKey := types.NamespacedName{Namespace: rolloutRun.Namespace, Name: ref.Name}
 	if err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), objectKey, rollout); err != nil {
-		return nil, err
+		return err
 	}
 
-	return rollout, nil
-}
-
-func (r *RolloutRunReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) (ctrl.Result, error) {
-	key := utils.ObjectKeyString(obj)
-	logger := r.Logger.WithValues("rolloutRun", key)
-
-	var err error
-	if features.DefaultFeatureGate.Enabled(features.UseDefaultExecutor) {
-		var done bool
-		var result ctrl.Result
-		var rollout *rolloutv1alpha1.Rollout
-
-		rollout, err = r.findRollout(ctx, obj)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		defaultExecutor := executor.NewDefaultExecutor(logger)
-		executorCtx := &executor.ExecutorContext{
-			Rollout: rollout, RolloutRun: obj, NewStatus: newStatus,
-		}
-		if done, result, err = defaultExecutor.Do(ctx, executorCtx); err != nil {
-			logger.Error(err, "defaultExecutor do err")
-			return ctrl.Result{}, err
-		}
-		if done {
-			newCondition := condition.NewCondition(
-				rolloutv1alpha1.RolloutConditionProgressing,
-				metav1.ConditionFalse,
-				rolloutv1alpha1.RolloutReasonProgressingCompleted,
-				"rollout is completed",
-			)
-			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCompleted
-			newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
-		}
-		return result, nil
-	}
-
-	var currentWorkflow *workflowv1alpha1.Workflow
-	currentWorkflow, err = r.getWorkflowForRun(ctx, obj)
-	if client.IgnoreNotFound(err) != nil {
-		logger.Error(err, "failed to get current workflow of rolloutRun")
-		return ctrl.Result{}, err
-	}
-
-	// TODO: how to deal with rollout spec upgrading, continue the progressing workflow and take effect next time?
-	if currentWorkflow != nil {
-		// currentWorkflow is progressing
-		return ctrl.Result{}, r.syncWorkflow(obj, currentWorkflow, newStatus)
-	}
-
-	logger.Info("about to construct workflow", "workflow", obj.Name)
-
-	workflow, err := constructRunWorkflow(obj, workloads)
-	if err != nil {
-		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to construct a new workflow %s: %v", obj.Name, err)
-		logger.Error(err, "failed to construct workflow", "workflow", obj.Name)
-		return ctrl.Result{}, err
-	}
-
-	// expect a workflow creation observed in cache
-	// NOTO: we have to set expectation before we create the workflow to avoid
-	//       that the creation event comes so fast that we don't have time to set it
-	r.expectation.ExpectCreations(key, 1) // nolint
-
-	if err = r.Client.Create(clusterinfo.ContextFed, workflow); err != nil {
-		r.expectation.DeleteExpectations(key)
-		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to create a new workflow %s: %v", workflow.Name, err)
-		logger.Error(err, "failed to create workflow", "workflow", workflow.Name)
-		return ctrl.Result{}, err
-	}
-
-	r.Recorder.Eventf(obj, corev1.EventTypeNormal, "WorkflowCreated", "create a new workflow %s", workflow.Name)
-	logger.Info("a new workflow has been created", "workflow", workflow.Name)
-
-	// update status
-	cond := condition.NewCondition(rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, "WorkflowCreated", "a new workflow is created")
-	resetRolloutRunStatus(newStatus, rolloutv1alpha1.RolloutPhaseProgressing, cond)
-
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) (*workload.Set, error) {
@@ -359,6 +324,7 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, instance *r
 	newStatus.LastUpdateTime = &now
 	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), instance, func() error {
 		instance.Status = *newStatus
+		instance.Status.ObservedGeneration = instance.Generation
 		return nil
 	})
 
@@ -371,147 +337,4 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, instance *r
 	r.Logger.V(2).Info("succeed to update rolloutRun status", "rolloutRun", key)
 	r.rvExpectation.ExpectUpdate(key, instance.ResourceVersion) // nolint
 	return nil
-}
-
-func (r *RolloutRunReconciler) getWorkflowForRun(_ context.Context, obj *rolloutv1alpha1.RolloutRun) (*workflowv1alpha1.Workflow, error) {
-	workflow := &workflowv1alpha1.Workflow{}
-	err := r.Client.Get(clusterinfo.ContextFed, types.NamespacedName{
-		Name:      obj.Name,
-		Namespace: obj.Namespace,
-	}, workflow)
-	if err != nil {
-		return nil, err
-	}
-	return workflow, nil
-}
-
-func (r *RolloutRunReconciler) syncWorkflow(obj *rolloutv1alpha1.RolloutRun, workflow *workflowv1alpha1.Workflow, newStatus *rolloutv1alpha1.RolloutRunStatus) error {
-	if workflow == nil {
-		cond := condition.NewCondition(rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingUnTriggered, "rolloutRun is not triggered")
-		resetRolloutRunStatus(newStatus, rolloutv1alpha1.RolloutPhaseInitialized, cond)
-		return nil
-	}
-
-	newStatus.Phase = rolloutv1alpha1.RolloutPhaseProgressing
-	var cond *rolloutv1alpha1.Condition
-	if workflow.Status.IsSucceeded() {
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCompleted
-		cond = condition.NewCondition(rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingCompleted, "workflow is complated")
-	} else if workflow.Status.IsCanceled() {
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCompleted
-		cond = condition.NewCondition(rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingCanceled, "workflow is canceled")
-	} else if workflow.Status.IsFailed() {
-		cond = condition.NewCondition(rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, rolloutv1alpha1.RolloutReasonProgressingError, "workflow is failed")
-	} else {
-		cond = condition.NewCondition(rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, rolloutv1alpha1.RolloutReasonProgressingRunning, "workflow is running")
-	}
-	if cond != nil {
-		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *cond)
-	}
-
-	batchStatusRecords, err := workflowutil.GetBatchStatusRecords(workflow)
-	if err != nil {
-		return err
-	}
-	if len(batchStatusRecords) > 0 {
-		batchStatus := workflowutil.GetCurrentBatch(batchStatusRecords)
-		newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-			RolloutBatchStatus: batchStatus,
-			Records:            batchStatusRecords,
-		}
-	}
-
-	// handle manual command
-	return r.handleManualCommand(obj, workflow, newStatus)
-}
-
-func (r *RolloutRunReconciler) handleManualCommand(instance *rolloutv1alpha1.RolloutRun, workflow *workflowv1alpha1.Workflow, newStatus *rolloutv1alpha1.RolloutRunStatus) error {
-	if len(instance.Annotations) == 0 {
-		return nil
-	}
-
-	command, ok := instance.Annotations[rollout.AnnoManualCommandKey]
-	if !ok {
-		return nil
-	}
-
-	var workflowModifyFunc func(*workflowv1alpha1.Workflow)
-
-	switch command {
-	case rollout.AnnoManualCommandResume:
-		if workflow.Status.IsPaused() && newStatus.BatchStatus.CurrentBatchState == rolloutv1alpha1.BatchStepStatePaused {
-			taskName := getSuspendTaskNameByBatchIndex(workflow, newStatus.BatchStatus.CurrentBatchIndex)
-			if len(taskName) > 0 {
-				resumeContext := []string{taskName}
-				data, _ := json.Marshal(resumeContext)
-				workflowModifyFunc = func(w *workflowv1alpha1.Workflow) {
-					if w.Annotations == nil {
-						w.Annotations = map[string]string{}
-					}
-					w.Annotations[workflowapi.AnnoWorkflowResumeSuspendTasks] = string(data)
-				}
-			}
-		}
-	case rollout.AnnoManualCommandPause:
-		if !workflow.Status.IsPaused() && workflow.Spec.Status != workflowv1alpha1.WorkflowSpecStatusPaused {
-			workflowModifyFunc = func(w *workflowv1alpha1.Workflow) {
-				w.Spec.Status = workflowv1alpha1.WorkflowSpecStatusPaused
-			}
-		}
-	case rollout.AnnoManualCommandCancel:
-		if !workflow.Status.IsCanceled() && workflow.Spec.Status != workflowv1alpha1.WorkflowSpecStatusCanceled {
-			workflowModifyFunc = func(w *workflowv1alpha1.Workflow) {
-				w.Spec.Status = workflowv1alpha1.WorkflowSpecStatusCanceled
-			}
-		}
-	}
-
-	// update workflow if necessary
-	if workflowModifyFunc != nil {
-		op, err := utils.UpdateOnConflict(clusterinfo.ContextFed, r.Client, r.Client, workflow, func() error {
-			workflowModifyFunc(workflow)
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-		r.Logger.Info("handle manual command, update workflow", "workflow", utils.ObjectKeyString(workflow), "rolloutRun", utils.ObjectKeyString(instance), "result", op)
-	}
-
-	// delete mamual command from rollout
-	op, err := utils.UpdateOnConflict(clusterinfo.ContextFed, r.Client, r.Client, instance, func() error {
-		delete(instance.Annotations, rollout.AnnoManualCommandKey)
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	key := utils.ObjectKeyString(instance)
-	r.Logger.Info("handle manual command, delete command from rolloutRun annotation", "rolloutRun", key, "result", op)
-	r.rvExpectation.ExpectUpdate(key, instance.ResourceVersion) // nolint
-
-	return nil
-}
-
-func getSuspendTaskNameByBatchIndex(workflow *workflowv1alpha1.Workflow, batchIndex int32) string {
-	for _, t := range workflow.Spec.Tasks {
-		if t.TaskSpec.Suspend == nil {
-			continue
-		}
-		indexStr := t.Labels[workflowapi.LabelBatchIndex]
-		if len(indexStr) == 0 {
-			continue
-		}
-		index, err := strconv.Atoi(indexStr)
-		if err != nil {
-			continue
-		}
-
-		if index == int(batchIndex) {
-			return t.Name
-		}
-	}
-	return ""
 }
