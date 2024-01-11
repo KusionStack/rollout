@@ -13,6 +13,8 @@ spec:
     kind: RolloutStrategy
     listKind: RolloutStrategyList
     plural: rolloutstrategies
+    shortNames:
+    - ros
     singular: rolloutstrategy
   scope: Namespaced
   versions:

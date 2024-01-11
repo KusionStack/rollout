@@ -13,6 +13,8 @@ spec:
     kind: RolloutRun
     listKind: RolloutRunList
     plural: rolloutruns
+    shortNames:
+    - ror
     singular: rolloutrun
   scope: Namespaced
   versions:

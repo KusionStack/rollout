@@ -26,6 +26,7 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
+// +kubebuilder:resource:shortName=ros
 
 // RolloutStrategy is the Schema for the rolloutstrategies API
 type RolloutStrategy struct {
