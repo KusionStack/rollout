@@ -35,5 +35,5 @@ func (p *Storage) Get(ctx context.Context, cluster, namespace, name string) (wor
 }
 
 func (p *Storage) List(ctx context.Context, namespace string, match rolloutv1alpha1.ResourceMatch) ([]workload.Interface, error) {
-	panic("implement me")
+	return []workload.Interface{}, nil
 }

@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kusionstack.io/kube-utils/controller/mixin"
-	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -35,16 +34,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
-	workflowv1alpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
-	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/utils"
-	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	"kusionstack.io/rollout/pkg/workload"
 	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
@@ -82,13 +77,6 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	b := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		For(&rolloutv1alpha1.RolloutRun{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
-
-	if !features.DefaultFeatureGate.Enabled(features.UseDefaultExecutor) {
-		b.Watches(
-			multicluster.FedKind(&source.Kind{Type: &workflowv1alpha1.Workflow{}}),
-			eventhandler.EqueueRequestForOwnerWithCreationObserved(&rolloutv1alpha1.RolloutRun{}, true, r.expectation),
-		)
-	}
 
 	_, err := b.Build(r)
 	return err
@@ -202,6 +190,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv
 
 	rollout := &rolloutv1alpha1.Rollout{}
 	if err := r.findRollout(ctx, obj, rollout); err != nil {
+		logger.Error(err, "findRollout error")
 		return ctrl.Result{}, err
 	}
 

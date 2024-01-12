@@ -44,6 +44,8 @@ type Store interface {
 type Registry interface {
 	// Register add a new workload store for given gvk
 	Register(gvk schema.GroupVersionKind, store Store)
+	// Delete delete a new workload store for given gvk
+	Delete(gvk schema.GroupVersionKind)
 	// If the gvk is registered, Get returns the workload rest store.
 	Get(gvk schema.GroupVersionKind) (Store, error)
 	// AddWatcher lets controller watch all registered workloads' types
@@ -75,6 +77,10 @@ func (m *workloadRegistry) Get(gvk schema.GroupVersionKind) (Store, error) {
 
 func (m *workloadRegistry) Register(gvk schema.GroupVersionKind, store Store) {
 	m.workloads.Store(gvk, store)
+}
+
+func (m *workloadRegistry) Delete(gvk schema.GroupVersionKind) {
+	m.workloads.Delete(gvk)
 }
 
 func (m *workloadRegistry) AddWatcher(mgr manager.Manager, c controller.Controller) error {
