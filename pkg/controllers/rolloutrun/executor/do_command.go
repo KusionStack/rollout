@@ -16,7 +16,7 @@ func (r *Executor) doCommand(executorContext *ExecutorContext) ctrl.Result {
 	newStatus := executorContext.NewStatus
 	newBatchStatus := executorContext.NewStatus.BatchStatus
 
-	batchError := newBatchStatus.Error
+	batchError := newStatus.Error
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatchState := newBatchStatus.CurrentBatchState
 	switch cmd {
@@ -30,7 +30,7 @@ func (r *Executor) doCommand(executorContext *ExecutorContext) ctrl.Result {
 		}
 	case rolloutapis.AnnoManualCommandRetry:
 		if batchError != nil {
-			newBatchStatus.Error = nil
+			newStatus.Error = nil
 		}
 	case rolloutapis.AnnoManualCommandPause:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePausing
@@ -38,7 +38,7 @@ func (r *Executor) doCommand(executorContext *ExecutorContext) ctrl.Result {
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
 	case rolloutapis.AnnoManualCommandSkip:
 		if batchError != nil {
-			newBatchStatus.Error = nil
+			newStatus.Error = nil
 			if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
 				currentBatchIndex++
 				newBatchStatus.CurrentBatchIndex = currentBatchIndex

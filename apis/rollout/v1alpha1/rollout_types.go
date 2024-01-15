@@ -155,7 +155,7 @@ const (
 type RolloutBatchStatus struct {
 	// CurrentBatchIndex defines the current batch index of batch release progress.
 	CurrentBatchIndex int32 `json:"currentBatchIndex"`
-	// CurrentBatchIndex indicates the current batch state.
+	// CurrentBatchState indicates the current batch state.
 	CurrentBatchState RolloutBatchStepState `json:"currentBatchState,omitempty"`
 }
 

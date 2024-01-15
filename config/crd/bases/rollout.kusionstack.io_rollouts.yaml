@@ -124,7 +124,7 @@ spec:
                     format: int32
                     type: integer
                   currentBatchState:
-                    description: CurrentBatchIndex indicates the current batch state.
+                    description: CurrentBatchState indicates the current batch state.
                     type: string
                 required:
                 - currentBatchIndex
