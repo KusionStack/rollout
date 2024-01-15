@@ -38,7 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	workflowvalpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers"
 	"kusionstack.io/rollout/pkg/features"
 	//+kubebuilder:scaffold:imports
@@ -99,9 +98,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(BeNil())
 
 	err = rolloutv1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = workflowvalpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = operatingv1alpha1.AddToScheme(scheme.Scheme)

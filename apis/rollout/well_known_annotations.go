@@ -15,7 +15,7 @@
 package rollout
 
 const (
-	// LabelRolloutManualCommand is set in Rollout for users to manipulate workflow
+	// LabelRolloutManualCommand is set in Rollout for users to manipulate rolloutRun
 	AnnoManualCommandKey    = "rollout.kusionstack.io/manual-command"
 	AnnoManualCommandResume = "resume"
 	AnnoManualCommandRetry  = "retry"

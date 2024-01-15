@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kusionstack.io/kube-utils/controller/mixin"
-	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -35,16 +34,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
-	workflowv1alpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
-	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/utils"
-	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	"kusionstack.io/rollout/pkg/workload"
 	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
@@ -60,7 +55,6 @@ type RolloutRunReconciler struct {
 
 	workloadRegistry workloadregistry.Registry
 
-	expectation   expectations.ControllerExpectationsInterface
 	rvExpectation expectations.ResourceVersionExpectationInterface
 }
 
@@ -68,7 +62,6 @@ func NewReconciler(mgr manager.Manager, workloadRegistry workloadregistry.Regist
 	return &RolloutRunReconciler{
 		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
 		workloadRegistry: workloadRegistry,
-		expectation:      expectations.NewControllerExpectations(),
 		rvExpectation:    expectations.NewResourceVersionExpectation(),
 	}
 }
@@ -82,13 +75,6 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	b := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		For(&rolloutv1alpha1.RolloutRun{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
-
-	if !features.DefaultFeatureGate.Enabled(features.UseDefaultExecutor) {
-		b.Watches(
-			multicluster.FedKind(&source.Kind{Type: &workflowv1alpha1.Workflow{}}),
-			eventhandler.EqueueRequestForOwnerWithCreationObserved(&rolloutv1alpha1.RolloutRun{}, true, r.expectation),
-		)
-	}
 
 	_, err := b.Build(r)
 	return err
@@ -115,7 +101,6 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), req.NamespacedName, obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			r.expectation.DeleteExpectations(key)
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
@@ -171,10 +156,6 @@ func (r *RolloutRunReconciler) satisfiedExpectations(instance *rolloutv1alpha1.R
 		return false
 	}
 
-	if !r.expectation.SatisfiedExpectations(key) {
-		logger.Info("rolloutRun does not statisfy controller expectation, skip reconciling")
-		return false
-	}
 	return true
 }
 
