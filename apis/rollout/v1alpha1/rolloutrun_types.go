@@ -56,16 +56,6 @@ type RolloutRunSpec struct {
 	Batch RolloutRunBatchStrategy `json:"batch,omitempty"`
 }
 
-type ObjectTypeRef struct {
-	// APIVersion is the group/version for the resource being referenced.
-	// If APIVersion is not specified, the specified Kind must be in the core API group.
-	// For any other third-party types, APIVersion is required.
-	// +optional
-	APIVersion string `json:"apiVersion"`
-	// Kind is the type of resource being referenced
-	Kind string `json:"kind"`
-}
-
 type RolloutRunBatchStrategy struct {
 	// Batches define the order of phases to execute release in canary release
 	Batches []RolloutRunStep `json:"batches,omitempty"`
@@ -75,11 +65,11 @@ type RolloutRunBatchStrategy struct {
 }
 
 type RolloutRunStep struct {
-	// traffic strategy
-	TrafficStrategy `json:",inline"`
-
 	// desired target replicas
 	Targets []RolloutRunStepTarget `json:"targets"`
+
+	// traffic strategy
+	Traffic *TrafficStrategy `json:"traffic,omitempty"`
 
 	// If set to true, the rollout will be paused before the step starts.
 	Breakpoint bool `json:"breakpoint,omitempty"`

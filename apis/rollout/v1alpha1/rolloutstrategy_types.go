@@ -80,11 +80,11 @@ type TolerationStrategy struct {
 
 // Custom release step
 type RolloutStep struct {
-	// traffic strategy
-	TrafficStrategy `json:",inline"`
-
 	// Replicas is the replicas of the rollout task, which represents the number of pods to be upgraded
 	Replicas intstr.IntOrString `json:"replicas"`
+
+	// traffic strategy
+	Traffic *TrafficStrategy `json:"traffic,omitempty"`
 
 	// Match defines condition used for matching resource cross clusterset
 	Match *ResourceMatch `json:"matchTargets,omitempty"`
@@ -94,32 +94,4 @@ type RolloutStep struct {
 
 	// Properties contains additional information for step
 	Properties map[string]string `json:"properties,omitempty"`
-}
-
-type TrafficStrategy struct {
-	// Weight indicate how many percentage of traffic the canary pods should receive
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=100
-	Weight       *int32               `json:"weight,omitempty"`
-	HTTPStrategy *HTTPTrafficStrategy `json:"http,omitempty"`
-}
-
-type HTTPTrafficStrategy struct {
-	// Matches define conditions used for matching the incoming HTTP requests to canary service.
-	Matches []HTTPRouteMatch `json:"matches,omitempty"`
-	// RequestHeaderModifier defines a schema for a filter that modifies request
-	// headers.
-	//
-	// Support: Core
-	//
-	// +optional
-	RequestHeaderModifier *HTTPHeaderFilter `json:"requestHeaderModifier,omitempty"`
-}
-
-type HTTPRouteMatch struct {
-	// Headers specifies HTTP request header matchers. Multiple match values are
-	// ANDed together, meaning, a request must match all the specified headers
-	// to select the route.
-	// +kubebuilder:validation:MaxItems=16
-	Headers []HTTPHeaderMatch `json:"headers,omitempty"`
 }

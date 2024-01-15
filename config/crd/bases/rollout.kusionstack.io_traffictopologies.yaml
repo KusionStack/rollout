@@ -6,22 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.5.0
   creationTimestamp: null
-  name: rollouts.rollout.kusionstack.io
+  name: traffictopologies.rollout.kusionstack.io
 spec:
   group: rollout.kusionstack.io
   names:
-    kind: Rollout
-    listKind: RolloutList
-    plural: rollouts
-    shortNames:
-    - ro
-    singular: rollout
+    kind: TrafficTopology
+    listKind: TrafficTopologyList
+    plural: traffictopologies
+    singular: traffictopology
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Rollout is the Schema for the rollouts API
+        description: TrafficTopologies defines the networking traffic relationships between workloads, backend services, and routes.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
@@ -32,24 +30,49 @@ spec:
           metadata:
             type: object
           spec:
-            description: RolloutSpec defines the desired state of Rollout
+            description: TrafficTopologySpec is the spec for a TrafficTopology resource.
             properties:
-              disabled:
-                description: Disabled means that rollout will not response for new event. Default value is false.
-                type: boolean
-              strategyRef:
-                description: StrategyRef is the reference to the rollout strategy
-                type: string
-              trafficTopologyRefs:
-                description: TrafficTopologies defines the networking traffic relationships between workloads, backend services, and routes.
+              backend:
+                description: Backend defines the reference to a kind of backend
+                properties:
+                  apiVersion:
+                    default: ""
+                    description: Group is the group of the referent. For example, "gateway.networking.k8s.io". When unspecified or empty string, core API group is inferred.
+                    type: string
+                  kind:
+                    default: Service
+                    description: "Kind is the Kubernetes resource kind of the referent. For example \"Service\". \n Defaults to \"Service\" when not specified. \n ExternalName services can refer to CNAME DNS records that may live outside of the cluster and as such are difficult to reason about in terms of conformance. They also may not be safe to forward to (see CVE-2021-25740 for more information). Implementations SHOULD NOT support ExternalName Services. \n Support: Core (Services with a type other than ExternalName) \n Support: Implementation-specific (Services with type ExternalName)"
+                    type: string
+                  name:
+                    description: Name is the name of the referent.
+                    type: string
+                required:
+                - name
+                type: object
+              routes:
+                description: Routes defines the list of routes
                 items:
-                  type: string
+                  properties:
+                    apiVersion:
+                      default: gateway.networking.k8s.io/v1
+                      description: "APIVersion is the group/version of the referent. For example, \"gateway.networking.k8s.io/v1\". \n Defaults to \"gateway.networking.k8s.io/v1\" when not specified."
+                      type: string
+                    kind:
+                      default: HTTPRoute
+                      description: "Kind is the Kubernetes resource kind of the referent. For example \"HTTPRoute\". \n Defaults to \"HTTPRoute\" when not specified."
+                      type: string
+                    name:
+                      description: Name is the name of the custom route.
+                      type: string
+                  required:
+                  - name
+                  type: object
                 type: array
-              triggerPolicy:
-                description: TriggerPolicy defines when rollout will be triggered
+              trafficType:
+                description: TrafficType defines the type of traffic
                 type: string
               workloadRef:
-                description: WorkloadRef is a reference to a kind of workloads
+                description: WorkloadRef is the reference to a kind of workloads
                 properties:
                   apiVersion:
                     description: APIVersion is the group/version for the resource being referenced. If APIVersion is not specified, the specified Kind must be in the core API group. For any other third-party types, APIVersion is required.
@@ -111,24 +134,12 @@ spec:
                 - match
                 type: object
             required:
-            - trafficTopologyRefs
+            - backend
+            - trafficType
+            - workloadRef
             type: object
           status:
-            description: RolloutStatus defines the observed state of Rollout
             properties:
-              batchStatus:
-                description: BatchStatus describes the state of the active batch release
-                properties:
-                  currentBatchIndex:
-                    description: CurrentBatchIndex defines the current batch index of batch release progress.
-                    format: int32
-                    type: integer
-                  currentBatchState:
-                    description: CurrentBatchIndex indicates the current batch state.
-                    type: string
-                required:
-                - currentBatchIndex
-                type: object
               conditions:
                 description: Conditions is the list of conditions
                 items:
@@ -159,20 +170,33 @@ spec:
                   - type
                   type: object
                 type: array
-              lastUpdateTime:
-                description: The last time this status was updated.
-                format: date-time
-                type: string
               observedGeneration:
-                description: ObservedGeneration is the most recent generation observed for this Rollout. It corresponds to the Rollout's generation, which is updated on mutation by the API Server.
+                description: ObservedGeneration is the most recent generation observed.
                 format: int64
                 type: integer
-              phase:
-                description: Phase indicates the current phase of rollout
-                type: string
-              rolloutID:
-                description: RolloutID is reference to workflow name now
-                type: string
+              topologies:
+                description: Topologies information aggregated by workload
+                items:
+                  properties:
+                    backendRoutings:
+                      description: backend routing references
+                      items:
+                        type: string
+                      type: array
+                    workloadRef:
+                      description: workload reference name and cluster
+                      properties:
+                        cluster:
+                          description: Cluster indicates the name of cluster
+                          type: string
+                        name:
+                          description: Name is the resource name
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  type: object
+                type: array
             type: object
         type: object
     served: true
