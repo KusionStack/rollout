@@ -32,6 +32,9 @@ type RolloutStrategy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// Canary defines the canary strategy for upgrade and operation
+	Canary *RolloutCanaryStep `json:"canary,omitempty"`
+
 	// Batch is the batch strategy for upgrade and operation
 	// +optional
 	Batch *BatchStrategy `json:"batch,omitempty"`
@@ -47,13 +50,15 @@ type RolloutStrategy struct {
 type RolloutStrategyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []RolloutStrategy `json:"items"`
+
+	Items []RolloutStrategy `json:"items"`
 }
 
 // BatchStrategy defines the batch strategy
 type BatchStrategy struct {
 	// Batches define the order of phases to execute release in canary release
 	Batches []RolloutStep `json:"batches,omitempty"`
+
 	// Toleration is the toleration policy of the canary strategy
 	// +optional
 	Toleration *TolerationStrategy `json:"toleration,omitempty"`
@@ -83,14 +88,39 @@ type RolloutStep struct {
 	Replicas intstr.IntOrString `json:"replicas"`
 
 	// traffic strategy
+	// +optional
 	Traffic *TrafficStrategy `json:"traffic,omitempty"`
 
 	// Match defines condition used for matching resource cross clusterset
+	// +optional
 	Match *ResourceMatch `json:"matchTargets,omitempty"`
 
 	// If set to true, the rollout will be paused before the step starts.
+	// +optional
 	Breakpoint bool `json:"breakpoint,omitempty"`
 
 	// Properties contains additional information for step
+	// +optional
 	Properties map[string]string `json:"properties,omitempty"`
+}
+
+type RolloutCanaryStep struct {
+	// Replicas is the replicas of the rollout task, which represents the number of pods to be upgraded
+	Replicas intstr.IntOrString `json:"replicas"`
+
+	// traffic strategy
+	// +optional
+	Traffic *TrafficStrategy `json:"traffic,omitempty"`
+
+	// Match defines condition used for matching resource cross clusterset
+	// +optional
+	Match *ResourceMatch `json:"matchTargets,omitempty"`
+
+	// Properties contains additional information for step
+	// +optional
+	Properties map[string]string `json:"properties,omitempty"`
+
+	// PodTemplateMetadataPatch defines a patch for workload podTemplate metadata.
+	// +optional
+	PodTemplateMetadataPatch *PodTemplateMetadataPatch `json:"podTemplateMetadataPatch,omitempty"`
 }

@@ -126,10 +126,13 @@ func makeRolloutWebhookReview(hookType rolloutv1alpha1.HookType, webhook *rollou
 			RolloutNamespace: rollout.Namespace,
 			RolloutID:        rolloutRun.Name,
 			HookType:         hookType,
-			BatchIndex:       newBatchStatus.CurrentBatchIndex,
 			Properties:       webhook.Properties,
 			TargetType:       rolloutRun.Spec.TargetType,
-			Targets:          rolloutRun.Spec.Batch.Batches[newBatchStatus.CurrentBatchIndex].Targets,
+			Batch: &rolloutv1alpha1.RolloutWebhookReviewBatch{
+				BatchIndex: newBatchStatus.CurrentBatchIndex,
+				Targets:    rolloutRun.Spec.Batch.Batches[newBatchStatus.CurrentBatchIndex].Targets,
+				Properties: rolloutRun.Spec.Batch.Batches[newBatchStatus.CurrentBatchIndex].Properties,
+			},
 		},
 	}
 }

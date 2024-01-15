@@ -117,18 +117,48 @@ type RolloutWebhookReview struct {
 type RolloutWebhookReviewSpec struct {
 	// Rollout Name
 	RolloutName string `json:"rolloutName,omitempty"`
+
 	// Rollout Namespace
-	RolloutNamespace string   `json:"rolloutNamespace,omitempty"`
-	RolloutID        string   `json:"rolloutID,omitempty"`
-	HookType         HookType `json:"hookType,omitempty"`
-	// BatchIndex is index of the batch executing
-	BatchIndex int32                  `json:"batchIndex,omitempty"`
-	TargetType ObjectTypeRef          `json:"targetType,omitempty"`
-	Targets    []RolloutRunStepTarget `json:"targets,omitempty"`
-	// Properties custom param from webhook paas to server side
+	RolloutNamespace string `json:"rolloutNamespace,omitempty"`
+
+	// Rollout ID
+	RolloutID string `json:"rolloutID,omitempty"`
+
+	// HookType specifies the type of webhook
+	HookType HookType `json:"hookType,omitempty"`
+
+	// TargetType defines the type of the target object
+	TargetType ObjectTypeRef `json:"targetType,omitempty"`
+
+	// Properties stores custom parameters from the webhook to be passed to the server side
+	Properties map[string]string `json:"properties,omitempty"`
+
+	// Canary defines the canary step webhook review spec
+	// +optional
+	Canary *RolloutWebhookReviewCanary `json:"canary,omitempty"`
+
+	// Batch defines the batch step webhook review spec
+	// +optional
+	Batch *RolloutWebhookReviewBatch `json:"batch,omitempty"`
+}
+
+type RolloutWebhookReviewCanary struct {
+	// Targets contains the list of rollout run step targets
+	Targets []RolloutRunStepTarget `json:"targets,omitempty"`
+	// Properties stores custom parameters from the webhook to be passed to the server side
 	Properties map[string]string `json:"properties,omitempty"`
 }
 
+type RolloutWebhookReviewBatch struct {
+	// BatchIndex is the index of the executing batch
+	BatchIndex int32 `json:"batchIndex,omitempty"`
+	// Targets contains the list of rollout run step targets
+	Targets []RolloutRunStepTarget `json:"targets,omitempty"`
+	// Properties stores custom parameters from the webhook to be passed to the server side
+	Properties map[string]string `json:"properties,omitempty"`
+}
+
+// Webhook type
 type HookType string
 
 const (
