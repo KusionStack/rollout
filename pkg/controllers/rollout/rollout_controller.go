@@ -333,7 +333,7 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, instance *rol
 
 	run = constructRolloutRun(instance, strategy, workloads, rolloutID)
 
-	// NOTO: we have to set expectation before we create the workflow to avoid
+	// NOTO: we have to set expectation before we create the rolloutRun to avoid
 	//       that the creation event comes so fast that we don't have time to set it
 	r.expectation.ExpectCreations(key, 1) // nolint
 

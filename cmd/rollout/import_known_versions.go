@@ -20,12 +20,10 @@ import (
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	workflowv1alpha1 "kusionstack.io/rollout/apis/workflow/v1alpha1"
 )
 
 func init() {
 	utilruntime.Must(rolloutv1alpha1.AddToScheme(clientgoscheme.Scheme))
-	utilruntime.Must(workflowv1alpha1.AddToScheme(clientgoscheme.Scheme))
 	utilruntime.Must(operatingv1alpha1.AddToScheme(clientgoscheme.Scheme))
 	//+kubebuilder:scaffold:scheme
 }

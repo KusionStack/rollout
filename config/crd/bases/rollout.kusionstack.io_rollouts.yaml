@@ -169,7 +169,7 @@ spec:
                 description: Phase indicates the current phase of rollout
                 type: string
               rolloutID:
-                description: RolloutID is reference to workflow name now
+                description: RolloutID is reference to rolloutRun name.
                 type: string
             type: object
         type: object

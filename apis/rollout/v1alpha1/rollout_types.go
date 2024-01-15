@@ -102,7 +102,7 @@ type RolloutStatus struct {
 	// The last time this status was updated.
 	// +optional
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
-	// RolloutID is reference to workflow name now
+	// RolloutID is reference to rolloutRun name.
 	RolloutID string `json:"rolloutID,omitempty"`
 	// BatchStatus describes the state of the active batch release
 	BatchStatus *RolloutBatchStatus `json:"batchStatus,omitempty"`
