@@ -158,6 +158,7 @@ func detectWebhooks(hookType rolloutv1alpha1.HookType, rolloutRun *rolloutv1alph
 
 // detectLatestWebhookStatus detect latest webhook to invoke
 func detectLatestWebhookStatus(hookType rolloutv1alpha1.HookType, webhooks []rolloutv1alpha1.RolloutWebhook, executorContext *ExecutorContext) *rolloutv1alpha1.BatchWebhookStatus {
+	newStatus := executorContext.NewStatus
 	newBatchStatus := executorContext.NewStatus.BatchStatus
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatchRecord := &newBatchStatus.Records[currentBatchIndex]
@@ -194,7 +195,7 @@ func detectLatestWebhookStatus(hookType rolloutv1alpha1.HookType, webhooks []rol
 			},
 		)
 		if !exists {
-			newBatchStatus.Error = newHookCodeReasonMessage(
+			newStatus.Error = newHookCodeReasonMessage(
 				nil,
 				hookType,
 				ReasonWebhookNotExist,
@@ -217,12 +218,13 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 	}
 
 	// detect webhook to invoke
+	newStatus := executorContext.NewStatus
 	newBatchStatus := executorContext.NewStatus.BatchStatus
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatchRecord := &newBatchStatus.Records[currentBatchIndex]
 	webhookStatus := detectLatestWebhookStatus(hookType, webhooks, executorContext)
-	if newBatchStatus.Error != nil {
-		return false, ctrl.Result{}, fmt.Errorf(newBatchStatus.Error.Message)
+	if newStatus.Error != nil {
+		return false, ctrl.Result{}, fmt.Errorf(newStatus.Error.Message)
 	}
 
 	// invoke webhook iteratively
@@ -302,7 +304,7 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 					moveToNextWebhook(webhooks[idx+1].Name, hookType, currentBatchRecord)
 					webhookStatus = &currentBatchRecord.Webhooks[len(currentBatchRecord.Webhooks)-1]
 				} else if rolloutv1alpha1.Fail == failurePolicy {
-					newBatchStatus.Error = newHookCodeReasonMessage(
+					newStatus.Error = newHookCodeReasonMessage(
 						webhookStatus,
 						hookType,
 						ReasonWebhookFailureThresholdExceeded,
@@ -311,9 +313,9 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 							item.Name, webhookStatus.FailureCount,
 						),
 					)
-					return false, ctrl.Result{}, fmt.Errorf(newBatchStatus.Error.Message)
+					return false, ctrl.Result{}, fmt.Errorf(newStatus.Error.Message)
 				} else {
-					newBatchStatus.Error = newHookCodeReasonMessage(
+					newStatus.Error = newHookCodeReasonMessage(
 						webhookStatus,
 						hookType,
 						ReasonWebhookFailurePolicyInvalid,
@@ -321,7 +323,7 @@ func (r *Executor) runRolloutWebhooks(ctx context.Context, hookType rolloutv1alp
 							"webhook(%s) failed since FailurePolicy(%s) invalid", item.Name, failurePolicy,
 						),
 					)
-					return false, ctrl.Result{}, fmt.Errorf(newBatchStatus.Error.Message)
+					return false, ctrl.Result{}, fmt.Errorf(newStatus.Error.Message)
 				}
 			}
 		}

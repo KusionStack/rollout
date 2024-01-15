@@ -512,19 +512,6 @@ spec:
                   currentBatchState:
                     description: CurrentBatchState indicates the current batch state.
                     type: string
-                  error:
-                    description: Error indicates the error info of progressing
-                    properties:
-                      code:
-                        description: Code is a globally unique identifier
-                        type: string
-                      message:
-                        description: A human-readable message indicating details about the transition.
-                        type: string
-                      reason:
-                        description: A human-readable short word
-                        type: string
-                    type: object
                   records:
                     description: Records contains all batches status details.
                     items:
@@ -768,6 +755,19 @@ spec:
                   - type
                   type: object
                 type: array
+              error:
+                description: Error indicates the error info of progressing
+                properties:
+                  code:
+                    description: Code is a globally unique identifier
+                    type: string
+                  message:
+                    description: A human-readable message indicating details about the transition.
+                    type: string
+                  reason:
+                    description: A human-readable short word
+                    type: string
+                type: object
               lastUpdateTime:
                 description: The last time this status was updated.
                 format: date-time

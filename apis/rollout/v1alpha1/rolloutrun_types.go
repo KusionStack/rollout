@@ -120,6 +120,8 @@ type RolloutRunStatus struct {
 	// The last time this status was updated.
 	// +optional
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Error indicates the error info of progressing
+	Error *CodeReasonMessage `json:"error,omitempty"`
 	// CanaryStatus describes the state of the active canary release
 	// +optional
 	CanaryStatus *RolloutRunStepStatus `json:"canaryStatus,omitempty"`
@@ -151,8 +153,6 @@ type RolloutRunStepStatus struct {
 type RolloutRunBatchStatus struct {
 	// RolloutBatchStatus contains status of current batch
 	RolloutBatchStatus `json:",inline"`
-	// Error indicates the error info of progressing
-	Error *CodeReasonMessage `json:"error,omitempty"`
 	// Context contains current state context data.
 	Context map[string]string `json:"context,omitempty"`
 	// Records contains all batches status details.

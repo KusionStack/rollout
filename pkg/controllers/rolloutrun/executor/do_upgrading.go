@@ -38,6 +38,7 @@ func newUpgradingCodeReasonMessage(reason string, msg string) *rolloutv1alpha1.C
 // doBatchUpgrading process upgrading state
 func (r *Executor) doBatchUpgrading(ctx context.Context, executorContext *ExecutorContext) (ctrl.Result, error) {
 	rolloutRun := executorContext.RolloutRun
+	newStatus := executorContext.NewStatus
 	newBatchStatus := executorContext.NewStatus.BatchStatus
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
@@ -56,11 +57,11 @@ func (r *Executor) doBatchUpgrading(ctx context.Context, executorContext *Execut
 	gvk := schema.FromAPIVersionAndKind(targetType.APIVersion, targetType.Kind)
 	store, err := workloadregistry.DefaultRegistry.Get(gvk)
 	if err != nil {
-		newBatchStatus.Error = newUpgradingCodeReasonMessage(
+		newStatus.Error = newUpgradingCodeReasonMessage(
 			ReasonWorkloadStoreNotExist,
 			fmt.Sprintf("gvk(%s) is unsupported, err=%v", gvk, err),
 		)
-		return ctrl.Result{}, errors.New(newBatchStatus.Error.Message)
+		return ctrl.Result{}, errors.New(newStatus.Error.Message)
 	}
 
 	// upgrade partition
@@ -69,17 +70,17 @@ func (r *Executor) doBatchUpgrading(ctx context.Context, executorContext *Execut
 		var wi workload.Interface
 		wi, err = store.Get(ctx, item.Cluster, rolloutRun.Namespace, item.Name)
 		if err != nil {
-			newBatchStatus.Error = newUpgradingCodeReasonMessage(
+			newStatus.Error = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("get Workload Interface(%s) error, err=%v", gvk, err),
 			)
-			return ctrl.Result{}, errors.New(newBatchStatus.Error.Message)
+			return ctrl.Result{}, errors.New(newStatus.Error.Message)
 		} else if wi == nil {
-			newBatchStatus.Error = newUpgradingCodeReasonMessage(
+			newStatus.Error = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("Workload Interface(%s) is not exist", gvk),
 			)
-			return ctrl.Result{}, errors.New(newBatchStatus.Error.Message)
+			return ctrl.Result{}, errors.New(newStatus.Error.Message)
 		}
 
 		_, exist := utils.Find(
@@ -101,11 +102,11 @@ func (r *Executor) doBatchUpgrading(ctx context.Context, executorContext *Execut
 				newBatchStatus.Context[ctxKeyLastUpgradeAt] = lastUpgradeAt
 				newBatchStatus.Records[currentBatchIndex].Targets = append(targets, *target)
 			} else {
-				newBatchStatus.Error = newUpgradingCodeReasonMessage(
+				newStatus.Error = newUpgradingCodeReasonMessage(
 					ReasonUpgradePartitionError,
 					fmt.Sprintf("Upgrade partition(%v) error, err=%v", item, err),
 				)
-				return ctrl.Result{}, errors.New(newBatchStatus.Error.Message)
+				return ctrl.Result{}, errors.New(newStatus.Error.Message)
 			}
 		}
 	}
@@ -145,23 +146,23 @@ func (r *Executor) doBatchUpgrading(ctx context.Context, executorContext *Execut
 		)
 		wi, err = store.Get(ctx, item.Cluster, rolloutRun.Namespace, item.Name)
 		if err != nil {
-			newBatchStatus.Error = newUpgradingCodeReasonMessage(
+			newStatus.Error = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("get Workload Interface(%s) error, err=%v", gvk, err),
 			)
-			return ctrl.Result{}, errors.New(newBatchStatus.Error.Message)
+			return ctrl.Result{}, errors.New(newStatus.Error.Message)
 		} else if wi == nil {
-			newBatchStatus.Error = newUpgradingCodeReasonMessage(
+			newStatus.Error = newUpgradingCodeReasonMessage(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("Workload Interface(%s) is not exist", gvk),
 			)
-			return ctrl.Result{}, errors.New(newBatchStatus.Error.Message)
+			return ctrl.Result{}, errors.New(newStatus.Error.Message)
 		}
 
 		ready, err = wi.CheckReady(nil)
 		if err != nil {
 			r.logger.Info("Target CheckReady error", "target", item, "error", err)
-			newBatchStatus.Error = newUpgradingCodeReasonMessage(
+			newStatus.Error = newUpgradingCodeReasonMessage(
 				ReasonUpgradePartitionError,
 				fmt.Sprintf("%v CheckReady error, err=%v", item, err),
 			)
@@ -172,17 +173,17 @@ func (r *Executor) doBatchUpgrading(ctx context.Context, executorContext *Execut
 			}
 			expectReadyReplicas, err = wi.CalculateAtLeastUpdatedAvailableReplicas(failureThreshold)
 			if err != nil {
-				newBatchStatus.Error = newUpgradingCodeReasonMessage(
+				newStatus.Error = newUpgradingCodeReasonMessage(
 					ReasonCheckReadyError,
 					fmt.Sprintf("%v Detect ExpectReadyReplicas error, err=%v", item, err),
 				)
-				return ctrl.Result{}, errors.New(newBatchStatus.Error.Message)
+				return ctrl.Result{}, errors.New(newStatus.Error.Message)
 			}
 
 			ready, err = wi.CheckReady(ptr.To(int32(expectReadyReplicas)))
 			if err != nil {
 				r.logger.Info("Target CheckReady error", "target", item, "error", err)
-				newBatchStatus.Error = newUpgradingCodeReasonMessage(
+				newStatus.Error = newUpgradingCodeReasonMessage(
 					ReasonUpgradePartitionError,
 					fmt.Sprintf("%v CheckReady error, err=%v", item, err),
 				)
