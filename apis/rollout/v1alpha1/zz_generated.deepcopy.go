@@ -663,11 +663,6 @@ func (in *RolloutRun) DeepCopyObject() runtime.Object {
 func (in *RolloutRunBatchStatus) DeepCopyInto(out *RolloutRunBatchStatus) {
 	*out = *in
 	out.RolloutBatchStatus = in.RolloutBatchStatus
-	if in.Error != nil {
-		in, out := &in.Error, &out.Error
-		*out = new(CodeReasonMessage)
-		**out = **in
-	}
 	if in.Context != nil {
 		in, out := &in.Context, &out.Context
 		*out = make(map[string]string, len(*in))
@@ -875,6 +870,11 @@ func (in *RolloutRunStatus) DeepCopyInto(out *RolloutRunStatus) {
 	if in.LastUpdateTime != nil {
 		in, out := &in.LastUpdateTime, &out.LastUpdateTime
 		*out = (*in).DeepCopy()
+	}
+	if in.Error != nil {
+		in, out := &in.Error, &out.Error
+		*out = new(CodeReasonMessage)
+		**out = **in
 	}
 	if in.CanaryStatus != nil {
 		in, out := &in.CanaryStatus, &out.CanaryStatus

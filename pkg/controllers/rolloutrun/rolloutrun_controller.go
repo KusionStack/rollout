@@ -227,7 +227,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv
 		)
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseSucceeded
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
-	} else if newStatus.BatchStatus.Error != nil {
+	} else if newStatus.Error != nil {
 		newCondition := condition.NewCondition(
 			rolloutv1alpha1.RolloutConditionProgressing,
 			metav1.ConditionFalse,

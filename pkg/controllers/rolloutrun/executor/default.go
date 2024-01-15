@@ -62,7 +62,6 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 	}
 
 	prePhase := newStatus.Phase
-	newBatchStatus := newStatus.BatchStatus
 	r.logger.Info("DefaultExecutor start to process")
 	defer func() {
 		r.logger.Info("DefaultExecutor process finished", "phaseFrom", prePhase, "phaseTo", newStatus.Phase)
@@ -80,7 +79,7 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 	}
 
 	// if batchError exist, do nothing
-	progressingError := newBatchStatus.Error
+	progressingError := newStatus.Error
 	if progressingError != nil {
 		r.logger.Info("DefaultExecutor will terminate since err exist", "batchError", progressingError)
 		return false, ctrl.Result{}, nil
