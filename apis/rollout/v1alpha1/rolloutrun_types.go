@@ -51,13 +51,18 @@ type RolloutRunSpec struct {
 	// Webhooks defines rollout webhook configuration
 	Webhooks []RolloutWebhook `json:"webhooks,omitempty"`
 
+	// Canary defines the canary strategy
+	// +optional
+	Canary *RolloutRunCanaryStrategy `json:"canary,omitempty"`
+
 	// Batch Strategy
 	Batch RolloutRunBatchStrategy `json:"batch,omitempty"`
 }
 
 type RolloutRunBatchStrategy struct {
-	// Batches define the order of phases to execute release in canary release
+	// Batches define the order of phases to execute release in batch release
 	Batches []RolloutRunStep `json:"batches,omitempty"`
+
 	// Toleration is the toleration policy of the canary strategy
 	// +optional
 	Toleration *TolerationStrategy `json:"toleration,omitempty"`
@@ -68,13 +73,33 @@ type RolloutRunStep struct {
 	Targets []RolloutRunStepTarget `json:"targets"`
 
 	// traffic strategy
+	// +optional
 	Traffic *TrafficStrategy `json:"traffic,omitempty"`
 
 	// If set to true, the rollout will be paused before the step starts.
+	// +optional
 	Breakpoint bool `json:"breakpoint,omitempty"`
 
 	// Properties contains additional information for step
+	// +optional
 	Properties map[string]string `json:"properties,omitempty"`
+}
+
+type RolloutRunCanaryStrategy struct {
+	// desired target replicas
+	Targets []RolloutRunStepTarget `json:"targets"`
+
+	// traffic strategy
+	// +optional
+	Traffic *TrafficStrategy `json:"traffic,omitempty"`
+
+	// Properties contains additional information for step
+	// +optional
+	Properties map[string]string `json:"properties,omitempty"`
+
+	// PodTemplateMetadataPatch defines a patch for workload podTemplate metadata.
+	// +optional
+	PodTemplateMetadataPatch *PodTemplateMetadataPatch `json:"podTemplateMetadataPatch,omitempty"`
 }
 
 type RolloutRunStepTarget struct {
@@ -95,10 +120,32 @@ type RolloutRunStatus struct {
 	// The last time this status was updated.
 	// +optional
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// CanaryStatus describes the state of the active canary release
+	// +optional
+	CanaryStatus *RolloutRunStepStatus `json:"canaryStatus,omitempty"`
 	// BatchStatus describes the state of the active batch release
+	// +optional
 	BatchStatus *RolloutRunBatchStatus `json:"batchStatus,omitempty"`
 	// TargetStatuses describes the referenced workloads status
+	// +optional
 	TargetStatuses []RolloutWorkloadStatus `json:"targetStatuses,omitempty"`
+}
+
+type RolloutRunStepStatus struct {
+	// State is Rollout step state
+	State RolloutBatchStepState `json:"state,omitempty"`
+	// StartTime is the time when the stage started
+	// +optional
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	// FinishTime is the time when the stage finished
+	// +optional
+	FinishTime *metav1.Time `json:"finishTime,omitempty"`
+	// WorkloadDetails contains release details for each workload
+	// +optional
+	Targets []RolloutWorkloadStatus `json:"targets,omitempty"`
+	// Webhooks contains webhook status
+	// +optional
+	Webhooks []BatchWebhookStatus `json:"webhooks,omitempty"`
 }
 
 type RolloutRunBatchStatus struct {
