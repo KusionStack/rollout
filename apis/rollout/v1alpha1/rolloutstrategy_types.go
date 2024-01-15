@@ -33,13 +33,15 @@ type RolloutStrategy struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Canary defines the canary strategy for upgrade and operation
-	Canary *RolloutCanaryStep `json:"canary,omitempty"`
+	// +optional
+	Canary *CanaryStrategy `json:"canary,omitempty"`
 
 	// Batch is the batch strategy for upgrade and operation
 	// +optional
 	Batch *BatchStrategy `json:"batch,omitempty"`
 
 	// Webhooks defines
+	// +optional
 	Webhooks []RolloutWebhook `json:"webhooks,omitempty"`
 }
 
@@ -104,7 +106,7 @@ type RolloutStep struct {
 	Properties map[string]string `json:"properties,omitempty"`
 }
 
-type RolloutCanaryStep struct {
+type CanaryStrategy struct {
 	// Replicas is the replicas of the rollout task, which represents the number of pods to be upgraded
 	Replicas intstr.IntOrString `json:"replicas"`
 

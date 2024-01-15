@@ -52,7 +52,8 @@ type RolloutRunSpec struct {
 	Webhooks []RolloutWebhook `json:"webhooks,omitempty"`
 
 	// Canary defines the canary strategy
-	Canary *RolloutRunCanaryStep `json:"canary,omitempty"`
+	// +optional
+	Canary *RolloutRunCanaryStrategy `json:"canary,omitempty"`
 
 	// Batch Strategy
 	Batch RolloutRunBatchStrategy `json:"batch,omitempty"`
@@ -84,7 +85,7 @@ type RolloutRunStep struct {
 	Properties map[string]string `json:"properties,omitempty"`
 }
 
-type RolloutRunCanaryStep struct {
+type RolloutRunCanaryStrategy struct {
 	// desired target replicas
 	Targets []RolloutRunStepTarget `json:"targets"`
 
