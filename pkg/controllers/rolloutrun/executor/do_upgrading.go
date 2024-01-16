@@ -13,10 +13,6 @@ import (
 )
 
 const (
-	ctxKeyLastUpgradeAt = "LastUpgradeAt"
-)
-
-const (
 	CodeUpgradingError = "UpgradingError"
 
 	ReasonCheckReadyError           = "CheckReadyError"
@@ -41,13 +37,6 @@ func (r *Executor) doBatchUpgrading(_ context.Context, executorContext *Executor
 	logger := r.logger.WithValues("rollout", executorContext.Rollout.Name, "rolloutRun", executorContext.RolloutRun.Name, "currentBatchIndex", currentBatchIndex)
 
 	logger.Info("do batch upgrading and check")
-
-	if len(currentBatch.Targets) == 0 {
-		logger.Info("skip this batch because of empty targets")
-		newBatchStatus.CurrentBatchState = BatchStatePostBatchHook
-		newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
-		return ctrl.Result{Requeue: true}, nil
-	}
 
 	// upgrade partition
 	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
@@ -84,7 +73,7 @@ func (r *Executor) doBatchUpgrading(_ context.Context, executorContext *Executor
 
 	if workloadChanged {
 		// check next time, give the controller a little time to react
-		return ctrl.Result{RequeueAfter: defaultRequeueAfter}, errors.New(newStatus.Error.Message)
+		return ctrl.Result{RequeueAfter: defaultRequeueAfter}, nil
 	}
 
 	// all workloads are updated now, then check if they are ready

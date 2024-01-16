@@ -5,8 +5,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2/klogr"
@@ -29,15 +28,13 @@ func newRunStepTarget(cluster, name string, replicas intstr.IntOrString) rollout
 }
 
 func TestExecutor_doBatchUpgrading(t *testing.T) {
-	RegisterFailHandler(Fail)
-
 	r := &Executor{
 		logger: klogr.New(),
 	}
 	tests := []struct {
 		name        string
 		fulfill     func(ctx *ExecutorContext)
-		checkResult func(ctx *ExecutorContext, result reconcile.Result, err error)
+		checkResult func(t *testing.T, ctx *ExecutorContext, result reconcile.Result, err error)
 	}{
 		{
 			name: "batch target is empty",
@@ -45,10 +42,11 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun := ctx.RolloutRun
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: nil}}
 			},
-			checkResult: func(ctx *ExecutorContext, result reconcile.Result, err error) {
-				Expect(err).To(HaveOccurred())
-				Expect(result).To(Equal(reconcile.Result{Requeue: true}))
-				Expect(ctx.NewStatus.Error).NotTo(BeNil())
+			checkResult: func(t *testing.T, ctx *ExecutorContext, result reconcile.Result, err error) {
+				assert := assert.New(t)
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.Nil(ctx.NewStatus.Error)
 			},
 		},
 		{
@@ -77,10 +75,11 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				}
 				ctx.NewStatus = rolloutRun.Status.DeepCopy()
 			},
-			checkResult: func(ctx *ExecutorContext, result reconcile.Result, err error) {
-				Expect(err).To(HaveOccurred())
-				Expect(result).To(Equal(reconcile.Result{}))
-				Expect(ctx.NewStatus.Error).NotTo(BeNil())
+			checkResult: func(t *testing.T, ctx *ExecutorContext, result reconcile.Result, err error) {
+				assert := assert.New(t)
+				assert.NotNil(err)
+				assert.Equal(reconcile.Result{}, result)
+				assert.NotNil(ctx.NewStatus.Error)
 			},
 		},
 		{
@@ -112,12 +111,13 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				// setup newStatus
 				ctx.NewStatus = rolloutRun.Status.DeepCopy()
 			},
-			checkResult: func(ctx *ExecutorContext, result reconcile.Result, err error) {
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}))
-				Expect(ctx.NewStatus.Error).To(BeNil())
-				Expect(ctx.NewStatus.BatchStatus.Records).To(HaveLen(1))
-				Expect(ctx.NewStatus.BatchStatus.Records[0].Targets).To(HaveLen(1))
+			checkResult: func(t *testing.T, ctx *ExecutorContext, result reconcile.Result, err error) {
+				assert := assert.New(t)
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}, result)
+				assert.Nil(ctx.NewStatus.Error)
+				assert.Len(ctx.NewStatus.BatchStatus.Records, 1)
+				assert.Len(ctx.NewStatus.BatchStatus.Records[0].Targets, 1)
 			},
 		},
 		{
@@ -149,14 +149,15 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				// setup newStatus
 				ctx.NewStatus = rolloutRun.Status.DeepCopy()
 			},
-			checkResult: func(ctx *ExecutorContext, result reconcile.Result, err error) {
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}))
-				Expect(ctx.NewStatus.Error).To(BeNil())
-				Expect(ctx.NewStatus.BatchStatus.Records).To(HaveLen(1))
-				Expect(ctx.NewStatus.BatchStatus.Records[0].Targets).To(HaveLen(1))
-				Expect(ctx.NewStatus.BatchStatus.Records[0].Targets[0].Replicas).To(Equal(100))
-				Expect(ctx.NewStatus.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas).To(Equal(1))
+			checkResult: func(t *testing.T, ctx *ExecutorContext, result reconcile.Result, err error) {
+				assert := assert.New(t)
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}, result)
+				assert.Nil(ctx.NewStatus.Error)
+				assert.Len(ctx.NewStatus.BatchStatus.Records, 1)
+				assert.Len(ctx.NewStatus.BatchStatus.Records[0].Targets, 1)
+				assert.EqualValues(100, ctx.NewStatus.BatchStatus.Records[0].Targets[0].Replicas)
+				assert.EqualValues(1, ctx.NewStatus.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas)
 			},
 		},
 		{
@@ -164,8 +165,10 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 			fulfill: func(ctx *ExecutorContext) {
 				rolloutRun := ctx.RolloutRun
 				// setup workloads
-				ctx.Workloads = workload.NewWorkloadSet(fake.New("cluster-a", rolloutRun.Namespace, "test-0").ChangeStatus(100, 10, 10))
-				ctx.Workloads = workload.NewWorkloadSet(fake.New("cluster-b", rolloutRun.Namespace, "test-0").ChangeStatus(100, 10, 10))
+				ctx.Workloads = workload.NewWorkloadSet(
+					fake.New("cluster-a", rolloutRun.Namespace, "test-0").ChangeStatus(100, 10, 10),
+					fake.New("cluster-b", rolloutRun.Namespace, "test-0").ChangeStatus(100, 10, 10),
+				)
 				// setup rolloutRun
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
@@ -190,31 +193,31 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				// setup newStatus
 				ctx.NewStatus = rolloutRun.Status.DeepCopy()
 			},
-			checkResult: func(ctx *ExecutorContext, result reconcile.Result, err error) {
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}))
-				Expect(ctx.NewStatus.Error).To(BeNil())
+			checkResult: func(t *testing.T, ctx *ExecutorContext, result reconcile.Result, err error) {
+				assert := assert.New(t)
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.Nil(ctx.NewStatus.Error)
 				// check records
-				Expect(ctx.NewStatus.BatchStatus.Records).To(HaveLen(1))
+				assert.Len(ctx.NewStatus.BatchStatus.Records, 1)
 				// check targets
-				Expect(ctx.NewStatus.BatchStatus.Records[0].Targets).To(HaveLen(2))
-				Expect(ctx.NewStatus.BatchStatus.Records[0].Targets[0].Replicas).To(Equal(100))
-				Expect(ctx.NewStatus.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas).To(Equal(10))
+				assert.Len(ctx.NewStatus.BatchStatus.Records[0].Targets, 2)
+				assert.EqualValues(100, ctx.NewStatus.BatchStatus.Records[0].Targets[0].Replicas)
+				assert.EqualValues(10, ctx.NewStatus.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas)
 				// check state
-				Expect(ctx.NewStatus.BatchStatus.CurrentBatchState).To(Equal(rolloutv1alpha1.BatchStepStatePostBatchStepHook))
-				Expect(ctx.NewStatus.BatchStatus.Records[0].State).To(Equal(rolloutv1alpha1.BatchStepStatePostBatchStepHook))
+				assert.Equal(rolloutv1alpha1.BatchStepStatePostBatchStepHook, ctx.NewStatus.BatchStatus.CurrentBatchState)
+				assert.Equal(rolloutv1alpha1.BatchStepStatePostBatchStepHook, ctx.NewStatus.BatchStatus.Records[0].State)
 			},
 		},
 	}
 	for i := range tests {
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
-			defer GinkgoRecover()
 			ctx := newTestExecutorContext()
 			tt.fulfill(ctx)
 			ctx.Initialize()
 			got, err := r.doBatchUpgrading(context.Background(), ctx)
-			tt.checkResult(ctx, got, err)
+			tt.checkResult(t, ctx, got, err)
 		})
 	}
 }
