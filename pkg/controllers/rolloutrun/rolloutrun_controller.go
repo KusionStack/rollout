@@ -183,6 +183,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv
 
 	rollout := &rolloutv1alpha1.Rollout{}
 	if err := r.findRollout(ctx, obj, rollout); err != nil {
+		logger.Error(err, "findRollout error")
 		return ctrl.Result{}, err
 	}
 

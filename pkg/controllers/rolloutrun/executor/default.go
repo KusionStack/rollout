@@ -6,10 +6,13 @@ import (
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutapis "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 	"kusionstack.io/rollout/pkg/utils"
 )
 
@@ -55,7 +58,7 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 			recordSize := len(rolloutRun.Spec.Batch.Batches)
 			records := make([]rolloutv1alpha1.RolloutRunBatchStatusRecord, recordSize)
 			for idx := range records {
-				records[idx] = rolloutv1alpha1.RolloutRunBatchStatusRecord{State: BatchStateInitial}
+				records[idx] = rolloutv1alpha1.RolloutRunBatchStatusRecord{Index: ptr.To(int32(idx)), State: BatchStateInitial}
 			}
 			newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Records: records, Context: context}
 		}
@@ -153,6 +156,7 @@ func (r *Executor) doBatch(ctx context.Context, executorContext *ExecutorContext
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	batchIndex := currentBatchIndex
 	switch currentBatchStatus.CurrentBatchState {
 	case BatchStateInitial:
 		result = r.doBatchInitial(executorContext)
@@ -172,6 +176,15 @@ func (r *Executor) doBatch(ctx context.Context, executorContext *ExecutorContext
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 		}
 	}
+
+	// sync workload
+	if detectErr := r.syncWorkloadStatus(ctx, batchIndex, executorContext); detectErr != nil {
+		if err == nil {
+			err = detectErr
+		}
+		r.logger.Error(detectErr, "DefaultExecutor syncWorkloadStatus for record error")
+	}
+
 	return result, err
 }
 
@@ -229,4 +242,46 @@ func (r *Executor) doBatchPaused(executorContext *ExecutorContext) ctrl.Result {
 	)
 
 	return ctrl.Result{}
+}
+
+// syncWorkloadStatus
+func (r *Executor) syncWorkloadStatus(ctx context.Context, batchIndex int32, executorContext *ExecutorContext) (err error) {
+	rolloutRun := executorContext.RolloutRun
+	newBatchStatus := executorContext.NewStatus.BatchStatus
+
+	record := &newBatchStatus.Records[batchIndex]
+	if len(record.Targets) == 0 {
+		r.logger.Info("DefaultExecutor syncWorkloadStatus skip since targets empty")
+		return nil
+	}
+
+	gvk := schema.FromAPIVersionAndKind(
+		rolloutRun.Spec.TargetType.APIVersion, rolloutRun.Spec.TargetType.Kind,
+	)
+
+	refs := make([]rolloutv1alpha1.CrossClusterObjectNameReference, len(record.Targets))
+	for i := range record.Targets {
+		target := record.Targets[i]
+		refs[i] = rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: target.Cluster, Name: target.Name}
+	}
+
+	store, err := workloadregistry.DefaultRegistry.Get(gvk)
+	if err != nil {
+		return err
+	}
+
+	resourceMatch := rolloutv1alpha1.ResourceMatch{Names: refs}
+	resources, err := store.List(ctx, rolloutRun.GetNamespace(), resourceMatch)
+	if err != nil {
+		return err
+	}
+
+	if len(resources) > 0 {
+		record.Targets = make([]rolloutv1alpha1.RolloutWorkloadStatus, len(resources))
+		for i := range resources {
+			record.Targets[i] = resources[i].GetStatus()
+		}
+	}
+
+	return nil
 }

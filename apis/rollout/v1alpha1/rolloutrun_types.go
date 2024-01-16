@@ -25,6 +25,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=ror
 
 type RolloutRun struct {
 	metav1.TypeMeta   `json:",inline"`

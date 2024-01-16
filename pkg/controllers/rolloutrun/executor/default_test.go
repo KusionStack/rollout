@@ -161,8 +161,7 @@ func (e emptyStore) Get(ctx context.Context, cluster, namespace, name string) (w
 }
 
 func (e emptyStore) List(ctx context.Context, namespace string, match rolloutv1alpha1.ResourceMatch) ([]workload.Interface, error) {
-	//TODO implement me
-	panic("implement me")
+	return nil, nil
 }
 
 // makeHandlerFunc mock http server
@@ -929,7 +928,8 @@ func TestDoBatchInitial(t *testing.T) {
 			},
 		},
 		{
-			name: "Input={len(Batches)==1}, Context={}, Output={CurrentBatchState=PreBatchStepHook}",
+			setup: setupStore,
+			name:  "Input={len(Batches)==1}, Context={}, Output={CurrentBatchState=PreBatchStepHook}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
@@ -1689,6 +1689,9 @@ func TestDoBatchUpgrading(t *testing.T) {
 
 	testcases := []testCase{
 		{
+			setup: func() {
+				workloadregistry.DefaultRegistry.Delete(fakev1alpha1.GVK)
+			},
 			name: "Input{CurrentBatchState=Upgrading, len(targets)==1}, Context{store is null}, Output{CurrentBatchState=Upgrading, CurrentBatchError is not nil}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{

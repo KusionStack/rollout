@@ -26,6 +26,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=ro
 
 // Rollout is the Schema for the rollouts API
 type Rollout struct {

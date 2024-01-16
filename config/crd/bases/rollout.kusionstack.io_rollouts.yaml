@@ -13,6 +13,8 @@ spec:
     kind: Rollout
     listKind: RolloutList
     plural: rollouts
+    shortNames:
+    - ro
     singular: rollout
   scope: Namespaced
   versions:
