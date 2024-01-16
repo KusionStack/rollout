@@ -3,7 +3,6 @@ package executor
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,7 +43,9 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				rollout := testRollout.DeepCopy()
 				rolloutRun := testRolloutRun.DeepCopy()
 
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: nil}}
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Targets: nil,
+				}}
 				return rollout, rolloutRun
 			},
 			assertResult: func(assert *assert.Assertions, result reconcile.Result, err error) {
@@ -61,7 +62,6 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				rollout := testRollout.DeepCopy()
 				rolloutRun := testRolloutRun.DeepCopy()
 
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: nil}}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						newRunStepTarget("non-exist", "non-exits", intstr.FromInt(1)),
@@ -78,7 +78,7 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 						{
 							Index:     ptr.To[int32](0),
 							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
+							StartTime: ptr.To(metav1.Now()),
 						},
 					},
 				}
@@ -116,7 +116,7 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 						{
 							Index:     ptr.To[int32](0),
 							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
+							StartTime: ptr.To(metav1.Now()),
 						},
 					},
 				}
@@ -157,7 +157,7 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 						{
 							Index:     ptr.To[int32](0),
 							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
+							StartTime: ptr.To(metav1.Now()),
 						},
 					},
 				}
@@ -201,7 +201,7 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 						{
 							Index:     ptr.To[int32](0),
 							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
+							StartTime: ptr.To(metav1.Now()),
 						},
 					},
 				}
