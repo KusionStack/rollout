@@ -124,7 +124,7 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	var result ctrl.Result
 	cmd := obj.Annotations[rollout.AnnoManualCommandKey]
-	result, err = r.syncRolloutRun(ctx, obj, newStatus)
+	result, err = r.syncRolloutRun(ctx, obj, newStatus, workloads)
 
 	updateStatus := r.updateStatusOnly(ctx, obj, newStatus, workloads)
 	if updateStatus != nil {
@@ -177,7 +177,7 @@ func (r *RolloutRunReconciler) handleFinalizer(rolloutRun *rolloutv1alpha1.Rollo
 	return nil
 }
 
-func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus) (ctrl.Result, error) {
+func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) (ctrl.Result, error) {
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rolloutRun", key)
 
@@ -194,7 +194,10 @@ func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv
 	)
 	defaultExecutor := executor.NewDefaultExecutor(logger)
 	executorCtx := &executor.ExecutorContext{
-		Rollout: rollout, RolloutRun: obj, NewStatus: newStatus,
+		Rollout:    rollout,
+		RolloutRun: obj,
+		NewStatus:  newStatus,
+		Workloads:  workloads,
 	}
 	if done, result, err = defaultExecutor.Do(ctx, executorCtx); err != nil {
 		logger.Error(err, "defaultExecutor do err")

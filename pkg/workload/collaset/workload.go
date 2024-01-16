@@ -2,6 +2,7 @@ package collaset
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -57,11 +58,6 @@ func (w *realWorkload) GetStatus() rolloutv1alpha1.RolloutWorkloadStatus {
 	return status
 }
 
-// GetObj returns the underlying object implementing the workload interface
-func (w *realWorkload) GetObj() client.Object {
-	return w.obj
-}
-
 // IsWaitingRollout
 func (w *realWorkload) IsWaitingRollout() bool {
 	cd := w.obj
@@ -75,64 +71,40 @@ func (w *realWorkload) IsWaitingRollout() bool {
 	return true
 }
 
-// CalculateAtLeastUpdatedAvailableReplicas calculates the number of replicas that should be available after the upgrade
-func (w *realWorkload) CalculateAtLeastUpdatedAvailableReplicas(failureThreshold *intstr.IntOrString) (int, error) {
-	if *w.obj.Spec.Replicas == 0 {
-		return 0, nil
-	}
-	failureReplicas, err := intstr.GetScaledValueFromIntOrPercent(failureThreshold, int(*w.obj.Spec.Replicas), true)
-	if err != nil {
-		return 0, err
-	}
-
-	return int(*w.obj.Spec.Replicas) - failureReplicas, nil
-}
-
-// calculatePartitionReplicas calculates the number of replicas that should be upgraded to the specified partition
-func (w *realWorkload) calculatePartitionReplicas(partition *intstr.IntOrString) (int, error) {
-	return intstr.GetScaledValueFromIntOrPercent(partition, int(*w.obj.Spec.Replicas), true)
-}
-
 // UpgradePartition upgrades the workload to the specified partition
-func (w *realWorkload) UpgradePartition(partition *intstr.IntOrString) (bool, error) {
-	expectReplicas, err := w.calculatePartitionReplicas(partition)
+func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
+	expectedPartition, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
 	if err != nil {
 		return false, err
 	}
 
-	currentPartition := w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition
-	if int(*currentPartition) <= expectReplicas {
-		w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition = ptr.To(int32(expectReplicas))
-		return true, w.client.Update(clusterinfo.WithCluster(context.Background(), w.info.Cluster), w.obj)
+	currentPartition := int32(0)
+	if w.obj.Spec.UpdateStrategy.RollingUpdate != nil && w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition != nil {
+		currentPartition = ptr.Deref[int32](w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition, 0)
 	}
 
-	return true, nil
-}
-
-// CheckReady checks if the workload is ready
-// TODO: show the reason why the workload is not ready
-func (w *realWorkload) CheckReady(expectUpdatedReplicas *int32) (bool, error) {
-	if w.obj.GetGeneration() != w.obj.Status.ObservedGeneration {
+	if currentPartition >= expectedPartition {
 		return false, nil
 	}
 
-	if *w.obj.Spec.Replicas == 0 {
-		return true, nil
-	}
+	// update
+	err = w.UpdateOnConflict(context.TODO(), func(o client.Object) error {
+		collaset, ok := o.(*operatingv1alpha1.CollaSet)
+		if !ok {
+			return fmt.Errorf("expect client.Object to be *operatingv1alpha1.CollaSet")
+		}
+		collaset.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.RollingUpdateCollaSetStrategy{
+			ByPartition: &operatingv1alpha1.ByPartition{
+				Partition: ptr.To[int32](expectedPartition),
+			},
+		}
+		return nil
+	})
 
-	var expectUpdatedAvailableReplicas int32
-	if expectUpdatedReplicas != nil {
-		expectUpdatedAvailableReplicas = *expectUpdatedReplicas
-	} else if w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition != nil {
-		expectUpdatedAvailableReplicas = *w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition
-	} else {
-		expectUpdatedAvailableReplicas = *w.obj.Spec.Replicas
+	if err != nil {
+		return false, err
 	}
-	if w.obj.Status.UpdatedAvailableReplicas >= expectUpdatedAvailableReplicas {
-		return true, nil
-	}
-
-	return false, nil
+	return true, nil
 }
 
 func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(client.Object) error) error {

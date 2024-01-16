@@ -502,11 +502,6 @@ spec:
               batchStatus:
                 description: BatchStatus describes the state of the active batch release
                 properties:
-                  context:
-                    additionalProperties:
-                      type: string
-                    description: Context contains current state context data.
-                    type: object
                   currentBatchIndex:
                     description: CurrentBatchIndex defines the current batch index of batch release progress.
                     format: int32
@@ -518,19 +513,6 @@ spec:
                     description: Records contains all batches status details.
                     items:
                       properties:
-                        error:
-                          description: error status
-                          properties:
-                            code:
-                              description: Code is a globally unique identifier
-                              type: string
-                            message:
-                              description: A human-readable message indicating details about the transition.
-                              type: string
-                            reason:
-                              description: A human-readable short word
-                              type: string
-                          type: object
                         finishTime:
                           description: FinishTime is the time when the stage finished
                           format: date-time
@@ -539,9 +521,6 @@ spec:
                           description: Index is the id of the batch
                           format: int32
                           type: integer
-                        message:
-                          description: Message is Rollout step state message
-                          type: string
                         startTime:
                           description: StartTime is the time when the stage started
                           format: date-time
@@ -640,6 +619,10 @@ spec:
                     description: FinishTime is the time when the stage finished
                     format: date-time
                     type: string
+                  index:
+                    description: Index is the id of the batch
+                    format: int32
+                    type: integer
                   startTime:
                     description: StartTime is the time when the stage started
                     format: date-time

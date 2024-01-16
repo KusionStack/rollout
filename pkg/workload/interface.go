@@ -52,20 +52,16 @@ type Interface interface {
 	// GetStatus returns current workload status
 	GetStatus() rolloutv1alpha1.RolloutWorkloadStatus
 
-	// GetObj returns the workload object
-	GetObj() client.Object
-
+	// IsWaitingRollout returns if the workload is waiting for rollout.
 	IsWaitingRollout() bool
 
 	// UpgradePartition upgrades the workload to the specified partition
-	UpgradePartition(partition *intstr.IntOrString) (bool, error)
+	// It should return true if the workload changed.
+	//
+	// NOTE: This function must be idempotent.
+	UpgradePartition(partition intstr.IntOrString) (bool, error)
 
-	// CheckReady checks if the workload is ready
-	CheckReady(expectUpdatedReplicas *int32) (bool, error)
-
-	// CalculateAtLeastUpdatedAvailableReplicas calculates the replicas of the workload from the specified failureThreshold
-	CalculateAtLeastUpdatedAvailableReplicas(failureThreshold *intstr.IntOrString) (int, error)
-
+	// UpdateOnConflict try its best to updates the workload on conflict.
 	UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error
 }
 

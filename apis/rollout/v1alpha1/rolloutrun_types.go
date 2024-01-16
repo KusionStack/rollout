@@ -125,7 +125,7 @@ type RolloutRunStatus struct {
 	Error *CodeReasonMessage `json:"error,omitempty"`
 	// CanaryStatus describes the state of the active canary release
 	// +optional
-	CanaryStatus *RolloutRunStepStatus `json:"canaryStatus,omitempty"`
+	CanaryStatus *RolloutRunBatchStatusRecord `json:"canaryStatus,omitempty"`
 	// BatchStatus describes the state of the active batch release
 	// +optional
 	BatchStatus *RolloutRunBatchStatus `json:"batchStatus,omitempty"`
@@ -134,28 +134,9 @@ type RolloutRunStatus struct {
 	TargetStatuses []RolloutWorkloadStatus `json:"targetStatuses,omitempty"`
 }
 
-type RolloutRunStepStatus struct {
-	// State is Rollout step state
-	State RolloutBatchStepState `json:"state,omitempty"`
-	// StartTime is the time when the stage started
-	// +optional
-	StartTime *metav1.Time `json:"startTime,omitempty"`
-	// FinishTime is the time when the stage finished
-	// +optional
-	FinishTime *metav1.Time `json:"finishTime,omitempty"`
-	// WorkloadDetails contains release details for each workload
-	// +optional
-	Targets []RolloutWorkloadStatus `json:"targets,omitempty"`
-	// Webhooks contains webhook status
-	// +optional
-	Webhooks []BatchWebhookStatus `json:"webhooks,omitempty"`
-}
-
 type RolloutRunBatchStatus struct {
 	// RolloutBatchStatus contains status of current batch
 	RolloutBatchStatus `json:",inline"`
-	// Context contains current state context data.
-	Context map[string]string `json:"context,omitempty"`
 	// Records contains all batches status details.
 	Records []RolloutRunBatchStatusRecord `json:"records,omitempty"`
 }
@@ -179,10 +160,6 @@ type RolloutRunBatchStatusRecord struct {
 	Index *int32 `json:"index,omitempty"`
 	// State is Rollout step state
 	State RolloutBatchStepState `json:"state,omitempty"`
-	// Message is Rollout step state message
-	Message string `json:"message,omitempty"`
-	// error status
-	Error *CodeReasonMessage `json:"error,omitempty"`
 	// StartTime is the time when the stage started
 	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`

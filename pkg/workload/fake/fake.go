@@ -33,11 +33,20 @@ var GVK = schema.GroupVersionKind{
 
 var _ workload.Interface = &fakeWorkload{}
 
-type fakeWorkload struct {
-	workload.Info
+type FakeWorkload interface {
+	workload.Interface
+	ChangeStatus(replicas, partition, ready int32) FakeWorkload
 }
 
-func New(cluster, namespace, name string) workload.Interface {
+type fakeWorkload struct {
+	workload.Info
+
+	Replicas      int32
+	Partition     int32
+	ReadyReplicas int32
+}
+
+func New(cluster, namespace, name string) FakeWorkload {
 	return &fakeWorkload{
 		Info: workload.Info{
 			Cluster:   cluster,
@@ -48,6 +57,9 @@ func New(cluster, namespace, name string) workload.Interface {
 				"rollout.kusionstack.io/cluster": cluster,
 			},
 		},
+		Replicas:      100,
+		Partition:     0,
+		ReadyReplicas: 0,
 	}
 }
 
@@ -57,34 +69,45 @@ func (w *fakeWorkload) GetInfo() workload.Info {
 }
 
 func (w *fakeWorkload) GetStatus() rolloutv1alpha1.RolloutWorkloadStatus {
-	panic("unimplemented")
-}
-
-func (w *fakeWorkload) GetObj() client.Object {
-	panic("unimplemented")
-}
-
-// CalculateAtLeastUpdatedAvailableReplicas implements workload.Interface.
-func (*fakeWorkload) CalculateAtLeastUpdatedAvailableReplicas(failureThreshold *intstr.IntOrString) (int, error) {
-	return 0, nil
-}
-
-// CheckReady implements workload.Interface.
-func (*fakeWorkload) CheckReady(expectUpdatedReplicas *int32) (bool, error) {
-	return true, nil
+	return rolloutv1alpha1.RolloutWorkloadStatus{
+		Cluster:            w.Info.Cluster,
+		Name:               w.Info.Name,
+		Generation:         1,
+		ObservedGeneration: 1,
+		RolloutReplicasSummary: rolloutv1alpha1.RolloutReplicasSummary{
+			Replicas:                 w.Replicas,
+			UpdatedReplicas:          w.ReadyReplicas,
+			UpdatedReadyReplicas:     w.ReadyReplicas,
+			UpdatedAvailableReplicas: w.ReadyReplicas,
+		},
+	}
 }
 
 // IsWaitingRollout implements workload.Interface.
-func (*fakeWorkload) IsWaitingRollout() bool {
-	panic("unimplemented")
+func (w *fakeWorkload) IsWaitingRollout() bool {
+	return w.Partition == 0
 }
 
 // UpdateOnConflict implements workload.Interface.
 func (*fakeWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error {
-	panic("unimplemented")
+	return nil
 }
 
 // UpgradePartition implements workload.Interface.
-func (*fakeWorkload) UpgradePartition(partition *intstr.IntOrString) (bool, error) {
+func (w *fakeWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
+	partitionInt, _ := workload.CalculatePartitionReplicas(&w.Replicas, partition)
+	if partitionInt <= w.Partition {
+		// already updated
+		return false, nil
+	}
+	w.Partition = partitionInt
+	w.ReadyReplicas = partitionInt
 	return true, nil
+}
+
+func (w *fakeWorkload) ChangeStatus(replicas, partition, ready int32) FakeWorkload {
+	w.Replicas = replicas
+	w.Partition = partition
+	w.ReadyReplicas = ready
+	return w
 }

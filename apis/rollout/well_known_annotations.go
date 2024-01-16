@@ -24,4 +24,7 @@ const (
 	AnnoManualCommandCancel = "cancel"
 
 	AnnoRolloutTrigger = "rollout.kusionstack.io/trigger"
+
+	// AnnoRolloutProgressingInfo contains the progressing info when rollout
+	AnnoRolloutProgressingInfo = "rollout.kusionstack.io/progressing-info"
 )

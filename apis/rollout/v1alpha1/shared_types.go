@@ -15,6 +15,8 @@
 package v1alpha1
 
 import (
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -65,6 +67,14 @@ func (r CrossClusterObjectNameReference) Matches(cluster, name string) bool {
 	return r.Cluster == cluster
 }
 
+func (r CrossClusterObjectNameReference) String() string {
+	if len(r.Cluster) == 0 {
+		return fmt.Sprintf("name=%q", r.Name)
+	}
+
+	return fmt.Sprintf("cluster=%q, name=%q", r.Cluster, r.Name)
+}
+
 type CodeReasonMessage struct {
 	// Code is a globally unique identifier
 	Code string `json:"code,omitempty"`
@@ -85,4 +95,21 @@ type PodTemplateMetadataPatch struct {
 	// Labels are additional metadata that can be included within a podTemplate.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+}
+
+// ProgressingInfo is the rollout progressing info
+type ProgressingInfo struct {
+	RolloutName    string                 `json:"rollout,omitempty"`
+	RolloutRunName string                 `json:"rolloutRun,omitempty"`
+	Canary         *CanaryProgressingInfo `json:"canary,omitempty"`
+	Batch          *BatchProgressingInfo  `json:"batch,omitempty"`
+}
+
+type CanaryProgressingInfo struct {
+	Replicas int32 `json:"replicas"`
+}
+
+type BatchProgressingInfo struct {
+	CurrentBatchIndex int32 `json:"currentBatchIndex"`
+	Replicas          int32 `json:"replicas"`
 }

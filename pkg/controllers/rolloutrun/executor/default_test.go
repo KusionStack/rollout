@@ -16,20 +16,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rolloutapis "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 	"kusionstack.io/rollout/pkg/workload"
 	fakev1alpha1 "kusionstack.io/rollout/pkg/workload/fake"
 )
@@ -41,13 +36,11 @@ const (
 )
 
 var (
-	apiSchema *runtime.Scheme
-
 	apiVersion = schema.GroupVersion{
 		Group: fakev1alpha1.GVK.Group, Version: fakev1alpha1.GVK.Version,
 	}
 
-	rollout = rolloutv1alpha1.Rollout{
+	testRollout = rolloutv1alpha1.Rollout{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        "foo",
 			Namespace:   metav1.NamespaceDefault,
@@ -58,7 +51,7 @@ var (
 		Spec: rolloutv1alpha1.RolloutSpec{},
 	}
 
-	rolloutRun = rolloutv1alpha1.RolloutRun{
+	testRolloutRun = rolloutv1alpha1.RolloutRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        "foo",
 			Namespace:   metav1.NamespaceDefault,
@@ -82,33 +75,41 @@ var (
 	}
 )
 
+func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun, workloads *workload.Set) *ExecutorContext {
+	if workloads == nil {
+		workloads = workload.NewWorkloadSet()
+	}
+	ctx := &ExecutorContext{
+		Rollout:    rollout,
+		RolloutRun: rolloutRun,
+		Workloads:  workloads,
+		NewStatus:  rolloutRun.Status.DeepCopy(),
+	}
+	ctx.Initialize()
+	return ctx
+}
+
 type testCase struct {
 	name                string
-	setup               setup
 	checkResult         checkResult
 	makeExecutorContext makeExecutorContext
 }
 
-type setup func()
-
-type checkResult func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error)
+type checkResult func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error)
 
 type makeExecutorContext func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext
 
 func runTestCase(t *testing.T, cases []testCase) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			defer GinkgoRecover()
 			ctx := context.Background()
 			executor := NewDefaultExecutor(zap.New(
 				zap.WriteTo(os.Stdout), zap.UseDevMode(true),
 			))
 
-			if tc.setup != nil {
-				tc.setup()
-			}
-
-			newRollout := rollout.DeepCopy()
-			newRolloutRun := rolloutRun.DeepCopy()
+			newRollout := testRollout.DeepCopy()
+			newRolloutRun := testRolloutRun.DeepCopy()
 			done, result, err := executor.Do(
 				ctx, tc.makeExecutorContext(newRollout, newRolloutRun),
 			)
@@ -120,49 +121,50 @@ func runTestCase(t *testing.T, cases []testCase) {
 	}
 }
 
-// setupStore mock store and wi
-func setupStore() {
-	apiSchema = runtime.NewScheme()
-	utilruntime.Must(rolloutv1alpha1.AddToScheme(apiSchema))
+// // setupStore mock store and wi
+// func setupStore() {
+// 	apiSchema = runtime.NewScheme()
+// 	utilruntime.Must(rolloutv1alpha1.AddToScheme(apiSchema))
 
-	clientBuilder := fake.NewClientBuilder().WithScheme(apiSchema)
+// 	clientBuilder := fake.NewClientBuilder().WithScheme(apiSchema)
 
-	workloadregistry.DefaultRegistry.Register(
-		fakev1alpha1.GVK,
-		&fakev1alpha1.Storage{Client: clientBuilder.Build()},
-	)
-}
+// 	workloadregistry.DefaultRegistry.Register(
+// 		fakev1alpha1.GVK,
+// 		&fakev1alpha1.Storage{Client: clientBuilder.Build()},
+// 	)
+// }
 
-type emptyStore struct {
-}
+// type emptyStore struct {
+// }
 
-func (e emptyStore) NewObject() client.Object {
-	//TODO implement me
-	panic("implement me")
-}
+// func (e emptyStore) NewObject() client.Object {
+// 	//TODO implement me
+// 	panic("implement me")
+// }
 
-func (e emptyStore) NewObjectList() client.ObjectList {
-	//TODO implement me
-	panic("implement me")
-}
+// func (e emptyStore) NewObjectList() client.ObjectList {
+// 	//TODO implement me
+// 	panic("implement me")
+// }
 
-func (e emptyStore) Watchable() bool {
-	//TODO implement me
-	panic("implement me")
-}
+// func (e emptyStore) Watchable() bool {
+// 	//TODO implement me
+// 	panic("implement me")
+// }
 
-func (e emptyStore) Wrap(cluster string, obj client.Object) (workload.Interface, error) {
-	//TODO implement me
-	panic("implement me")
-}
+// func (e emptyStore) Wrap(cluster string, obj client.Object) (workload.Interface, error) {
+// 	//TODO implement me
+// 	panic("implement me")
+// }
 
-func (e emptyStore) Get(ctx context.Context, cluster, namespace, name string) (workload.Interface, error) {
-	return nil, nil
-}
+// func (e emptyStore) Get(ctx context.Context, cluster, namespace, name string) (workload.Interface, error) {
+// 	return nil, nil
+// }
 
-func (e emptyStore) List(ctx context.Context, namespace string, match rolloutv1alpha1.ResourceMatch) ([]workload.Interface, error) {
-	return nil, nil
-}
+// func (e emptyStore) List(ctx context.Context, namespace string, match rolloutv1alpha1.ResourceMatch) ([]workload.Interface, error) {
+// 	//TODO implement me
+// 	panic("implement me")
+// }
 
 // makeHandlerFunc mock http server
 func makeHandlerFunc() http.HandlerFunc {
@@ -230,15 +232,14 @@ func TestDo(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePreRollout {
 					return false, nil
@@ -250,11 +251,11 @@ func TestDo(t *testing.T) {
 			name: "Input={ProgressingStatus.State==Initial}, Context={}, Output={ProgressingStatus.State==PreRollout}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -262,7 +263,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePreRollout {
 					return false, nil
@@ -274,17 +274,15 @@ func TestDo(t *testing.T) {
 			name: "Input={ProgressingStatus.State==Initial, ProgressingStatus.Error!=nil}, Context={}, Output={ProgressingStatus.State==Initial}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
-				}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				rolloutRun.Status.Error = &rolloutv1alpha1.CodeReasonMessage{
 					Code:   "PreBatchStepHookError",
 					Reason: "WebhookFailureThresholdExceeded",
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -292,7 +290,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error == nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseInitial {
 					return false, nil
@@ -305,11 +302,11 @@ func TestDo(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.DeletionTimestamp = ptr.To(metav1.Now())
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -317,7 +314,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
 					return false, nil
@@ -329,11 +325,11 @@ func TestDo(t *testing.T) {
 			name: "Input={ProgressingStatus.State==Paused}, Context={}, Output={ProgressingStatus.State==Paused}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhasePaused
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -341,7 +337,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePaused {
 					return false, nil
@@ -353,11 +348,11 @@ func TestDo(t *testing.T) {
 			name: "Input={ProgressingStatus.State==Canceling}, Context={}, Output={ProgressingStatus.State==Completed}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -365,7 +360,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceled {
 					return false, nil
@@ -377,11 +371,11 @@ func TestDo(t *testing.T) {
 			name: "Input={ProgressingStatus.State==Completed}, Context={}, Output={ProgressingStatus.State==Completed}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseSucceeded
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if !done || result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if !done || result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -389,7 +383,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseSucceeded {
 					return false, nil
@@ -401,11 +394,11 @@ func TestDo(t *testing.T) {
 			name: "Input={ProgressingStatus.State==PreRollout}, Context={}, Output={ProgressingStatus.State==Rolling}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhasePreRollout
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -413,7 +406,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false, nil
@@ -425,11 +417,11 @@ func TestDo(t *testing.T) {
 			name: "Input={ProgressingStatus.State==Rolling}, Context={}, Output={ProgressingStatus.State==PostRollout}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -437,7 +429,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePostRollout ||
 					newBatchStatus.RolloutBatchStatus.CurrentBatchState != rolloutv1alpha1.BatchStepStatePending {
 					return false, nil
@@ -449,11 +440,11 @@ func TestDo(t *testing.T) {
 			name: "Input={ProgressingStatus.State==PostRollout}, Context={}, Output={ProgressingStatus.State==Completed}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if !done || result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if !done || result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -461,7 +452,6 @@ func TestDo(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
-					len(newBatchStatus.Context) != 0 ||
 					len(newBatchStatus.RolloutBatchStatus.CurrentBatchState) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseSucceeded {
 					return false, nil
@@ -503,7 +493,6 @@ func TestDoCommand(t *testing.T) {
 					},
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 1, CurrentBatchState: BatchStatePaused,
 					},
@@ -529,8 +518,8 @@ func TestDoCommand(t *testing.T) {
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -542,7 +531,6 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					len(newBatchStatus.Context) != 0 ||
 					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false, nil
@@ -568,7 +556,6 @@ func TestDoCommand(t *testing.T) {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey] = rolloutapis.AnnoManualCommandRetry
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -593,8 +580,8 @@ func TestDoCommand(t *testing.T) {
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -606,7 +593,6 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 1 ||
-					len(newBatchStatus.Context) != 0 ||
 					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false, nil
@@ -648,7 +634,6 @@ func TestDoCommand(t *testing.T) {
 					},
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 1, CurrentBatchState: BatchStatePaused,
 					},
@@ -673,8 +658,8 @@ func TestDoCommand(t *testing.T) {
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -686,7 +671,6 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					len(newBatchStatus.Context) != 0 ||
 					newBatchStatus.RolloutBatchStatus.CurrentBatchState != BatchStatePaused ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePausing {
 					return false, nil
@@ -728,7 +712,6 @@ func TestDoCommand(t *testing.T) {
 					},
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 1, CurrentBatchState: BatchStatePaused,
 					},
@@ -754,8 +737,8 @@ func TestDoCommand(t *testing.T) {
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -767,7 +750,6 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					len(newBatchStatus.Context) != 0 ||
 					newBatchStatus.CurrentBatchState != BatchStatePaused ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
 					return false, nil
@@ -793,7 +775,6 @@ func TestDoCommand(t *testing.T) {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey] = rolloutapis.AnnoManualCommandSkip
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -806,8 +787,8 @@ func TestDoCommand(t *testing.T) {
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -819,7 +800,6 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					len(newBatchStatus.Context) != 0 ||
 					newBatchStatus.CurrentBatchState != BatchStateInitial ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false, nil
@@ -845,7 +825,6 @@ func TestDoCommand(t *testing.T) {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey] = rolloutapis.AnnoManualCommandSkip
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 1, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -864,8 +843,8 @@ func TestDoCommand(t *testing.T) {
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -877,7 +856,6 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					len(newBatchStatus.Context) != 0 ||
 					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePostRollout {
 					return false, nil
@@ -910,11 +888,11 @@ func TestDoBatchInitial(t *testing.T) {
 			name: "Input={len(Batches)==0}, Context={}, Output={}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: map[string]string{}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
@@ -928,12 +906,10 @@ func TestDoBatchInitial(t *testing.T) {
 			},
 		},
 		{
-			setup: setupStore,
-			name:  "Input={len(Batches)==1}, Context={}, Output={CurrentBatchState=PreBatchStepHook}",
+			name: "Input={len(Batches)==1}, Context={}, Output={CurrentBatchState=PreBatchStepHook}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
 					Records: make([]rolloutv1alpha1.RolloutRunBatchStatusRecord, 1),
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
@@ -943,8 +919,8 @@ func TestDoBatchInitial(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
@@ -975,7 +951,6 @@ func TestDoBatchError(t *testing.T) {
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{}}}
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context:            map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook},
 					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
 						State:     BatchStatePreBatchHook,
@@ -996,8 +971,8 @@ func TestDoBatchError(t *testing.T) {
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.IsZero() || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.IsZero() || err != nil {
 					return false, nil
 				}
 
@@ -1044,7 +1019,6 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1057,8 +1031,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
@@ -1079,7 +1053,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1101,8 +1075,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(5)*time.Second) || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || (result.RequeueAfter != time.Duration(5)*time.Second) || err != nil {
 					return false, nil
 				}
 
@@ -1133,7 +1107,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1159,8 +1133,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.IsZero() || error == nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.IsZero() || err == nil {
 					return false, nil
 				}
 
@@ -1195,7 +1169,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1221,8 +1195,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -1253,7 +1227,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1284,8 +1258,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(5)*time.Second) || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || (result.RequeueAfter != time.Duration(5)*time.Second) || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
@@ -1323,7 +1297,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1349,8 +1323,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
@@ -1380,7 +1354,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1406,8 +1380,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
 					return false, nil
 				}
 
@@ -1438,7 +1412,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1464,8 +1438,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
 					return false, nil
 				}
 
@@ -1496,7 +1470,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1522,8 +1496,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -1554,7 +1528,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1580,8 +1554,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
 					return false, nil
 				}
 
@@ -1612,7 +1586,7 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
 					},
@@ -1645,8 +1619,8 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
 					return false, nil
 				}
 
@@ -1684,377 +1658,6 @@ func TestDoBatchPreBatchHook(t *testing.T) {
 	runTestCase(t, testcases)
 }
 
-func TestDoBatchUpgrading(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	testcases := []testCase{
-		{
-			setup: func() {
-				workloadregistry.DefaultRegistry.Delete(fakev1alpha1.GVK)
-			},
-			name: "Input{CurrentBatchState=Upgrading, len(targets)==1}, Context{store is null}, Output{CurrentBatchState=Upgrading, CurrentBatchError is not nil}",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:      "wh-01",
-						HookTypes: []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-				}}}
-
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStateUpgrading,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
-						{
-							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-								{Name: "wh-01", HookType: rolloutv1alpha1.HookTypePreBatchStep, CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: rolloutv1alpha1.WebhookReviewCodeOK, Reason: "Success"}, FailureCount: 0},
-							},
-						},
-					},
-				}
-
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || result.Requeue || error == nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error == nil ||
-					newStatus.Error.Code != CodeUpgradingError ||
-					newStatus.Error.Reason != ReasonWorkloadStoreNotExist ||
-					newBatchStatus.CurrentBatchState != BatchStateUpgrading {
-					return false, nil
-				}
-
-				if len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStateUpgrading {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input{CurrentBatchState==Upgrading, len(targets)==1}, Context{WorkloadInterface is null}, Output{CurrentBatchState=Upgrading, CurrentBatchError is not nil}",
-			setup: func() {
-				workloadregistry.DefaultRegistry.Register(fakev1alpha1.GVK, &emptyStore{})
-			},
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:      "wh-01",
-						HookTypes: []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-				}}}
-
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStateUpgrading,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
-						{
-							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-								{Name: "wh-01", HookType: rolloutv1alpha1.HookTypePreBatchStep, CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: rolloutv1alpha1.WebhookReviewCodeOK, Reason: "Success"}, FailureCount: 0},
-							},
-						},
-					},
-				}
-
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || result.Requeue || error == nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error == nil ||
-					newStatus.Error.Code != CodeUpgradingError ||
-					newStatus.Error.Reason != ReasonWorkloadInterfaceNotExist ||
-					newBatchStatus.CurrentBatchState != BatchStateUpgrading {
-					return false, nil
-				}
-
-				if len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					len(newBatchStatus.Records[0].Targets) != 0 ||
-					newBatchStatus.Records[0].State != BatchStateUpgrading {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name:  "Input{CurrentBatchState==Upgrading, len(targets)==0}, Output{CurrentBatchState=PostBatchStepHook}",
-			setup: setupStore,
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:      "wh-01",
-						HookTypes: []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{}}}
-
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStateUpgrading,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
-						{
-							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-								{Name: "wh-01", HookType: rolloutv1alpha1.HookTypePreBatchStep, CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: rolloutv1alpha1.WebhookReviewCodeOK, Reason: "Success"}, FailureCount: 0},
-							},
-						},
-					},
-				}
-
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStatePostBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePostBatchHook {
-					return false, nil
-				}
-				return true, nil
-			},
-		},
-		{
-			name:  "Input{CurrentBatchState==Upgrading, len(targets)==1}, Output{CurrentBatchState=PostBatchStepHook}",
-			setup: setupStore,
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:      "wh-01",
-						HookTypes: []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-				}}}
-
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStateUpgrading,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
-						{
-							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-								{Name: "wh-01", HookType: rolloutv1alpha1.HookTypePreBatchStep, CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: rolloutv1alpha1.WebhookReviewCodeOK, Reason: "Success"}, FailureCount: 0},
-							},
-						},
-					},
-				}
-
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					newBatchStatus.CurrentBatchState != BatchStatePostBatchHook {
-					return false, nil
-				}
-
-				if _, exist := newBatchStatus.Context[ctxKeyLastUpgradeAt]; !exist {
-					return false, nil
-				}
-
-				if len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					len(newBatchStatus.Records[0].Webhooks) != 1 ||
-					len(newBatchStatus.Records[0].Targets) != 1 ||
-					newBatchStatus.Records[0].Targets[0].Name != "test-1" ||
-					newBatchStatus.Records[0].Targets[0].Cluster != "cluster-a" ||
-					newBatchStatus.Records[0].State != BatchStatePostBatchHook {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name:  "Input{CurrentBatchState==Upgrading, len(targets)==2}, Output{CurrentBatchState=Upgrading}",
-			setup: setupStore,
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:      "wh-01",
-						HookTypes: []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-2"}, Replicas: intstr.FromInt(2)},
-				}}}
-
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{ctxKeyLastUpgradeAt: time.Now().UTC().Format(time.RFC3339)},
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStateUpgrading,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
-						{
-							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
-							Targets:   []rolloutv1alpha1.RolloutWorkloadStatus{{Cluster: "cluster-a", Name: "test-1"}},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-								{Name: "wh-01", HookType: rolloutv1alpha1.HookTypePreBatchStep, CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: rolloutv1alpha1.WebhookReviewCodeOK, Reason: "Success"}, FailureCount: 0},
-							},
-						},
-					},
-				}
-
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					newBatchStatus.CurrentBatchState != BatchStatePostBatchHook {
-					return false, nil
-				}
-
-				if _, exist := newBatchStatus.Context[ctxKeyLastUpgradeAt]; !exist {
-					return false, nil
-				}
-
-				if len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					len(newBatchStatus.Records[0].Webhooks) != 1 ||
-					len(newBatchStatus.Records[0].Targets) != 2 ||
-					newBatchStatus.Records[0].Targets[0].Name != "test-1" ||
-					newBatchStatus.Records[0].Targets[0].Cluster != "cluster-a" ||
-					newBatchStatus.Records[0].Targets[1].Name != "test-2" ||
-					newBatchStatus.Records[0].Targets[1].Cluster != "cluster-a" ||
-					newBatchStatus.Records[0].State != BatchStatePostBatchHook {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name:  "Input{CurrentBatchState==Upgrading, len(targets)==2}, Context={Within InitialDelaySeconds}, Output{CurrentBatchState=Upgrading}",
-			setup: setupStore,
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:      "wh-01",
-						HookTypes: []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-					},
-				}
-				rolloutRun.Spec.Batch = rolloutv1alpha1.RolloutRunBatchStrategy{
-					Toleration: &rolloutv1alpha1.TolerationStrategy{InitialDelaySeconds: 10},
-					Batches: []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-2"}, Replicas: intstr.FromInt(2)},
-					}}},
-				}
-
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{ctxKeyLastUpgradeAt: time.Now().Add(time.Duration(-5) * time.Second).UTC().Format(time.RFC3339)},
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStateUpgrading,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
-						{
-							State:     BatchStateUpgrading,
-							StartTime: &metav1.Time{Time: time.Now()},
-							Targets:   []rolloutv1alpha1.RolloutWorkloadStatus{{Cluster: "cluster-a", Name: "test-1"}, {Cluster: "cluster-a", Name: "test-2"}},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-								{Name: "wh-01", HookType: rolloutv1alpha1.HookTypePreBatchStep, CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: rolloutv1alpha1.WebhookReviewCodeOK, Reason: "Success"}, FailureCount: 0},
-							},
-						},
-					},
-				}
-
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || result.RequeueAfter < 0 || result.RequeueAfter > (time.Duration(5)*time.Second) || error != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					newBatchStatus.CurrentBatchState != BatchStateUpgrading {
-					return false, nil
-				}
-
-				if _, exist := newBatchStatus.Context[ctxKeyLastUpgradeAt]; !exist {
-					return false, nil
-				}
-
-				if len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					len(newBatchStatus.Records[0].Webhooks) != 1 ||
-					len(newBatchStatus.Records[0].Targets) != 2 ||
-					newBatchStatus.Records[0].Targets[0].Name != "test-1" ||
-					newBatchStatus.Records[0].Targets[0].Cluster != "cluster-a" ||
-					newBatchStatus.Records[0].Targets[1].Name != "test-2" ||
-					newBatchStatus.Records[0].Targets[1].Cluster != "cluster-a" ||
-					newBatchStatus.Records[0].State != BatchStateUpgrading {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-	}
-
-	runTestCase(t, testcases)
-}
-
 func TestDoBatchPostBatchHook(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -2067,7 +1670,7 @@ func TestDoBatchPostBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePostBatchHook,
 					},
@@ -2081,8 +1684,8 @@ func TestDoBatchPostBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
@@ -2103,7 +1706,7 @@ func TestDoBatchPostBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePostBatchHook,
 					},
@@ -2146,8 +1749,8 @@ func TestDoBatchPostBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
@@ -2193,7 +1796,7 @@ func TestDoBatchPostBatchHook(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePostBatchHook,
 					},
@@ -2236,8 +1839,8 @@ func TestDoBatchPostBatchHook(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 				newStatus := rolloutRun.Status
@@ -2299,7 +1902,7 @@ func TestDoBatchSucceeded(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStateSucceeded,
 					},
@@ -2312,8 +1915,8 @@ func TestDoBatchSucceeded(t *testing.T) {
 				}}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 
@@ -2340,7 +1943,7 @@ func TestDoBatchSucceeded(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Context: map[string]string{},
+
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0, CurrentBatchState: BatchStateSucceeded,
 					},
@@ -2352,8 +1955,8 @@ func TestDoBatchSucceeded(t *testing.T) {
 				}
 				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
 			},
-			checkResult: func(done bool, result ctrl.Result, error error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || error != nil {
+			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
+				if done || !result.Requeue || err != nil {
 					return false, nil
 				}
 

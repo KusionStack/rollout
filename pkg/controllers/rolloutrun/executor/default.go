@@ -14,11 +14,12 @@ import (
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 	"kusionstack.io/rollout/pkg/utils"
+	"kusionstack.io/rollout/pkg/workload"
 )
 
 const (
-	defaultRunTimeout   int32 = 5
-	defaultRequeueAfter       = time.Duration(5) * time.Second
+	defaultRunTimeout   = 5
+	defaultRequeueAfter = time.Duration(5) * time.Second
 )
 
 // ExecutorContext context of rolloutRun
@@ -26,6 +27,29 @@ type ExecutorContext struct {
 	Rollout    *rolloutv1alpha1.Rollout
 	RolloutRun *rolloutv1alpha1.RolloutRun
 	NewStatus  *rolloutv1alpha1.RolloutRunStatus
+	Workloads  *workload.Set
+}
+
+func (c *ExecutorContext) Initialize() {
+	if c.NewStatus == nil {
+		c.NewStatus = c.RolloutRun.Status.DeepCopy()
+	}
+	newStatus := c.NewStatus
+	// init BatchStatus
+	if len(newStatus.Phase) == 0 || newStatus.BatchStatus == nil {
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
+
+		if len(c.RolloutRun.Spec.Batch.Batches) == 0 {
+			newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
+		} else {
+			recordSize := len(c.RolloutRun.Spec.Batch.Batches)
+			records := make([]rolloutv1alpha1.RolloutRunBatchStatusRecord, recordSize)
+			for idx := range records {
+				records[idx] = rolloutv1alpha1.RolloutRunBatchStatusRecord{Index: ptr.To(int32(idx)), State: BatchStateInitial}
+			}
+			newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Records: records}
+		}
+	}
 }
 
 type Executor struct {
@@ -36,38 +60,32 @@ func NewDefaultExecutor(logger logr.Logger) *Executor {
 	return &Executor{logger: logger}
 }
 
+func (r *Executor) loggerWithContext(executorContext *ExecutorContext) logr.Logger {
+	return r.logger.WithValues("rollout", executorContext.Rollout.Name, "rolloutRun", executorContext.RolloutRun.Name)
+}
+
 // Do execute the lifecycle for rollout run, and will return new status
 func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bool, ctrl.Result, error) {
+	logger := r.loggerWithContext(executorContext)
+
 	newStatus := executorContext.NewStatus
 	rolloutRun := executorContext.RolloutRun
-	if !rolloutRun.DeletionTimestamp.IsZero() &&
-		newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
-		r.logger.Info("DefaultExecutor will cancel since DeletionTimestamp is not nil")
+
+	// treat deletion as canceling and requeue
+	if !rolloutRun.DeletionTimestamp.IsZero() && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
+		logger.Info("DefaultExecutor will cancel since DeletionTimestamp is not nil")
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
 		return false, ctrl.Result{Requeue: true}, nil
 	}
 
 	// init BatchStatus
-	if len(newStatus.Phase) == 0 || newStatus.BatchStatus == nil {
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
-
-		context := make(map[string]string)
-		if len(rolloutRun.Spec.Batch.Batches) == 0 {
-			newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Context: context}
-		} else {
-			recordSize := len(rolloutRun.Spec.Batch.Batches)
-			records := make([]rolloutv1alpha1.RolloutRunBatchStatusRecord, recordSize)
-			for idx := range records {
-				records[idx] = rolloutv1alpha1.RolloutRunBatchStatusRecord{Index: ptr.To(int32(idx)), State: BatchStateInitial}
-			}
-			newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{Records: records, Context: context}
-		}
-	}
+	executorContext.Initialize()
 
 	prePhase := newStatus.Phase
-	r.logger.Info("DefaultExecutor start to process")
+
+	logger.Info("DefaultExecutor start to process")
 	defer func() {
-		r.logger.Info("DefaultExecutor process finished", "phaseFrom", prePhase, "phaseTo", newStatus.Phase)
+		logger.Info("DefaultExecutor process finished", "phaseFrom", prePhase, "phaseTo", newStatus.Phase)
 	}()
 
 	// if command exist, do command
@@ -77,14 +95,13 @@ func (r *Executor) Do(ctx context.Context, executorContext *ExecutorContext) (bo
 
 	// if paused, do nothing
 	if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
-		r.logger.Info("DefaultExecutor will terminate since paused")
+		logger.Info("DefaultExecutor will terminate since paused")
 		return false, ctrl.Result{}, nil
 	}
 
 	// if batchError exist, do nothing
-	progressingError := newStatus.Error
-	if progressingError != nil {
-		r.logger.Info("DefaultExecutor will terminate since err exist", "batchError", progressingError)
+	if newStatus.Error != nil {
+		logger.Info("DefaultExecutor will terminate since err exist", "batchError", newStatus.Error)
 		return false, ctrl.Result{}, nil
 	}
 
@@ -225,7 +242,6 @@ func (r *Executor) doBatchSucceeded(executorContext *ExecutorContext) (result ct
 	} else {
 		r.logger.Info("DefaultExecutor doBatchSucceeded move to next batch")
 		result = ctrl.Result{Requeue: true}
-		newBatchStatus.Context = map[string]string{}
 		newBatchStatus.RolloutBatchStatus = rolloutv1alpha1.RolloutBatchStatus{
 			CurrentBatchIndex: currentBatchIndex + 1, CurrentBatchState: BatchStateInitial,
 		}
