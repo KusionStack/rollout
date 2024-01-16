@@ -57,11 +57,6 @@ func (w *realWorkload) GetStatus() rolloutv1alpha1.RolloutWorkloadStatus {
 	return status
 }
 
-// GetObj returns the underlying object implementing the workload interface
-func (w *realWorkload) GetObj() client.Object {
-	return w.obj
-}
-
 // IsWaitingRollout
 func (w *realWorkload) IsWaitingRollout() bool {
 	cd := w.obj
@@ -75,27 +70,9 @@ func (w *realWorkload) IsWaitingRollout() bool {
 	return true
 }
 
-// CalculateAtLeastUpdatedAvailableReplicas calculates the number of replicas that should be available after the upgrade
-func (w *realWorkload) CalculateAtLeastUpdatedAvailableReplicas(failureThreshold *intstr.IntOrString) (int, error) {
-	if *w.obj.Spec.Replicas == 0 {
-		return 0, nil
-	}
-	failureReplicas, err := intstr.GetScaledValueFromIntOrPercent(failureThreshold, int(*w.obj.Spec.Replicas), true)
-	if err != nil {
-		return 0, err
-	}
-
-	return int(*w.obj.Spec.Replicas) - failureReplicas, nil
-}
-
-// calculatePartitionReplicas calculates the number of replicas that should be upgraded to the specified partition
-func (w *realWorkload) calculatePartitionReplicas(partition *intstr.IntOrString) (int, error) {
-	return intstr.GetScaledValueFromIntOrPercent(partition, int(*w.obj.Spec.Replicas), true)
-}
-
 // UpgradePartition upgrades the workload to the specified partition
-func (w *realWorkload) UpgradePartition(partition *intstr.IntOrString) (bool, error) {
-	expectReplicas, err := w.calculatePartitionReplicas(partition)
+func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
+	expectReplicas, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
 	if err != nil {
 		return false, err
 	}
@@ -107,32 +84,6 @@ func (w *realWorkload) UpgradePartition(partition *intstr.IntOrString) (bool, er
 	}
 
 	return true, nil
-}
-
-// CheckReady checks if the workload is ready
-// TODO: show the reason why the workload is not ready
-func (w *realWorkload) CheckReady(expectUpdatedReplicas *int32) (bool, error) {
-	if w.obj.GetGeneration() != w.obj.Status.ObservedGeneration {
-		return false, nil
-	}
-
-	if *w.obj.Spec.Replicas == 0 {
-		return true, nil
-	}
-
-	var expectUpdatedAvailableReplicas int32
-	if expectUpdatedReplicas != nil {
-		expectUpdatedAvailableReplicas = *expectUpdatedReplicas
-	} else if w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition != nil {
-		expectUpdatedAvailableReplicas = *w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition
-	} else {
-		expectUpdatedAvailableReplicas = *w.obj.Spec.Replicas
-	}
-	if w.obj.Status.UpdatedAvailableReplicas >= expectUpdatedAvailableReplicas {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(client.Object) error) error {

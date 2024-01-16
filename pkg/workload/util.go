@@ -15,7 +15,11 @@
 package workload
 
 import (
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+
+	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
 func GetClusterFromLabel(labels map[string]string) string {
@@ -23,4 +27,20 @@ func GetClusterFromLabel(labels map[string]string) string {
 		return ""
 	}
 	return labels[clusterinfo.ClusterLabelKey]
+}
+
+func CalculatePartitionReplicas(totalReplicas *int32, partition intstr.IntOrString) (int, error) {
+	replicas := ptr.Deref[int32](totalReplicas, 0)
+	if replicas == 0 {
+		return 0, nil
+	}
+	return intstr.GetScaledValueFromIntOrPercent(&partition, int(replicas), true)
+}
+
+func CheckPartitionReady(status rolloutv1alpha1.RolloutWorkloadStatus, partiton int32) bool {
+	if status.Generation != status.ObservedGeneration {
+		return false
+	}
+
+	return status.UpdatedAvailableReplicas >= partiton
 }

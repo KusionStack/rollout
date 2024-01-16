@@ -17,7 +17,6 @@ package statefulset
 import (
 	"context"
 	"fmt"
-	"math"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -63,10 +62,6 @@ func (w *realWorkload) GetStatus() rolloutv1alpha1.RolloutWorkloadStatus {
 	}
 }
 
-func (w *realWorkload) GetObj() client.Object {
-	return w.obj
-}
-
 func (w *realWorkload) UpdateObject(obj client.Object) {
 	sts, ok := obj.(*appsv1.StatefulSet)
 	if !ok {
@@ -87,69 +82,58 @@ func (w *realWorkload) IsWaitingRollout() bool {
 	return false
 }
 
-func (w *realWorkload) UpgradePartition(partition *intstr.IntOrString) (bool, error) {
-	expectReplicas, err := w.CalculatePartitionReplicas(partition)
+func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
+	val, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
 	if err != nil {
 		return false, err
 	}
 
-	replicas := *w.obj.Spec.Replicas
-	if int32(expectReplicas) > *w.obj.Spec.Replicas {
-		return false, fmt.Errorf(fmt.Sprintf("expectReplicas %d must lte replicas %d", expectReplicas, replicas))
+	expectedReplicas := int32(val)
+
+	// get total replicas number
+	totalReplicas := ptr.Deref[int32](w.obj.Spec.Replicas, 0)
+	if expectedReplicas > totalReplicas {
+		expectedReplicas = totalReplicas
 	}
 
-	oldPartition := w.obj.Spec.UpdateStrategy.RollingUpdate.Partition
-	w.obj.Spec.UpdateStrategy.RollingUpdate.Partition = ptr.To(*w.obj.Spec.Replicas - int32(expectReplicas))
-	if oldPartition == nil ||
-		*oldPartition != *w.obj.Spec.UpdateStrategy.RollingUpdate.Partition {
-		return true, w.client.Update(clusterinfo.WithCluster(context.Background(), w.info.Cluster), w.obj)
+	if w.obj.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {
+		return false, fmt.Errorf("rollout can not upgrade partition in StatefulSet if the upgrade strategy type is not RollingUpdate")
 	}
 
-	return false, nil
-}
+	// get current partition number
+	currentPartition := int32(0)
+	if w.obj.Spec.UpdateStrategy.RollingUpdate != nil {
+		currentPartition = ptr.Deref[int32](w.obj.Spec.UpdateStrategy.RollingUpdate.Partition, 0)
+	}
 
-func (w *realWorkload) CheckReady(expectUpdatedReplicas *int32) (bool, error) {
-	if w.obj.GetGeneration() != w.obj.Status.ObservedGeneration {
+	// if totalReplicas == 100, expectReplicas == 10, then expectedPartition is 90
+	expectedPartition := totalReplicas - expectedReplicas
+
+	if currentPartition <= expectedPartition {
+		// already update
 		return false, nil
 	}
 
-	if (*w.obj.Spec.Replicas) == 0 {
-		return true, nil
-	}
-
-	var expectUpdatedAvailableReplicas int32
-	if expectUpdatedReplicas != nil {
-		expectUpdatedAvailableReplicas = *expectUpdatedReplicas
-	} else {
-		replica := *w.obj.Spec.Replicas
-		partition := *w.obj.Spec.UpdateStrategy.RollingUpdate.Partition
-		if partition >= replica {
-			expectUpdatedAvailableReplicas = math.MaxInt16
-		} else {
-			expectUpdatedAvailableReplicas = replica - partition
+	// we need to update partiton here
+	err = w.UpdateOnConflict(context.TODO(), func(obj client.Object) error {
+		sts, ok := obj.(*appsv1.StatefulSet)
+		if !ok {
+			return fmt.Errorf("expect client.Object to be appsv1.StatefulSet")
 		}
-	}
-	if w.obj.Status.UpdatedReplicas >= expectUpdatedAvailableReplicas {
-		return true, nil
-	}
 
-	return false, nil
-}
-
-func (w *realWorkload) CalculatePartitionReplicas(partition *intstr.IntOrString) (int, error) {
-	if w.obj.Spec.Replicas == nil {
-		return intstr.GetScaledValueFromIntOrPercent(partition, 0, true)
-	}
-	return intstr.GetScaledValueFromIntOrPercent(partition, int(*w.obj.Spec.Replicas), true)
-}
-
-func (w *realWorkload) CalculateAtLeastUpdatedAvailableReplicas(failureThreshold *intstr.IntOrString) (int, error) {
-	failureReplicas, err := intstr.GetScaledValueFromIntOrPercent(failureThreshold, int(*w.obj.Spec.Replicas), true)
+		// TODO: add batch info in annotation
+		sts.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
+			Type: appsv1.RollingUpdateStatefulSetStrategyType,
+			RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
+				Partition: ptr.To[int32](expectedPartition),
+			},
+		}
+		return nil
+	})
 	if err != nil {
-		return 0, err
+		return false, err
 	}
-
-	return int(*w.obj.Spec.Replicas) - failureReplicas, nil
+	return true, nil
 }
 
 func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error {
@@ -165,9 +149,4 @@ func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj
 		w.obj = obj
 	}
 	return nil
-}
-
-func (w *realWorkload) Matches(match rolloutv1alpha1.ResourceMatch) bool {
-	matcher := workload.MatchAsMatcher(match)
-	return matcher.Matches(w.info.Cluster, w.obj.Name, w.obj.Labels)
 }
