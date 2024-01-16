@@ -75,12 +75,17 @@ var (
 	}
 )
 
-func newTestExecutorContext() *ExecutorContext {
-	ctx := &ExecutorContext{
-		Rollout:    testRollout.DeepCopy(),
-		RolloutRun: testRolloutRun.DeepCopy(),
-		Workloads:  workload.NewWorkloadSet(),
+func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun, workloads *workload.Set) *ExecutorContext {
+	if workloads == nil {
+		workloads = workload.NewWorkloadSet()
 	}
+	ctx := &ExecutorContext{
+		Rollout:    rollout,
+		RolloutRun: rolloutRun,
+		Workloads:  workloads,
+		NewStatus:  rolloutRun.Status.DeepCopy(),
+	}
+	ctx.Initialize()
 	return ctx
 }
 
