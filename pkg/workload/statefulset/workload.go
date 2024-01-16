@@ -83,21 +83,13 @@ func (w *realWorkload) IsWaitingRollout() bool {
 }
 
 func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
-	val, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
-	if err != nil {
-		return false, err
-	}
-
-	expectedReplicas := int32(val)
-
-	// get total replicas number
-	totalReplicas := ptr.Deref[int32](w.obj.Spec.Replicas, 0)
-	if expectedReplicas > totalReplicas {
-		expectedReplicas = totalReplicas
-	}
-
 	if w.obj.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {
 		return false, fmt.Errorf("rollout can not upgrade partition in StatefulSet if the upgrade strategy type is not RollingUpdate")
+	}
+
+	expectedReplicas, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
+	if err != nil {
+		return false, err
 	}
 
 	// get current partition number
@@ -106,6 +98,8 @@ func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, err
 		currentPartition = ptr.Deref[int32](w.obj.Spec.UpdateStrategy.RollingUpdate.Partition, 0)
 	}
 
+	// get total replicas number
+	totalReplicas := ptr.Deref[int32](w.obj.Spec.Replicas, 0)
 	// if totalReplicas == 100, expectReplicas == 10, then expectedPartition is 90
 	expectedPartition := totalReplicas - expectedReplicas
 
@@ -118,7 +112,7 @@ func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, err
 	err = w.UpdateOnConflict(context.TODO(), func(obj client.Object) error {
 		sts, ok := obj.(*appsv1.StatefulSet)
 		if !ok {
-			return fmt.Errorf("expect client.Object to be appsv1.StatefulSet")
+			return fmt.Errorf("expect client.Object to be *appsv1.StatefulSet")
 		}
 
 		// TODO: add batch info in annotation

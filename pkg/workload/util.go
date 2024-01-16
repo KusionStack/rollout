@@ -29,12 +29,19 @@ func GetClusterFromLabel(labels map[string]string) string {
 	return labels[clusterinfo.ClusterLabelKey]
 }
 
-func CalculatePartitionReplicas(totalReplicas *int32, partition intstr.IntOrString) (int, error) {
+func CalculatePartitionReplicas(totalReplicas *int32, partition intstr.IntOrString) (int32, error) {
 	replicas := ptr.Deref[int32](totalReplicas, 0)
 	if replicas == 0 {
 		return 0, nil
 	}
-	return intstr.GetScaledValueFromIntOrPercent(&partition, int(replicas), true)
+	partitionInt, err := intstr.GetScaledValueFromIntOrPercent(&partition, int(replicas), true)
+	if err != nil {
+		return 0, err
+	}
+	if partitionInt > int(replicas) {
+		partitionInt = int(replicas)
+	}
+	return int32(partitionInt), nil
 }
 
 func CheckPartitionReady(status rolloutv1alpha1.RolloutWorkloadStatus, partiton int32) bool {

@@ -96,15 +96,12 @@ func (*fakeWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj c
 // UpgradePartition implements workload.Interface.
 func (w *fakeWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
 	partitionInt, _ := workload.CalculatePartitionReplicas(&w.Replicas, partition)
-	if partitionInt > int(w.Replicas) {
-		partitionInt = int(w.Replicas)
-	}
-	if partitionInt <= int(w.Partition) {
+	if partitionInt <= w.Partition {
 		// already updated
 		return false, nil
 	}
-	w.Partition = int32(partitionInt)
-	w.ReadyReplicas = int32(partitionInt)
+	w.Partition = partitionInt
+	w.ReadyReplicas = partitionInt
 	return true, nil
 }
 

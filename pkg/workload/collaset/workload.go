@@ -2,6 +2,7 @@ package collaset
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -72,17 +73,37 @@ func (w *realWorkload) IsWaitingRollout() bool {
 
 // UpgradePartition upgrades the workload to the specified partition
 func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
-	expectReplicas, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
+	expectedPartition, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
 	if err != nil {
 		return false, err
 	}
 
-	currentPartition := w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition
-	if int(*currentPartition) <= expectReplicas {
-		w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition = ptr.To(int32(expectReplicas))
-		return true, w.client.Update(clusterinfo.WithCluster(context.Background(), w.info.Cluster), w.obj)
+	currentPartition := int32(0)
+	if w.obj.Spec.UpdateStrategy.RollingUpdate != nil && w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition != nil {
+		currentPartition = ptr.Deref[int32](w.obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition, 0)
 	}
 
+	if currentPartition >= expectedPartition {
+		return false, nil
+	}
+
+	// update
+	err = w.UpdateOnConflict(context.TODO(), func(o client.Object) error {
+		collaset, ok := o.(*operatingv1alpha1.CollaSet)
+		if !ok {
+			return fmt.Errorf("expect client.Object to be *operatingv1alpha1.CollaSet")
+		}
+		collaset.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.RollingUpdateCollaSetStrategy{
+			ByPartition: &operatingv1alpha1.ByPartition{
+				Partition: ptr.To[int32](expectedPartition),
+			},
+		}
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
