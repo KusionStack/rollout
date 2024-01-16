@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	defaultRunTimeout   int32 = 5
-	defaultRequeueAfter       = time.Duration(5) * time.Second
+	defaultRunTimeout   = 5
+	defaultRequeueAfter = time.Duration(5) * time.Second
 )
 
 // ExecutorContext context of rolloutRun
@@ -242,7 +242,6 @@ func (r *Executor) doBatchSucceeded(executorContext *ExecutorContext) (result ct
 	} else {
 		r.logger.Info("DefaultExecutor doBatchSucceeded move to next batch")
 		result = ctrl.Result{Requeue: true}
-		newBatchStatus.Context = map[string]string{}
 		newBatchStatus.RolloutBatchStatus = rolloutv1alpha1.RolloutBatchStatus{
 			CurrentBatchIndex: currentBatchIndex + 1, CurrentBatchState: BatchStateInitial,
 		}
