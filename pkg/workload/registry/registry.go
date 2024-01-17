@@ -8,25 +8,24 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/discovery/cached/memory"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
 // Standard workload store interface
 type Store interface {
+	GroupVersionKind() schema.GroupVersionKind
 	// NewObject returns a new instance of the workload type
 	NewObject() client.Object
 	// NewObjectList returns a new instance of the workload list type
@@ -42,18 +41,23 @@ type Store interface {
 }
 
 type Registry interface {
+	// SetupWithManger initialize registry with manager.
+	SetupWithManger(mgr manager.Manager)
 	// Register add a new workload store for given gvk
-	Register(gvk schema.GroupVersionKind, store Store)
+	Register(store Store)
 	// Delete delete a new workload store for given gvk
 	Delete(gvk schema.GroupVersionKind)
-	// If the gvk is registered, Get returns the workload rest store.
+	// If the gvk is registered and supported by all member clusters, Get returns the workload rest store.
 	Get(gvk schema.GroupVersionKind) (Store, error)
-	// AddWatcher lets controller watch all registered workloads' types
-	AddWatcher(mgr manager.Manager, c controller.Controller) error
+	// WatchableStores return all watchable and supported stores.
+	WatchableStores() []Store
 }
 
 type workloadRegistry struct {
-	workloads sync.Map // map[schema.GroupVersionKind]Store
+	workloads        sync.Map // map[schema.GroupVersionKind]Store
+	logger           logr.Logger
+	discoveryFed     discovery.DiscoveryInterface
+	discoveryMembers multicluster.PartialCachedDiscoveryInterface
 }
 
 var _ Registry = &workloadRegistry{}
@@ -65,129 +69,96 @@ func New() Registry {
 	return m
 }
 
+// SetupWithManger implements Registry.
+func (r *workloadRegistry) SetupWithManger(mgr manager.Manager) {
+	r.logger = mgr.GetLogger().WithName("workloadRegistry")
+	var fedDiscovery discovery.DiscoveryInterface
+	var membersDiscovery multicluster.PartialCachedDiscoveryInterface
+	c := mgr.GetClient()
+	client, ok := c.(multicluster.MultiClusterDiscovery)
+	if ok {
+		fedDiscovery = client.FedDiscoveryInterface()
+		membersDiscovery = client.MembersCachedDiscoveryInterface()
+	} else {
+		discoveryClient := memory.NewMemCacheClient(discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()))
+		fedDiscovery = discoveryClient
+		membersDiscovery = discoveryClient
+	}
+	r.discoveryFed = fedDiscovery
+	r.discoveryMembers = membersDiscovery
+}
+
 // Get implements Registry.
 func (m *workloadRegistry) Get(gvk schema.GroupVersionKind) (Store, error) {
 	value, ok := m.workloads.Load(gvk)
 	if !ok {
-		return nil, fmt.Errorf("unregistered gvk in workload registry %s", gvk.String())
+		return nil, fmt.Errorf("unregistered gvk(%s) in workload registry", gvk.String())
 	}
 
 	return value.(Store), nil
 }
 
-func (m *workloadRegistry) Register(gvk schema.GroupVersionKind, store Store) {
-	m.workloads.Store(gvk, store)
+func (m *workloadRegistry) Register(store Store) {
+	m.workloads.Store(store.GroupVersionKind(), store)
 }
 
 func (m *workloadRegistry) Delete(gvk schema.GroupVersionKind) {
 	m.workloads.Delete(gvk)
 }
 
-func (m *workloadRegistry) AddWatcher(mgr manager.Manager, c controller.Controller) error {
-	var retErr error
-
-	client := mgr.GetClient()
-	scheme := mgr.GetScheme()
-	logger := c.GetLogger()
+func (m *workloadRegistry) WatchableStores() []Store {
+	result := make([]Store, 0)
 
 	m.workloads.Range(func(key, value any) bool {
 		store := value.(Store)
+		gvk := store.GroupVersionKind()
 
 		if !store.Watchable() {
 			// skip it
+			m.logger.Info("gvk store says it is not watchable, skip it", "gvk", gvk.String())
 			return true
 		}
 
-		err := c.Watch(
-			multicluster.ClustersKind(&source.Kind{Type: store.NewObject()}),
-			enqueueRolloutForWorkloadHandler(client, scheme, logger),
-		)
+		supported, err := m.isGVKSupportedInMembers(gvk)
 		if err != nil {
-			retErr = err
-			return false
+			m.logger.Error(err, "failed to get discovery result from member clusters, skip it", "gvk", gvk.String())
+			return true
 		}
+		if !supported {
+			m.logger.Info("gvk is not supported in all members clusters, skip it", "gvk", gvk.String())
+			return true
+		}
+
+		result = append(result, store)
 
 		return true
 	})
 
-	if retErr != nil {
-		return retErr
-	}
-
-	return nil
+	return result
 }
 
-func enqueueRolloutForWorkloadHandler(reader client.Reader, scheme *runtime.Scheme, logger logr.Logger) handler.EventHandler {
-	mapFunc := func(obj client.Object) []reconcile.Request {
-		key := types.NamespacedName{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.GetName(),
-		}
-		kinds, _, err := scheme.ObjectKinds(obj)
-		if err != nil {
-			logger.Error(err, "failed to get ObjectKind from object", "key", key.String())
-			return nil
-		}
-		gvk := kinds[0]
-
-		cluster := workload.GetClusterFromLabel(obj.GetLabels())
-		info := workload.NewInfo(cluster, gvk, obj)
-		rollout, err := getRolloutForWorkload(reader, logger, info)
-		if err != nil {
-			logger.Error(err, "failed to get rollout for workload", "key", key.String(), "gvk", gvk.String())
-			return nil
-		}
-		if rollout == nil {
-			// TODO: if workload has rollout label but no rollout matches it, we need to clean the label
-			// no matched
-			// logger.V(5).Info("no matched rollout found for workload", "workload", key.String(), "gvk", gvk.String())
-			return nil
-		}
-
-		logger.V(1).Info("get matched rollout for workload", "workload", key.String(), "rollout", rollout.Name)
-		req := types.NamespacedName{Namespace: rollout.GetNamespace(), Name: rollout.GetName()}
-		return []reconcile.Request{{NamespacedName: req}}
+func (m *workloadRegistry) isGVKSupportedInMembers(gvk schema.GroupVersionKind) (bool, error) {
+	if m.discoveryMembers == nil {
+		return false, fmt.Errorf("member clusters discovery interface is not set, please use SetupWithManager() firstly")
 	}
 
-	return handler.EnqueueRequestsFromMapFunc(mapFunc)
-}
-
-func getRolloutForWorkload(
-	reader client.Reader,
-	logger logr.Logger,
-	workloadInfo workload.Info,
-) (*rolloutv1alpha1.Rollout, error) {
-	rList := &rolloutv1alpha1.RolloutList{}
-	ctx := clusterinfo.WithCluster(context.TODO(), clusterinfo.Fed)
-	if err := reader.List(ctx, rList, client.InNamespace(workloadInfo.Namespace)); err != nil {
-		logger.Error(err, "failed to list rollouts")
-		return nil, err
+	_, resources, err := m.discoveryMembers.ServerGroupsAndResources()
+	if err != nil {
+		return false, err
 	}
 
-	for i := range rList.Items {
-		rollout := rList.Items[i]
-		workloadRef := rollout.Spec.WorkloadRef
-		refGV, err := schema.ParseGroupVersion(workloadRef.APIVersion)
-		if err != nil {
-			logger.Error(err, "failed to parse rollout workload ref group version", "rollout", rollout.Name, "apiVersion", workloadRef.APIVersion)
+	for _, resourceList := range resources {
+		if resourceList.GroupVersion != gvk.GroupVersion().String() {
 			continue
 		}
-		refGVK := refGV.WithKind(workloadRef.Kind)
-
-		if !reflect.DeepEqual(refGVK, workloadInfo.GVK) {
-			// group version kind not match
-			// logger.Info("gvk not match", "gvk", workloadInfo.GVK.String(), "refGVK", refGVK)
-			continue
-		}
-
-		macher := workload.MatchAsMatcher(workloadRef.Match)
-		if macher.Matches(workloadInfo.Cluster, workloadInfo.Name, workloadInfo.Labels) {
-			return &rollout, nil
+		_, found := utils.Find(resourceList.APIResources, func(resource *metav1.APIResource) bool {
+			return resource.Kind == gvk.Kind
+		})
+		if found {
+			return true, nil
 		}
 	}
-
-	// not found
-	return nil, nil
+	return false, nil
 }
 
 // GetWorkloadList implements WorkloadManager.

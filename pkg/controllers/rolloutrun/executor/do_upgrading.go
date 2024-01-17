@@ -84,7 +84,7 @@ func (r *Executor) doBatchUpgrading(_ context.Context, executorContext *Executor
 		status := target.GetStatus()
 		partition, _ := workload.CalculatePartitionReplicas(&status.Replicas, item.Replicas)
 
-		if !workload.CheckPartitionReady(status, int32(partition)) {
+		if !workload.CheckPartitionReady(status, partition) {
 			// ready
 			logger.Info("still waiting for target ready", "target", item.CrossClusterObjectNameReference)
 			return reconcile.Result{RequeueAfter: defaultRequeueAfter}, nil

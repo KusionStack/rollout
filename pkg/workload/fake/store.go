@@ -3,6 +3,7 @@ package fake
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -11,6 +12,10 @@ import (
 
 type Storage struct {
 	Client client.Client
+}
+
+func (p *Storage) GroupVersionKind() schema.GroupVersionKind {
+	return GVK
 }
 
 func (p *Storage) NewObject() client.Object {
@@ -22,7 +27,7 @@ func (p *Storage) NewObjectList() client.ObjectList {
 }
 
 func (p *Storage) Watchable() bool {
-	panic("implement me")
+	return false
 }
 
 func (p *Storage) Wrap(cluster string, obj client.Object) (workload.Interface, error) {

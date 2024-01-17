@@ -97,16 +97,17 @@ func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			enqueueRolloutForStrategyHandler(r.Client, r.Logger),
 		)
 
-	c, err := b.Build(r)
-	if err != nil {
-		return err
+	allworkloads := r.workloadRegistry.WatchableStores()
+	for _, store := range allworkloads {
+		gvk := store.GroupVersionKind()
+		r.Logger.Info("add watcher for workload", "gvk", gvk.String())
+		b.Watches(
+			multicluster.ClustersKind(&source.Kind{Type: store.NewObject()}),
+			enqueueRolloutForWorkloadHandler(r.Client, r.Scheme, r.Logger),
+		)
 	}
 
-	err = r.workloadRegistry.AddWatcher(mgr, c)
-	if err != nil {
-		return err
-	}
-	return err
+	return b.Complete(r)
 }
 
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=rollouts,verbs=get;list;watch;create;update;patch;delete
