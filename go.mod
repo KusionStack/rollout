@@ -24,13 +24,14 @@ require (
 	k8s.io/kubernetes v1.22.2
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	kusionstack.io/kube-api v0.0.27
-	kusionstack.io/kube-utils v0.1.3-0.20231129104310-266398d27f18
+	kusionstack.io/kube-utils v0.1.8
 	sigs.k8s.io/controller-runtime v0.16.3
 )
 
 require (
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	gotest.tools/v3 v3.4.0 // indirect
 )
 
 require (
@@ -126,6 +127,5 @@ replace (
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.22.2
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.22.2
 	k8s.io/system-validators => k8s.io/system-validators v1.5.0
-	//k8s.io/utils => k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.10.3
 )

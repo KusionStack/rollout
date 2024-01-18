@@ -17,6 +17,7 @@ package workloadregistry
 import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"kusionstack.io/rollout/pkg/workload/collaset"
 	"kusionstack.io/rollout/pkg/workload/registry"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
@@ -30,9 +31,10 @@ var (
 )
 
 func InitFunc(mgr manager.Manager) (bool, error) {
-	logger := mgr.GetLogger()
-	logger.Info("init default workload registry")
-	//DefaultRegistry.Register(collaset.GVK, collaset.NewStorage(mgr))
-	DefaultRegistry.Register(statefulset.GVK, statefulset.NewStorage(mgr))
+	logger := mgr.GetLogger().WithName("init")
+	logger.Info("initialize default workload registry")
+	DefaultRegistry.Register(collaset.NewStorage(mgr))
+	DefaultRegistry.Register(statefulset.NewStorage(mgr))
+	DefaultRegistry.SetupWithManger(mgr)
 	return true, nil
 }

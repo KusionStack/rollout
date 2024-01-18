@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,6 +38,11 @@ func NewStorage(mgr manager.Manager) registry.Store {
 	return &Storage{
 		client: mgr.GetClient(),
 	}
+}
+
+// GroupVersionKind implements registry.Store.
+func (*Storage) GroupVersionKind() schema.GroupVersionKind {
+	return GVK
 }
 
 func (p *Storage) Watchable() bool {
