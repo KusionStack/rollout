@@ -153,6 +153,7 @@ func NewTestHTTPServer() *httptest.Server {
 	return httptest.NewServer(testHTTPHandler())
 }
 
+// nolint
 func testHTTPHandler() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		path := request.URL.Path

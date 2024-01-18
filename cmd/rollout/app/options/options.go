@@ -34,6 +34,7 @@ type Options struct {
 	LeaderElect                 bool
 	FederatedMode               bool
 	Logger                      string
+	CertDir                     string
 	ZapOptions                  *zap.Options
 	ControllerConcurrentWorkers int
 }
@@ -64,7 +65,7 @@ func (o *Options) Validate() []error {
 	return errs
 }
 
-func (o *Options) Flags(initializer initializer.Interface) cliflag.NamedFlagSets {
+func (o *Options) Flags(initializers ...initializer.Interface) cliflag.NamedFlagSets {
 	fss := cliflag.NamedFlagSets{}
 	fs := fss.FlagSet("options")
 
@@ -75,6 +76,7 @@ func (o *Options) Flags(initializer initializer.Interface) cliflag.NamedFlagSets
 			"Enabling this will ensure there is only one active controller manager.")
 	fs.BoolVar(&o.FederatedMode, "federated-mode", o.FederatedMode, "Enable federated mode for controller manager.")
 	fs.StringVar(&o.Logger, "logger", o.Logger, "The logger provider, Options are:\n"+strings.Join([]string{"zap", "klog"}, "\n"))
+	fs.StringVar(&o.CertDir, "cert-dir", o.CertDir, "The directory where the TLS certs are located. If not set, webhook server would look up the server key and certificate in {TempDir}/k8s-webhook-server/serving-certs.")
 	fs.IntVar(&o.ControllerConcurrentWorkers, "controller-concurrent-workers", o.ControllerConcurrentWorkers, "The number of concurrent workers for the controller.")
 
 	// bind zap flags
@@ -87,7 +89,9 @@ func (o *Options) Flags(initializer initializer.Interface) cliflag.NamedFlagSets
 	features.DefaultMutableFeatureGate.AddFlag(fs)
 
 	// bind initializer flags
-	initializer.BindFlag(fs)
+	for _, in := range initializers {
+		in.BindFlag(fs)
+	}
 	return fss
 }
 

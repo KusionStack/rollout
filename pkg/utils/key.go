@@ -16,11 +16,23 @@
 
 package utils
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
+import (
+	"fmt"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+)
 
 func ObjectKeyString(obj client.Object) string {
 	if len(obj.GetNamespace()) == 0 {
 		return obj.GetName()
 	}
 	return obj.GetNamespace() + "/" + obj.GetName()
+}
+
+func AdmissionRequestObjectKeyString(req admission.Request) string {
+	if len(req.Namespace) == 0 {
+		return req.Name
+	}
+	return fmt.Sprintf("%s/%s", req.Namespace, req.Name)
 }
