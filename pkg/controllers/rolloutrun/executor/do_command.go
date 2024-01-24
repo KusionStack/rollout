@@ -8,19 +8,20 @@ import (
 )
 
 // doCommand
-func (r *Executor) doCommand(executorContext *ExecutorContext) ctrl.Result {
-	rolloutRun := executorContext.RolloutRun
+func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
+	rolloutRun := ctx.RolloutRun
 	cmd := rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey]
-	r.logger.Info("DefaultExecutor begin to doCommand", "command", cmd)
+	logger := ctx.loggerWithContext(r.logger)
+	logger.Info("processing manual command", "command", cmd)
 
-	newStatus := executorContext.NewStatus
-	newBatchStatus := executorContext.NewStatus.BatchStatus
+	newStatus := ctx.NewStatus
+	newBatchStatus := ctx.NewStatus.BatchStatus
 
 	batchError := newStatus.Error
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatchState := newBatchStatus.CurrentBatchState
 	switch cmd {
-	case rolloutapis.AnnoManualCommandResume:
+	case rolloutapis.AnnoManualCommandResume, rolloutapis.AnnoManualCommandContinue:
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 		}
@@ -47,10 +48,9 @@ func (r *Executor) doCommand(executorContext *ExecutorContext) ctrl.Result {
 				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 			}
 		}
-	default:
-		return ctrl.Result{}
 	}
 
+	// Regardless of the value, we need to delete the key.
 	delete(rolloutRun.Annotations, rolloutapis.AnnoManualCommandKey)
 
 	return ctrl.Result{Requeue: true}

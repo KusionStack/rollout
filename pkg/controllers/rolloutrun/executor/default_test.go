@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -42,7 +42,7 @@ var (
 
 	testRollout = rolloutv1alpha1.Rollout{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "foo",
+			Name:        "test-rollout",
 			Namespace:   metav1.NamespaceDefault,
 			UID:         types.UID(uuid.New().String()),
 			Labels:      make(map[string]string),
@@ -53,7 +53,7 @@ var (
 
 	testRolloutRun = rolloutv1alpha1.RolloutRun{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "foo",
+			Name:        "test-rolloutrun",
 			Namespace:   metav1.NamespaceDefault,
 			UID:         types.UID(uuid.New().String()),
 			Labels:      make(map[string]string),
@@ -64,7 +64,7 @@ var (
 				APIVersion: apiVersion.String(), Kind: fakev1alpha1.GVK.Kind,
 			},
 			Webhooks: []rolloutv1alpha1.RolloutWebhook{},
-			Batch: rolloutv1alpha1.RolloutRunBatchStrategy{
+			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
 				Toleration: &rolloutv1alpha1.TolerationStrategy{},
 				Batches:    []rolloutv1alpha1.RolloutRunStep{},
 			},
@@ -74,6 +74,16 @@ var (
 		},
 	}
 )
+
+func newTestLogger() logr.Logger {
+	return zap.New(zap.UseDevMode(true), zap.ConsoleEncoder())
+}
+
+// func newTestExecutor() *Executor {
+// 	return &Executor{
+// 		logger: newTestLogger(),
+// 	}
+// }
 
 func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun, workloads *workload.Set) *ExecutorContext {
 	if workloads == nil {
@@ -103,16 +113,13 @@ func runTestCase(t *testing.T, cases []testCase) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			defer GinkgoRecover()
-			ctx := context.Background()
 			executor := NewDefaultExecutor(zap.New(
 				zap.WriteTo(os.Stdout), zap.UseDevMode(true),
 			))
 
 			newRollout := testRollout.DeepCopy()
 			newRolloutRun := testRolloutRun.DeepCopy()
-			done, result, err := executor.Do(
-				ctx, tc.makeExecutorContext(newRollout, newRolloutRun),
-			)
+			done, result, err := executor.Do(tc.makeExecutorContext(newRollout, newRolloutRun))
 
 			expect, err := tc.checkResult(done, result, err, newRolloutRun)
 			Expect(err).NotTo(HaveOccurred())
@@ -120,51 +127,6 @@ func runTestCase(t *testing.T, cases []testCase) {
 		})
 	}
 }
-
-// // setupStore mock store and wi
-// func setupStore() {
-// 	apiSchema = runtime.NewScheme()
-// 	utilruntime.Must(rolloutv1alpha1.AddToScheme(apiSchema))
-
-// 	clientBuilder := fake.NewClientBuilder().WithScheme(apiSchema)
-
-// 	workloadregistry.DefaultRegistry.Register(
-// 		fakev1alpha1.GVK,
-// 		&fakev1alpha1.Storage{Client: clientBuilder.Build()},
-// 	)
-// }
-
-// type emptyStore struct {
-// }
-
-// func (e emptyStore) NewObject() client.Object {
-// 	//TODO implement me
-// 	panic("implement me")
-// }
-
-// func (e emptyStore) NewObjectList() client.ObjectList {
-// 	//TODO implement me
-// 	panic("implement me")
-// }
-
-// func (e emptyStore) Watchable() bool {
-// 	//TODO implement me
-// 	panic("implement me")
-// }
-
-// func (e emptyStore) Wrap(cluster string, obj client.Object) (workload.Interface, error) {
-// 	//TODO implement me
-// 	panic("implement me")
-// }
-
-// func (e emptyStore) Get(ctx context.Context, cluster, namespace, name string) (workload.Interface, error) {
-// 	return nil, nil
-// }
-
-// func (e emptyStore) List(ctx context.Context, namespace string, match rolloutv1alpha1.ResourceMatch) ([]workload.Interface, error) {
-// 	//TODO implement me
-// 	panic("implement me")
-// }
 
 // makeHandlerFunc mock http server
 func makeHandlerFunc() http.HandlerFunc {
@@ -475,7 +437,7 @@ func TestDoCommand(t *testing.T) {
 			name: "Input={CurrentBatchState==Paused}, Context={command=Resume}, Output={CurrentBatchState==PreBatchStepHook}",
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey] = rolloutapis.AnnoManualCommandResume
+				rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey] = rolloutapis.AnnoManualCommandContinue
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
@@ -487,7 +449,7 @@ func TestDoCommand(t *testing.T) {
 						Name:             "wh-01",
 						FailureThreshold: 2,
 						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
+						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.PreBatchStepHook, rolloutv1alpha1.PostBatchStepHook},
 						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url},
 						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
 					},
@@ -505,7 +467,7 @@ func TestDoCommand(t *testing.T) {
 								{
 									Name:              "wh-01",
 									FailureCount:      2,
-									HookType:          rolloutv1alpha1.HookTypePreBatchStep,
+									HookType:          rolloutv1alpha1.PreBatchStepHook,
 									CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: "Ok", Reason: "Success"},
 								},
 							},
@@ -567,7 +529,7 @@ func TestDoCommand(t *testing.T) {
 								{
 									Name:              "wh-01",
 									FailureCount:      2,
-									HookType:          rolloutv1alpha1.HookTypePreBatchStep,
+									HookType:          rolloutv1alpha1.PreBatchStepHook,
 									CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: "Ok", Reason: "Success"},
 								},
 							},
@@ -628,7 +590,7 @@ func TestDoCommand(t *testing.T) {
 						Name:             "wh-01",
 						FailureThreshold: 2,
 						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
+						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.PreBatchStepHook, rolloutv1alpha1.PostBatchStepHook},
 						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url},
 						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
 					},
@@ -646,7 +608,7 @@ func TestDoCommand(t *testing.T) {
 								{
 									Name:              "wh-01",
 									FailureCount:      2,
-									HookType:          rolloutv1alpha1.HookTypePreBatchStep,
+									HookType:          rolloutv1alpha1.PreBatchStepHook,
 									CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: "Ok", Reason: "Success"},
 								},
 							},
@@ -706,7 +668,7 @@ func TestDoCommand(t *testing.T) {
 						Name:             "wh-01",
 						FailureThreshold: 2,
 						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
+						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.PreBatchStepHook, rolloutv1alpha1.PostBatchStepHook},
 						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url},
 						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
 					},
@@ -724,7 +686,7 @@ func TestDoCommand(t *testing.T) {
 								{
 									Name:              "wh-01",
 									FailureCount:      2,
-									HookType:          rolloutv1alpha1.HookTypePreBatchStep,
+									HookType:          rolloutv1alpha1.PreBatchStepHook,
 									CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: "Ok", Reason: "Success"},
 								},
 							},
@@ -933,955 +895,6 @@ func TestDoBatchInitial(t *testing.T) {
 					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
 					return false, nil
 				}
-				return true, nil
-			},
-		},
-	}
-
-	runTestCase(t, testcases)
-}
-
-func TestDoBatchError(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	testcases := []testCase{
-		{
-			name: "Input={len(Batches)==1, CurrentBatchState=PreBatchStepHook, error!=nil}, Context={}, Output={CurrentBatchState=PreBatchStepHook}",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{Targets: []rolloutv1alpha1.RolloutRunStepTarget{}}}
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State:     BatchStatePreBatchHook,
-						StartTime: &metav1.Time{Time: time.Now()},
-						Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-							{
-								Name:              "wh-01",
-								FailureCount:      2,
-								HookType:          rolloutv1alpha1.HookTypePreBatchStep,
-								CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: "PreBatchStepHookError", Reason: "WebhookFailureThresholdExceeded"},
-							},
-						},
-					}},
-				}
-				rolloutRun.Status.Error = &rolloutv1alpha1.CodeReasonMessage{
-					Code:   "PreBatchStepHookError",
-					Reason: "WebhookFailureThresholdExceeded",
-				}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.IsZero() || err != nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newStatus.Error.Code != newCode(rolloutv1alpha1.HookTypePreBatchStep) ||
-					newStatus.Error.Reason != ReasonWebhookFailureThresholdExceeded {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 2 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookFailureThresholdExceeded" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != "PreBatchStepHookError" {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-	}
-
-	runTestCase(t, testcases)
-}
-
-func TestDoBatchPreBatchHook(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	ts := httptest.NewServer(makeHandlerFunc())
-	defer ts.Close()
-
-	testcases := []testCase{
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook,}, Context={}, Output={CurrentBatchState=Running}",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()}}},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || err != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStateUpgrading ||
-					newBatchStatus.CurrentBatchState != BatchStateUpgrading {
-					return false, nil
-				}
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, failureThreshold=2, client config invalid,}, Context={do first time}, Output={CurrentBatchState=PreBatchStepHook}",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()}}},
-				}
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: "@*&"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(5)*time.Second) || err != nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 1 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, failureThreshold=2, client config invalid,}, Context={do second time}, Output={CurrentBatchState=PreBatchStepHook, CurrentBatchError!=nil}",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State:     BatchStatePreBatchHook,
-						StartTime: &metav1.Time{Time: time.Now()},
-						Webhooks:  []rolloutv1alpha1.BatchWebhookStatus{{Name: "wh-01", FailureCount: 1, HookType: rolloutv1alpha1.HookTypePreBatchStep}},
-					}},
-				}
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: "@*&"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.IsZero() || err == nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newStatus.Error.Code != newCode(rolloutv1alpha1.HookTypePreBatchStep) ||
-					newStatus.Error.Reason != ReasonWebhookFailureThresholdExceeded {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 2 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, failureThreshold=2, FailurePolicy=ignore, client config invalid,}, Context={do second time}, Output={CurrentBatchState=Running, }",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State:     BatchStatePreBatchHook,
-						StartTime: &metav1.Time{Time: time.Now()},
-						Webhooks:  []rolloutv1alpha1.BatchWebhookStatus{{Name: "wh-01", FailureCount: 1, HookType: rolloutv1alpha1.HookTypePreBatchStep}},
-					}},
-				}
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Ignore,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: "@*&"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || err != nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStateUpgrading ||
-					newBatchStatus.CurrentBatchState != BatchStateUpgrading {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 2 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==2, CurrentBatchState=PreBatchStepHook, failureThreshold=2, FailurePolicy=ignore, client config invalid,}, Context={do second time}, Output={CurrentBatchState=Running, }",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State:     BatchStatePreBatchHook,
-						StartTime: &metav1.Time{Time: time.Now()},
-						Webhooks:  []rolloutv1alpha1.BatchWebhookStatus{{Name: "wh-01", FailureCount: 1, HookType: rolloutv1alpha1.HookTypePreBatchStep}},
-					}},
-				}
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Ignore,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: "@*&"},
-					},
-					{
-						Name:         "wh-02",
-						HookTypes:    []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig: rolloutv1alpha1.WebhookClientConfig{URL: "@*&"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(5)*time.Second) || err != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 2 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[1].Name != "wh-02" ||
-					newBatchStatus.Records[0].Webhooks[1].FailureCount != 1 ||
-					newBatchStatus.Records[0].Webhooks[1].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[1].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[1].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, }, Context={server side 400}, Output={CurrentBatchState=PreBatchStepHook, CurrentBatchError!=nil }",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()},
-					}},
-				}
-				url := fmt.Sprintf("%s/webhook?%s=1&%s=400", ts.URL, reqKeySleepSeconds, reqKeyResponseCode)
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url, TimeoutSeconds: 2, PeriodSeconds: 3},
-						Properties:       map[string]string{},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newStatus.Error != nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 1 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, }, Context={server side error}, Output={CurrentBatchState=PreBatchStepHook, CurrentBatchError!=nil }",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()},
-					}},
-				}
-				url := fmt.Sprintf("%s/webhook?", ts.URL)
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url, TimeoutSeconds: 2, PeriodSeconds: 3},
-						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"Error\",\"reason\":\"Failed\",\"message\":\"Something is wrong\"}"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newStatus.Error != nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 1 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "Failed" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, }, Context={server side processing}, Output={CurrentBatchState=PreBatchStepHook, }",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()},
-					}},
-				}
-				url := fmt.Sprintf("%s/webhook", ts.URL)
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url, TimeoutSeconds: 2, PeriodSeconds: 3},
-						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"Processing\",\"reason\":\"WaitForCondition\",\"message\":\"Something is Processing\"}"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newStatus.Error != nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 0 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WaitForCondition" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeProcessing {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, }, Context={server side ok}, Output={CurrentBatchState=Running, }",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()},
-					}},
-				}
-				url := fmt.Sprintf("%s/webhook", ts.URL)
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url, TimeoutSeconds: 2, PeriodSeconds: 3},
-						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || err != nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newStatus.Error != nil ||
-					newBatchStatus.Records[0].State != rolloutv1alpha1.RolloutReasonProgressingRunning ||
-					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutReasonProgressingRunning {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 0 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "Success" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeOK {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, }, Context={server side timeout}, Output={CurrentBatchState=PreBatchStepHook, }",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()},
-					}},
-				}
-				url := fmt.Sprintf("%s/webhook?%s=3&%s=400", ts.URL, reqKeySleepSeconds, reqKeyResponseCode)
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url, TimeoutSeconds: 2, PeriodSeconds: 3},
-						Properties:       map[string]string{},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newStatus.Error != nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 1 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==1, CurrentBatchState=PreBatchStepHook, }, Context={webhook timeout}, Output={CurrentBatchState=PreBatchStepHook, }",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()},
-					}},
-				}
-				urlWh1 := fmt.Sprintf("%s/webhook?%s=5", ts.URL, reqKeySleepSeconds)
-				urlWh2 := fmt.Sprintf("%s/webhook?%s=3&%s=400", ts.URL, reqKeySleepSeconds, reqKeyResponseCode)
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:         "wh-01",
-						HookTypes:    []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig: rolloutv1alpha1.WebhookClientConfig{URL: urlWh1, TimeoutSeconds: 6, PeriodSeconds: 3},
-						Properties:   map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
-					},
-					{
-						Name:             "wh-02",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Fail,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: urlWh2, TimeoutSeconds: 2, PeriodSeconds: 3},
-						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || (result.RequeueAfter != time.Duration(3)*time.Second) || err != nil {
-					return false, nil
-				}
-
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newStatus.Error != nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 0 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "Success" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeOK {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[1].Name != "wh-02" ||
-					newBatchStatus.Records[0].Webhooks[1].FailureCount != 0 ||
-					newBatchStatus.Records[0].Webhooks[1].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[1].CodeReasonMessage != (rolloutv1alpha1.CodeReasonMessage{}) {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-	}
-
-	runTestCase(t, testcases)
-}
-
-func TestDoBatchPostBatchHook(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	ts := httptest.NewServer(makeHandlerFunc())
-	defer ts.Close()
-
-	testcases := []testCase{
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)==0, Pause=true, CurrentBatchState=PostBatchStepHook,}, Context={}, Output={CurrentBatchState=Succeeded}",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePostBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()}}},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Breakpoint: true,
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || err != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStateSucceeded ||
-					newBatchStatus.CurrentBatchState != BatchStateSucceeded {
-					return false, nil
-				}
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)=2, Pause=true, CurrentBatchState=PostBatchStepHook,}, Context={}, Output={CurrentBatchState=Succeeded}",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePostBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State:     BatchStatePreBatchHook,
-						StartTime: &metav1.Time{Time: time.Now()},
-						Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-							{
-								Name:              "wh-01",
-								HookType:          rolloutv1alpha1.HookTypePreBatchStep,
-								FailureCount:      2,
-								CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: rolloutv1alpha1.WebhookReviewCodeError, Reason: ReasonWebhookExecuteError, Message: "Error"},
-							},
-						},
-					}},
-				}
-
-				url := fmt.Sprintf("%s/webhook", ts.URL)
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Ignore,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url},
-						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
-					},
-					{
-						Name:         "wh-02",
-						HookTypes:    []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig: rolloutv1alpha1.WebhookClientConfig{URL: url},
-						Properties:   map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Breakpoint: true,
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || err != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStateSucceeded ||
-					newBatchStatus.CurrentBatchState != BatchStateSucceeded {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 2 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[1].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[1].FailureCount != 0 ||
-					newBatchStatus.Records[0].Webhooks[1].HookType != rolloutv1alpha1.HookTypePostBatchStep ||
-					newBatchStatus.Records[0].Webhooks[1].CodeReasonMessage.Reason != "Success" ||
-					newBatchStatus.Records[0].Webhooks[1].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeOK {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[2].Name != "wh-02" ||
-					newBatchStatus.Records[0].Webhooks[2].FailureCount != 0 ||
-					newBatchStatus.Records[0].Webhooks[2].HookType != rolloutv1alpha1.HookTypePostBatchStep ||
-					newBatchStatus.Records[0].Webhooks[2].CodeReasonMessage.Reason != "Success" ||
-					newBatchStatus.Records[0].Webhooks[2].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeOK {
-					return false, nil
-				}
-
-				return true, nil
-			},
-		},
-		{
-			name: "Input={len(Batches)==1, len(Webhooks)=2, Pause=false, CurrentBatchState=PostBatchStepHook,}, Context={}, Output={CurrentBatchState=Succeeded}",
-			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
-				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePostBatchHook,
-					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{
-						State:     BatchStatePreBatchHook,
-						StartTime: &metav1.Time{Time: time.Now()},
-						Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
-							{
-								Name:              "wh-01",
-								HookType:          rolloutv1alpha1.HookTypePreBatchStep,
-								FailureCount:      2,
-								CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{Code: rolloutv1alpha1.WebhookReviewCodeError, Reason: ReasonWebhookExecuteError, Message: "Error"},
-							},
-						},
-					}},
-				}
-
-				url := fmt.Sprintf("%s/webhook", ts.URL)
-				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					{
-						Name:             "wh-01",
-						FailureThreshold: 2,
-						FailurePolicy:    rolloutv1alpha1.Ignore,
-						HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig:     rolloutv1alpha1.WebhookClientConfig{URL: url},
-						Properties:       map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
-					},
-					{
-						Name:         "wh-02",
-						HookTypes:    []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePostBatchStep},
-						ClientConfig: rolloutv1alpha1.WebhookClientConfig{URL: url},
-						Properties:   map[string]string{reqKeyResponseBody: "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
-					},
-				}
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Breakpoint: false,
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)},
-					},
-				}}
-				return &ExecutorContext{Rollout: rollout, RolloutRun: rolloutRun, NewStatus: &rolloutRun.Status}
-			},
-			checkResult: func(done bool, result ctrl.Result, err error, rolloutRun *rolloutv1alpha1.RolloutRun) (bool, error) {
-				if done || !result.Requeue || err != nil {
-					return false, nil
-				}
-				newStatus := rolloutRun.Status
-				newBatchStatus := rolloutRun.Status.BatchStatus
-				if newBatchStatus.CurrentBatchIndex != 0 ||
-					newStatus.Error != nil ||
-					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.CurrentBatchState != BatchStateSucceeded {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].FinishTime == nil ||
-					newBatchStatus.Records[0].State != BatchStateSucceeded {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[0].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[0].FailureCount != 2 ||
-					newBatchStatus.Records[0].Webhooks[0].HookType != rolloutv1alpha1.HookTypePreBatchStep ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Reason != "WebhookExecuteError" ||
-					newBatchStatus.Records[0].Webhooks[0].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeError {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[1].Name != "wh-01" ||
-					newBatchStatus.Records[0].Webhooks[1].FailureCount != 0 ||
-					newBatchStatus.Records[0].Webhooks[1].HookType != rolloutv1alpha1.HookTypePostBatchStep ||
-					newBatchStatus.Records[0].Webhooks[1].CodeReasonMessage.Reason != "Success" ||
-					newBatchStatus.Records[0].Webhooks[1].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeOK {
-					return false, nil
-				}
-
-				if newBatchStatus.Records[0].Webhooks[2].Name != "wh-02" ||
-					newBatchStatus.Records[0].Webhooks[2].FailureCount != 0 ||
-					newBatchStatus.Records[0].Webhooks[2].HookType != rolloutv1alpha1.HookTypePostBatchStep ||
-					newBatchStatus.Records[0].Webhooks[2].CodeReasonMessage.Reason != "Success" ||
-					newBatchStatus.Records[0].Webhooks[2].CodeReasonMessage.Code != rolloutv1alpha1.WebhookReviewCodeOK {
-					return false, nil
-				}
-
 				return true, nil
 			},
 		},

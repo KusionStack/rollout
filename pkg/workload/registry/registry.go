@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/elliotchance/pie/v2"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -151,8 +151,8 @@ func (m *workloadRegistry) isGVKSupportedInMembers(gvk schema.GroupVersionKind) 
 		if resourceList.GroupVersion != gvk.GroupVersion().String() {
 			continue
 		}
-		_, found := utils.Find(resourceList.APIResources, func(resource *metav1.APIResource) bool {
-			return resource.Kind == gvk.Kind
+		found := pie.Any[metav1.APIResource](resourceList.APIResources, func(value metav1.APIResource) bool {
+			return value.Kind == gvk.Kind
 		})
 		if found {
 			return true, nil

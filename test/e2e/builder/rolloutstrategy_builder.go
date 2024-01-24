@@ -42,7 +42,7 @@ func (b *RolloutStrategyBuilder) Namespace(namespace string) *RolloutStrategyBui
 }
 
 // Build returns a RolloutStrategy
-func (b *RolloutStrategyBuilder) Build(ts *httptest.Server, labels map[string]string) *rolloutv1alpha1.RolloutStrategy {
+func (b *RolloutStrategyBuilder) Build(ts *httptest.Server) *rolloutv1alpha1.RolloutStrategy {
 	b.complete()
 
 	return &rolloutv1alpha1.RolloutStrategy{
@@ -51,30 +51,19 @@ func (b *RolloutStrategyBuilder) Build(ts *httptest.Server, labels map[string]st
 			Namespace: b.namespace,
 		},
 		Batch: &rolloutv1alpha1.BatchStrategy{
-			Toleration: &rolloutv1alpha1.TolerationStrategy{
-				WorkloadFailureThreshold: &intstr.IntOrString{Type: intstr.String, StrVal: "10%"},
-			},
+			Toleration: &rolloutv1alpha1.TolerationStrategy{},
 			Batches: []rolloutv1alpha1.RolloutStep{
 				{
 					Breakpoint: true,
 					Replicas:   intstr.FromInt(1),
-					Match: &rolloutv1alpha1.ResourceMatch{
-						Selector: &metav1.LabelSelector{MatchLabels: labels},
-					},
 				},
 				{
 					Breakpoint: true,
 					Replicas:   intstr.FromInt(2),
-					Match: &rolloutv1alpha1.ResourceMatch{
-						Selector: &metav1.LabelSelector{MatchLabels: labels},
-					},
 				},
 				{
 					Breakpoint: true,
 					Replicas:   intstr.FromString("100%"),
-					Match: &rolloutv1alpha1.ResourceMatch{
-						Selector: &metav1.LabelSelector{MatchLabels: labels},
-					},
 				},
 			},
 		},
@@ -83,17 +72,23 @@ func (b *RolloutStrategyBuilder) Build(ts *httptest.Server, labels map[string]st
 				Name:             "wh-01",
 				FailureThreshold: 2,
 				FailurePolicy:    rolloutv1alpha1.Ignore,
-				HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-				ClientConfig:     rolloutv1alpha1.WebhookClientConfig{TimeoutSeconds: 5, PeriodSeconds: 3, URL: fmt.Sprintf("%s/webhook?sleepSeconds=2", ts.URL)},
-				Properties:       map[string]string{"responseBody": "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
+				HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.PreBatchStepHook, rolloutv1alpha1.PostBatchStepHook},
+				ClientConfig: rolloutv1alpha1.WebhookClientConfig{
+					TimeoutSeconds: 2,
+					PeriodSeconds:  1,
+					URL:            fmt.Sprintf("%s/error", ts.URL),
+				},
 			},
 			{
 				Name:             "wh-02",
 				FailureThreshold: 2,
-				FailurePolicy:    rolloutv1alpha1.Ignore,
-				HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.HookTypePreBatchStep, rolloutv1alpha1.HookTypePostBatchStep},
-				ClientConfig:     rolloutv1alpha1.WebhookClientConfig{TimeoutSeconds: 5, PeriodSeconds: 3, URL: fmt.Sprintf("%s/webhook?sleepSeconds=2", ts.URL)},
-				Properties:       map[string]string{"responseBody": "{\"code\":\"OK\",\"reason\":\"Success\",\"message\":\"Success\"}"},
+				FailurePolicy:    rolloutv1alpha1.Fail,
+				HookTypes:        []rolloutv1alpha1.HookType{rolloutv1alpha1.PreBatchStepHook, rolloutv1alpha1.PostBatchStepHook},
+				ClientConfig: rolloutv1alpha1.WebhookClientConfig{
+					TimeoutSeconds: 2,
+					PeriodSeconds:  1,
+					URL:            fmt.Sprintf("%s/ok", ts.URL),
+				},
 			},
 		},
 	}

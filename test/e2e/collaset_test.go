@@ -32,6 +32,7 @@ import (
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
+	"kusionstack.io/rollout/pkg/webhook/probe/http"
 	"kusionstack.io/rollout/pkg/workload/collaset"
 	"kusionstack.io/rollout/test/e2e/builder"
 )
@@ -47,10 +48,10 @@ var _ = Describe("CollaSet", func() {
 
 	BeforeEach(func() {
 		// prepare http server
-		ts = httptest.NewServer(makeHandlerFunc())
+		ts = http.NewTestHTTPServer()
 
 		// Prepare Cls
-		cls = builder.NewCollsetBuilder().Namespace(ns).Build()
+		cls = builder.NewCollsetBuilder().Namespace(e2eNamespace).Build()
 		{
 			By(fmt.Sprintf("PrepareCls: create cls %s/%s", cls.Namespace, cls.Name))
 			Expect(k8sClient.Create(ctx, cls)).Should(Succeed())
@@ -108,10 +109,7 @@ var _ = Describe("CollaSet", func() {
 
 		// Prepare Rollout && Strategy
 		{
-			strategy = builder.NewRolloutStrategy().Namespace(ns).Build(ts, map[string]string{
-				"app.kubernetes.io/name":     cls.Labels["app.kubernetes.io/name"],
-				"app.kubernetes.io/instance": cls.Labels["app.kubernetes.io/instance"],
-			})
+			strategy = builder.NewRolloutStrategy().Namespace(e2eNamespace).Build(ts)
 			Expect(k8sClient.Create(ctx, strategy)).Should(Succeed())
 			Eventually(func() bool {
 				if err := k8sClient.Get(ctx, GetNamespacedName(strategy.Name, strategy.Namespace), strategy); err != nil {
@@ -120,7 +118,7 @@ var _ = Describe("CollaSet", func() {
 				return true
 			}, "60s", "1s").Should(BeTrue())
 
-			rollout = builder.NewRollout().Namespace(ns).StrategyName(strategy.Name).Build(collaset.GVK, map[string]string{
+			rollout = builder.NewRollout().Namespace(e2eNamespace).StrategyName(strategy.Name).Build(collaset.GVK, map[string]string{
 				"app.kubernetes.io/name":     cls.Labels["app.kubernetes.io/name"],
 				"app.kubernetes.io/instance": cls.Labels["app.kubernetes.io/instance"],
 			})
@@ -222,7 +220,7 @@ var _ = Describe("CollaSet", func() {
 				if rolloutRun.Annotations == nil {
 					rolloutRun.Annotations = make(map[string]string)
 				}
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandResume
+				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 
 				return nil
 			})
@@ -274,7 +272,7 @@ var _ = Describe("CollaSet", func() {
 					rolloutRun.Annotations = make(map[string]string)
 				}
 
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandResume
+				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 
 				return nil
 			})
@@ -325,7 +323,7 @@ var _ = Describe("CollaSet", func() {
 				if rolloutRun.Annotations == nil {
 					rolloutRun.Annotations = make(map[string]string)
 				}
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandResume
+				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 
 				return nil
 			})

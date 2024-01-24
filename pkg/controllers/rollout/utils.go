@@ -84,7 +84,7 @@ func constructRolloutRun(instance *rolloutv1alpha1.Rollout, strategy *rolloutv1a
 				APIVersion: instance.Spec.WorkloadRef.APIVersion,
 				Kind:       instance.Spec.WorkloadRef.Kind,
 			},
-			Batch: rolloutv1alpha1.RolloutRunBatchStrategy{
+			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
 				Toleration: strategy.Batch.Toleration,
 				Batches:    constructRolloutRunBatches(strategy.Batch, workloadWrappers),
 			},
