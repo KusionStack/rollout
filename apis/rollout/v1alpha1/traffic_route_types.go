@@ -21,6 +21,9 @@ type TrafficTopology struct {
 	Status TrafficTopologyStatus `json:"status,omitempty"`
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+
 // TrafficTopologyList is a list of TrafficTopology resources.
 type TrafficTopologyList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -134,6 +137,9 @@ type BackendRouting struct {
 	Spec   BackendRoutingSpec   `json:"spec,omitempty"`
 	Status BackendRoutingStatus `json:"status,omitempty"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // BackendRoutingList is a list of BackendRouting resources.
 type BackendRoutingList struct {
