@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -21,30 +20,28 @@ const (
 	ReasonWorkloadInterfaceNotExist = "WorkloadInterfaceNotExist"
 )
 
-// newUpgradingCodeReasonMessage construct CodeReasonMessage
-func newUpgradingCodeReasonMessage(reason string, msg string) *rolloutv1alpha1.CodeReasonMessage {
+// newUpgradingError construct CodeReasonMessage
+func newUpgradingError(reason string, msg string) *rolloutv1alpha1.CodeReasonMessage {
 	return &rolloutv1alpha1.CodeReasonMessage{Code: CodeUpgradingError, Reason: reason, Message: msg}
 }
 
 // doBatchUpgrading process upgrading state
-func (r *Executor) doBatchUpgrading(_ context.Context, executorContext *ExecutorContext) (ctrl.Result, error) {
-	rolloutRun := executorContext.RolloutRun
-	newStatus := executorContext.NewStatus
-	newBatchStatus := executorContext.NewStatus.BatchStatus
-	currentBatchIndex := newBatchStatus.CurrentBatchIndex
+func (r *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (ctrl.Result, error) {
+	rolloutRun := ctx.RolloutRun
+	newStatus := ctx.NewStatus
+	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
 
-	logger := r.logger.WithValues("rollout", executorContext.Rollout.Name, "rolloutRun", executorContext.RolloutRun.Name, "currentBatchIndex", currentBatchIndex)
-
+	logger := r.loggerWithContext(ctx)
 	logger.Info("do batch upgrading and check")
 
 	// upgrade partition
 	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
 	workloadChanged := false
 	for _, item := range currentBatch.Targets {
-		wi := executorContext.Workloads.Get(item.Cluster, item.Name)
+		wi := ctx.Workloads.Get(item.Cluster, item.Name)
 		if wi == nil {
-			newStatus.Error = newUpgradingCodeReasonMessage(
+			newStatus.Error = newUpgradingError(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
 			)
@@ -54,7 +51,7 @@ func (r *Executor) doBatchUpgrading(_ context.Context, executorContext *Executor
 		// upgradePartition is an idempotent function
 		changed, err := wi.UpgradePartition(item.Replicas)
 		if err != nil {
-			newStatus.Error = newUpgradingCodeReasonMessage(
+			newStatus.Error = newUpgradingError(
 				ReasonUpgradePartitionError,
 				fmt.Sprintf("failed to upgrade workload(%s) partition: %v", item.CrossClusterObjectNameReference, err),
 			)
@@ -69,7 +66,7 @@ func (r *Executor) doBatchUpgrading(_ context.Context, executorContext *Executor
 	}
 
 	// update target status in batch
-	newBatchStatus.Records[currentBatchIndex].Targets = batchTargetStatuses
+	newStatus.BatchStatus.Records[currentBatchIndex].Targets = batchTargetStatuses
 
 	if workloadChanged {
 		// check next time, give the controller a little time to react
@@ -79,7 +76,7 @@ func (r *Executor) doBatchUpgrading(_ context.Context, executorContext *Executor
 	// all workloads are updated now, then check if they are ready
 	for _, item := range currentBatch.Targets {
 		// target will not be nil here
-		target := executorContext.Workloads.Get(item.Cluster, item.Name)
+		target := ctx.Workloads.Get(item.Cluster, item.Name)
 
 		status := target.GetStatus()
 		partition, _ := workload.CalculatePartitionReplicas(&status.Replicas, item.Replicas)
@@ -92,8 +89,8 @@ func (r *Executor) doBatchUpgrading(_ context.Context, executorContext *Executor
 	}
 
 	// all workloads are ready now, move to next phase
-	newBatchStatus.CurrentBatchState = BatchStatePostBatchHook
-	newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
+	newStatus.BatchStatus.CurrentBatchState = BatchStatePostBatchHook
+	newStatus.BatchStatus.Records[currentBatchIndex].State = newStatus.BatchStatus.CurrentBatchState
 
 	return ctrl.Result{Requeue: true}, nil
 }

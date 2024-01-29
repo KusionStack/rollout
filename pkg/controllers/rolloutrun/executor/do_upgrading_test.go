@@ -1,13 +1,11 @@
 package executor
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -26,10 +24,7 @@ func newRunStepTarget(cluster, name string, replicas intstr.IntOrString) rollout
 	}
 }
 
-func TestExecutor_doBatchUpgrading(t *testing.T) {
-	r := &Executor{
-		logger: klogr.New(),
-	}
+func Test_BatchExecutor_doBatchUpgrading(t *testing.T) {
 	tests := []struct {
 		name         string
 		getObjects   func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun)
@@ -72,12 +67,12 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0,
-						CurrentBatchState: BatchStateUpgrading,
+						CurrentBatchState: BatchStateRunning,
 					},
 					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
 						{
 							Index:     ptr.To[int32](0),
-							State:     BatchStateUpgrading,
+							State:     BatchStateRunning,
 							StartTime: ptr.To(metav1.Now()),
 						},
 					},
@@ -110,12 +105,12 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0,
-						CurrentBatchState: BatchStateUpgrading,
+						CurrentBatchState: BatchStateRunning,
 					},
 					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
 						{
 							Index:     ptr.To[int32](0),
-							State:     BatchStateUpgrading,
+							State:     BatchStateRunning,
 							StartTime: ptr.To(metav1.Now()),
 						},
 					},
@@ -151,12 +146,12 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0,
-						CurrentBatchState: BatchStateUpgrading,
+						CurrentBatchState: BatchStateRunning,
 					},
 					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
 						{
 							Index:     ptr.To[int32](0),
-							State:     BatchStateUpgrading,
+							State:     BatchStateRunning,
 							StartTime: ptr.To(metav1.Now()),
 						},
 					},
@@ -195,12 +190,12 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0,
-						CurrentBatchState: BatchStateUpgrading,
+						CurrentBatchState: BatchStateRunning,
 					},
 					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
 						{
 							Index:     ptr.To[int32](0),
-							State:     BatchStateUpgrading,
+							State:     BatchStateRunning,
 							StartTime: ptr.To(metav1.Now()),
 						},
 					},
@@ -208,7 +203,6 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 
 				return rollout, rolloutRun
 			},
-
 			getWorkloads: func() *workload.Set {
 				return workload.NewWorkloadSet(
 					fake.New("cluster-a", "default", "test-0").ChangeStatus(100, 10, 10),
@@ -233,6 +227,8 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 			},
 		},
 	}
+
+	executor := newTestBatchExecutor(newTestWebhookExecutor())
 	for i := range tests {
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
@@ -242,7 +238,7 @@ func TestExecutor_doBatchUpgrading(t *testing.T) {
 				workloads = tt.getWorkloads()
 			}
 			ctx := createTestExecutorContext(rollout, rolloutRun, workloads)
-			got, err := r.doBatchUpgrading(context.Background(), ctx)
+			got, err := executor.doBatchUpgrading(ctx)
 			assert := assert.New(t)
 			tt.assertResult(assert, got, err)
 			tt.assertStatus(assert, ctx.NewStatus)

@@ -45,6 +45,11 @@ type RolloutWebhook struct {
 	Provider *string `json:"provider,omitempty"`
 }
 
+// Error implements error.
+func (*RolloutWebhook) Error() string {
+	panic("unimplemented")
+}
+
 // FailurePolicyType specifies a failure policy that defines how unrecognized errors from the admission endpoint are handled.
 type FailurePolicyType string
 
@@ -86,7 +91,7 @@ type WebhookClientConfig struct {
 	URL string `json:"url,omitempty" protobuf:"bytes,3,opt,name=url"`
 
 	// `caBundle` is a PEM encoded CA bundle which will be used to validate the webhook's server certificate.
-	// If unspecified, system trust roots on the apiserver are used.
+	// If unspecified, system trust roots' CA on the node.
 	// +optional
 	CABundle []byte `json:"caBundle,omitempty" protobuf:"bytes,2,opt,name=caBundle"`
 
@@ -117,9 +122,6 @@ type RolloutWebhookReview struct {
 type RolloutWebhookReviewSpec struct {
 	// Rollout Name
 	RolloutName string `json:"rolloutName,omitempty"`
-
-	// Rollout Namespace
-	RolloutNamespace string `json:"rolloutNamespace,omitempty"`
 
 	// Rollout ID
 	RolloutID string `json:"rolloutID,omitempty"`
@@ -162,15 +164,15 @@ type RolloutWebhookReviewBatch struct {
 type HookType string
 
 const (
-	HookTypePreBatchStep  HookType = "PreBatchStepHook"
-	HookTypePostBatchStep HookType = "PostBatchStepHook"
+	PreCanaryStepHook  HookType = "PreCanaryStepHook"
+	PostCanaryStepHook HookType = "PostCanaryStepHook"
+	PreBatchStepHook   HookType = "PreBatchStepHook"
+	PostBatchStepHook  HookType = "PostBatchStepHook"
 )
 
 type RolloutWebhookReviewStatus struct {
 	CodeReasonMessage `json:",inline"`
 }
-
-type WebhookReviewCode string
 
 const (
 	WebhookReviewCodeOK         string = "OK"

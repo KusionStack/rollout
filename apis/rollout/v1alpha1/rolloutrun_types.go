@@ -57,7 +57,7 @@ type RolloutRunSpec struct {
 	Canary *RolloutRunCanaryStrategy `json:"canary,omitempty"`
 
 	// Batch Strategy
-	Batch RolloutRunBatchStrategy `json:"batch,omitempty"`
+	Batch *RolloutRunBatchStrategy `json:"batch,omitempty"`
 }
 
 type RolloutRunBatchStrategy struct {
@@ -183,9 +183,17 @@ type BatchWebhookStatus struct {
 	CodeReasonMessage `json:",inline"`
 	// Failure count
 	FailureCount int32 `json:"failureCount,omitempty"`
-	// Failure count when an error occurred
-	FailureCountAtError int32 `json:"failureCountAtError,omitempty"`
+	// Current webhook worker state
+	State WebhookState `json:"state,omitempty"`
 }
+
+type WebhookState string
+
+const (
+	WebhookRunning   = "Running"
+	WebhookOnHold    = "OnHold"
+	WebhookCompleted = "Completed"
+)
 
 func (r *RolloutRun) IsCompleted() bool {
 	if r == nil {

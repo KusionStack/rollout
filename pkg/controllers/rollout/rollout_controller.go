@@ -629,7 +629,7 @@ func (r *RolloutReconciler) applyOneTimeStrategy(obj *rolloutv1alpha1.Rollout, r
 		// update strategy in annotation
 		run.Annotations[ontimestrategy.AnnoOneTimeStrategy] = strategyStr
 		// update batch in spec
-		run.Spec.Batch = batch
+		run.Spec.Batch = &batch
 		return nil
 	})
 

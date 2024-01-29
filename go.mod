@@ -22,15 +22,17 @@ require (
 	k8s.io/component-base v0.28.4
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kubernetes v1.22.2
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
+	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	kusionstack.io/kube-api v0.0.27
 	kusionstack.io/kube-utils v0.1.8
 	sigs.k8s.io/controller-runtime v0.16.3
 )
 
 require (
+	github.com/elliotchance/pie/v2 v2.8.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	gotest.tools/v3 v3.4.0 // indirect
 )
 

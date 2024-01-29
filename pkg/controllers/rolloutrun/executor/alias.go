@@ -6,7 +6,7 @@ const (
 	BatchStateInitial       = rolloutv1alpha1.BatchStepStatePending
 	BatchStatePaused        = rolloutv1alpha1.BatchStepStatePaused
 	BatchStatePreBatchHook  = rolloutv1alpha1.BatchStepStatePreBatchStepHook
-	BatchStateUpgrading     = rolloutv1alpha1.BatchStepStateRunning
+	BatchStateRunning       = rolloutv1alpha1.BatchStepStateRunning
 	BatchStatePostBatchHook = rolloutv1alpha1.BatchStepStatePostBatchStepHook
 	BatchStateSucceeded     = rolloutv1alpha1.BatchStepStateSucceeded
 )

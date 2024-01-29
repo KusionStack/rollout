@@ -64,7 +64,7 @@ type RolloutSpec struct {
 
 	// TrafficTopologies defines the networking traffic relationships between
 	// workloads, backend services, and routes.
-	TrafficTopologyRefs []string `json:"trafficTopologyRefs"`
+	TrafficTopologyRefs []string `json:"trafficTopologyRefs,omitempty"`
 }
 
 type RolloutTriggerPolicy string
@@ -195,18 +195,20 @@ type RolloutBatchStepState string
 const (
 	// BatchStepStatePending means the step is pending.
 	BatchStepStatePending RolloutBatchStepState = "Pending"
+	// BatchStepStatePreCanaryStepHook means the step is in pre canary hook
+	BatchStepStatePreCanaryStepHook RolloutBatchStepState = RolloutBatchStepState(PreCanaryStepHook)
 	// BatchStepStatePreBatchStepHook means the step is in pre batch hook
-	BatchStepStatePreBatchStepHook RolloutBatchStepState = RolloutBatchStepState(HookTypePreBatchStep)
+	BatchStepStatePreBatchStepHook RolloutBatchStepState = RolloutBatchStepState(PreBatchStepHook)
 	// BatchStepStateRunning means the step is running.
 	BatchStepStateRunning RolloutBatchStepState = "Running"
+	// BatchStepStatePostCanaryStepHook means the step is in post canary hook
+	BatchStepStatePostCanaryStepHook RolloutBatchStepState = RolloutBatchStepState(PostCanaryStepHook)
 	// BatchStepStatePostBatchStepHook means the step is in post batch hook
-	BatchStepStatePostBatchStepHook RolloutBatchStepState = RolloutBatchStepState(HookTypePostBatchStep)
+	BatchStepStatePostBatchStepHook RolloutBatchStepState = RolloutBatchStepState(PostBatchStepHook)
 	// BatchStepStateSucceeded means the step is completed.
 	BatchStepStateSucceeded RolloutBatchStepState = "Succeeded"
 	// BatchStepStatePaused means the step is paused.
 	BatchStepStatePaused RolloutBatchStepState = "Paused"
 	// BatchStepStateCanceled means the step is canceled.
 	BatchStepStateCanceled RolloutBatchStepState = "Canceled"
-	// BatchStepStateError means the step is error.
-	BatchStepStateError RolloutBatchStepState = "Error"
 )

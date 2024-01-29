@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/google/uuid"
+	"github.com/elliotchance/pie/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -56,14 +56,19 @@ type RolloutRunReconciler struct {
 	workloadRegistry workloadregistry.Registry
 
 	rvExpectation expectations.ResourceVersionExpectationInterface
+
+	executor *executor.Executor
 }
 
 func NewReconciler(mgr manager.Manager, workloadRegistry workloadregistry.Registry) *RolloutRunReconciler {
-	return &RolloutRunReconciler{
+	r := &RolloutRunReconciler{
 		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
 		workloadRegistry: workloadRegistry,
 		rvExpectation:    expectations.NewResourceVersionExpectation(),
 	}
+
+	r.executor = executor.NewDefaultExecutor(r.Logger)
+	return r
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -90,9 +95,7 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	key := req.String()
 
-	logger := r.Logger.WithValues(
-		"rolloutRun", key, "traceId", uuid.New().String(),
-	)
+	logger := r.Logger.WithValues("rolloutRun", key)
 
 	logger.V(2).Info("start reconciling rolloutRun")
 	defer logger.V(2).Info("finish reconciling rolloutRun")
@@ -192,14 +195,14 @@ func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv
 		err    error
 		result ctrl.Result
 	)
-	defaultExecutor := executor.NewDefaultExecutor(logger)
 	executorCtx := &executor.ExecutorContext{
+		Context:    ctx,
 		Rollout:    rollout,
 		RolloutRun: obj,
 		NewStatus:  newStatus,
 		Workloads:  workloads,
 	}
-	if done, result, err = defaultExecutor.Do(ctx, executorCtx); err != nil {
+	if done, result, err = r.executor.Do(executorCtx); err != nil {
 		logger.Error(err, "defaultExecutor do err")
 		return ctrl.Result{}, err
 	}
@@ -234,17 +237,14 @@ func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv
 
 // findRollout get Rollout from rolloutRun
 func (r *RolloutRunReconciler) findRollout(ctx context.Context, rolloutRun *rolloutv1alpha1.RolloutRun, rollout *rolloutv1alpha1.Rollout) error {
-	ref, exist := utils.Find(
-		rolloutRun.OwnerReferences,
-		func(o *metav1.OwnerReference) bool {
-			return o.Kind == "Rollout"
-		},
-	)
-	if !exist {
+	index := pie.FindFirstUsing(rolloutRun.OwnerReferences, func(o metav1.OwnerReference) bool {
+		return o.Kind == "Rollout"
+	})
+	if index == -1 {
 		objectKey := types.NamespacedName{Namespace: rolloutRun.Namespace, Name: rolloutRun.Name}
 		return fmt.Errorf("rollout not exist in rolloutRun(%v) ownerReferences", objectKey)
 	}
-
+	ref := rolloutRun.OwnerReferences[index]
 	objectKey := types.NamespacedName{Namespace: rolloutRun.Namespace, Name: ref.Name}
 	if err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), objectKey, rollout); err != nil {
 		return err

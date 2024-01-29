@@ -455,7 +455,7 @@ spec:
                       description: ClientConfig defines how to communicate with the hook. Required
                       properties:
                         caBundle:
-                          description: '`caBundle` is a PEM encoded CA bundle which will be used to validate the webhook''s server certificate. If unspecified, system trust roots on the apiserver are used.'
+                          description: '`caBundle` is a PEM encoded CA bundle which will be used to validate the webhook''s server certificate. If unspecified, system trust roots'' CA on the node.'
                           format: byte
                           type: string
                         periodSeconds:
@@ -589,10 +589,6 @@ spec:
                                 description: Failure count
                                 format: int32
                                 type: integer
-                              failureCountAtError:
-                                description: Failure count when an error occurred
-                                format: int32
-                                type: integer
                               hookType:
                                 description: Webhook Type
                                 type: string
@@ -604,6 +600,9 @@ spec:
                                 type: string
                               reason:
                                 description: A human-readable short word
+                                type: string
+                              state:
+                                description: Current webhook worker state
                                 type: string
                             type: object
                           type: array
@@ -691,10 +690,6 @@ spec:
                           description: Failure count
                           format: int32
                           type: integer
-                        failureCountAtError:
-                          description: Failure count when an error occurred
-                          format: int32
-                          type: integer
                         hookType:
                           description: Webhook Type
                           type: string
@@ -706,6 +701,9 @@ spec:
                           type: string
                         reason:
                           description: A human-readable short word
+                          type: string
+                        state:
+                          description: Current webhook worker state
                           type: string
                       type: object
                     type: array

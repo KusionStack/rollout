@@ -18,10 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http/httptest"
-	"strconv"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -29,12 +26,13 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
+	"kusionstack.io/rollout/pkg/webhook/probe/http"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
 	"kusionstack.io/rollout/test/e2e/builder"
 )
@@ -50,10 +48,10 @@ var _ = Describe("StatefulSet", func() {
 
 	BeforeEach(func() {
 		// prepare http server
-		ts = httptest.NewServer(makeHandlerFunc())
+		ts = http.NewTestHTTPServer()
 
 		// Prepare Sts
-		sts = builder.NewStatefulSet().Namespace(ns).Build()
+		sts = builder.NewStatefulSet().Namespace(e2eNamespace).Build()
 		{
 			By(fmt.Sprintf("PrepareSts: create sts %s/%s", sts.Namespace, sts.Name))
 			Expect(k8sClient.Create(ctx, sts)).Should(Succeed())
@@ -84,7 +82,7 @@ var _ = Describe("StatefulSet", func() {
 					corev1.EnvVar{Name: "Foo", Value: "Bar"},
 				)
 				tmpSts.Spec.Template.Spec.Containers[0].Env = mergeEnv
-				tmpSts.Spec.UpdateStrategy.RollingUpdate.Partition = ptr.To(int32(math.MaxInt32))
+				tmpSts.Spec.UpdateStrategy.RollingUpdate.Partition = sts.Spec.Replicas
 				if err := k8sClient.Update(ctx, tmpSts); err != nil {
 					By("Update sts error")
 					return false
@@ -115,10 +113,7 @@ var _ = Describe("StatefulSet", func() {
 
 		// Prepare Rollout && Strategy
 		{
-			strategy = builder.NewRolloutStrategy().Namespace(ns).Build(ts, map[string]string{
-				"app.kubernetes.io/name":     sts.Labels["app.kubernetes.io/name"],
-				"app.kubernetes.io/instance": sts.Labels["app.kubernetes.io/instance"],
-			})
+			strategy = builder.NewRolloutStrategy().Namespace(e2eNamespace).Build(ts)
 			Expect(k8sClient.Create(ctx, strategy)).Should(Succeed())
 			Eventually(func() bool {
 				if err := k8sClient.Get(ctx, GetNamespacedName(strategy.Name, strategy.Namespace), strategy); err != nil {
@@ -127,7 +122,7 @@ var _ = Describe("StatefulSet", func() {
 				return true
 			}, "60s", "1s").Should(BeTrue())
 
-			rollout = builder.NewRollout().Namespace(ns).StrategyName(strategy.Name).Build(statefulset.GVK, map[string]string{
+			rollout = builder.NewRollout().Namespace(e2eNamespace).StrategyName(strategy.Name).Build(statefulset.GVK, map[string]string{
 				"app.kubernetes.io/name":     sts.Labels["app.kubernetes.io/name"],
 				"app.kubernetes.io/instance": sts.Labels["app.kubernetes.io/instance"],
 			})
@@ -179,7 +174,7 @@ var _ = Describe("StatefulSet", func() {
 				if len(rollout.Annotations) == 0 {
 					rollout.Annotations = make(map[string]string)
 				}
-				rollout.Annotations["rollout.kusionstack.io/trigger"] = strconv.FormatInt(time.Now().Unix(), 10)
+				rollout.Annotations["rollout.kusionstack.io/trigger"] = ""
 				if err := k8sClient.Update(ctx, rollout); err != nil {
 					return false
 				}
@@ -229,8 +224,7 @@ var _ = Describe("StatefulSet", func() {
 				if rolloutRun.Annotations == nil {
 					rolloutRun.Annotations = make(map[string]string)
 				}
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandResume
-
+				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -281,7 +275,7 @@ var _ = Describe("StatefulSet", func() {
 					rolloutRun.Annotations = make(map[string]string)
 				}
 
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandResume
+				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 
 				return nil
 			})
@@ -332,7 +326,7 @@ var _ = Describe("StatefulSet", func() {
 				if rolloutRun.Annotations == nil {
 					rolloutRun.Annotations = make(map[string]string)
 				}
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandResume
+				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 
 				return nil
 			})
@@ -395,8 +389,10 @@ var _ = Describe("StatefulSet", func() {
 					return false
 				}
 
+				logf.Log.WithName("e2e-test").Info("show final rolloutRun status", "rolloutRun", rolloutRun)
 				return true
 			}, "60s", "1s").Should(BeTrue())
+
 		}
 	})
 })

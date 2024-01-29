@@ -110,8 +110,6 @@ spec:
                 - kind
                 - match
                 type: object
-            required:
-            - trafficTopologyRefs
             type: object
           status:
             description: RolloutStatus defines the observed state of Rollout

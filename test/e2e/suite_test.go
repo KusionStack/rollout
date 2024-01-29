@@ -40,6 +40,7 @@ import (
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers"
 	"kusionstack.io/rollout/pkg/features"
+	"kusionstack.io/rollout/test/e2e/controller"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -60,9 +61,11 @@ func TestAPIs(t *testing.T) {
 	RunSpecs(t, "Controller Suite")
 }
 
+const e2eNamespace = "rollout-e2e-test"
+
 var rolloutSystemNamespace = &corev1.Namespace{
 	ObjectMeta: metav1.ObjectMeta{
-		Name: "rollout-demo",
+		Name: e2eNamespace,
 	},
 }
 
@@ -115,8 +118,10 @@ var _ = BeforeSuite(func() {
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
 
-	//err = controllers.Initializer.Add(controller.FakeStsControllerName, controller.InitFakeStsControllerFunc)
-	//Expect(err).ToNot(HaveOccurred())
+	if os.Getenv("TEST_USE_EXISTING_CLUSTER") != "true" {
+		err = controllers.Initializer.Add(controller.FakeStsControllerName, controller.InitFakeStsControllerFunc)
+		Expect(err).ToNot(HaveOccurred())
+	}
 
 	featureGates := os.Getenv("FEATURE_GATES")
 	if len(featureGates) > 0 {
