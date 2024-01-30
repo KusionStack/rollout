@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/transport"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/webhook/probe"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe"
 )
 
 var (

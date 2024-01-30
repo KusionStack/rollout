@@ -9,8 +9,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook"
 	"kusionstack.io/rollout/pkg/utils"
-	"kusionstack.io/rollout/pkg/webhook"
 )
 
 const (

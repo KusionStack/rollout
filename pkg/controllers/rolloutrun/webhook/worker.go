@@ -25,8 +25,8 @@ import (
 	"k8s.io/utils/ptr"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/webhook/probe"
-	"kusionstack.io/rollout/pkg/webhook/probe/http"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe/http"
 )
 
 type Result rolloutv1alpha1.BatchWebhookStatus

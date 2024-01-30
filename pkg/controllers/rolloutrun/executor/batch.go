@@ -96,8 +96,6 @@ func (e *batchExecutor) doBatchInitial(ctx *ExecutorContext) {
 		}
 		newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
 	}
-
-	return
 }
 
 // doBatchSucceeded process succeeded state

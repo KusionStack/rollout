@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/webhook/probe"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe"
 )
 
 func Test_httpProber_Probe(t *testing.T) {

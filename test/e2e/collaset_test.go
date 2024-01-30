@@ -31,8 +31,8 @@ import (
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe/http"
 	"kusionstack.io/rollout/pkg/utils"
-	"kusionstack.io/rollout/pkg/webhook/probe/http"
 	"kusionstack.io/rollout/pkg/workload/collaset"
 	"kusionstack.io/rollout/test/e2e/builder"
 )
