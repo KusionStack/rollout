@@ -4,8 +4,8 @@ go 1.19
 
 require (
 	github.com/davecgh/go-spew v1.1.1
+	github.com/elliotchance/pie/v2 v2.8.0
 	github.com/go-logr/logr v1.2.4
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 	github.com/google/uuid v1.3.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.6
@@ -29,7 +29,7 @@ require (
 )
 
 require (
-	github.com/elliotchance/pie/v2 v2.8.0 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect

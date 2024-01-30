@@ -21,11 +21,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/fake"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func newTestBatchExecutor(webhook webhookExecutor) *batchExecutor {

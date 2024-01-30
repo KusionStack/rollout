@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/webhook/probe"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe"
 )
 
 const (
