@@ -67,12 +67,12 @@ func Test_BatchExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0,
-						CurrentBatchState: BatchStateRunning,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepRunning,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
 							Index:     ptr.To[int32](0),
-							State:     BatchStateRunning,
+							State:     rolloutv1alpha1.RolloutStepRunning,
 							StartTime: ptr.To(metav1.Now()),
 						},
 					},
@@ -105,12 +105,12 @@ func Test_BatchExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0,
-						CurrentBatchState: BatchStateRunning,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepRunning,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
 							Index:     ptr.To[int32](0),
-							State:     BatchStateRunning,
+							State:     rolloutv1alpha1.RolloutStepRunning,
 							StartTime: ptr.To(metav1.Now()),
 						},
 					},
@@ -146,12 +146,12 @@ func Test_BatchExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0,
-						CurrentBatchState: BatchStateRunning,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepRunning,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
 							Index:     ptr.To[int32](0),
-							State:     BatchStateRunning,
+							State:     rolloutv1alpha1.RolloutStepRunning,
 							StartTime: ptr.To(metav1.Now()),
 						},
 					},
@@ -190,12 +190,12 @@ func Test_BatchExecutor_doBatchUpgrading(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: 0,
-						CurrentBatchState: BatchStateRunning,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepRunning,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
 							Index:     ptr.To[int32](0),
-							State:     BatchStateRunning,
+							State:     rolloutv1alpha1.RolloutStepRunning,
 							StartTime: ptr.To(metav1.Now()),
 						},
 					},
@@ -222,8 +222,8 @@ func Test_BatchExecutor_doBatchUpgrading(t *testing.T) {
 				assert.EqualValues(100, status.BatchStatus.Records[0].Targets[0].Replicas)
 				assert.EqualValues(10, status.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas)
 				// check state
-				assert.Equal(rolloutv1alpha1.BatchStepStatePostBatchStepHook, status.BatchStatus.CurrentBatchState)
-				assert.Equal(rolloutv1alpha1.BatchStepStatePostBatchStepHook, status.BatchStatus.Records[0].State)
+				assert.Equal(rolloutv1alpha1.RolloutStepPostBatchStepHook, status.BatchStatus.CurrentBatchState)
+				assert.Equal(rolloutv1alpha1.RolloutStepPostBatchStepHook, status.BatchStatus.Records[0].State)
 			},
 		},
 	}

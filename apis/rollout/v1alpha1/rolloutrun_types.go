@@ -57,6 +57,7 @@ type RolloutRunSpec struct {
 	Canary *RolloutRunCanaryStrategy `json:"canary,omitempty"`
 
 	// Batch Strategy
+	// +optional
 	Batch *RolloutRunBatchStrategy `json:"batch,omitempty"`
 }
 
@@ -125,7 +126,7 @@ type RolloutRunStatus struct {
 	Error *CodeReasonMessage `json:"error,omitempty"`
 	// CanaryStatus describes the state of the active canary release
 	// +optional
-	CanaryStatus *RolloutRunBatchStatusRecord `json:"canaryStatus,omitempty"`
+	CanaryStatus *RolloutRunStepStatus `json:"canaryStatus,omitempty"`
 	// BatchStatus describes the state of the active batch release
 	// +optional
 	BatchStatus *RolloutRunBatchStatus `json:"batchStatus,omitempty"`
@@ -138,28 +139,37 @@ type RolloutRunBatchStatus struct {
 	// RolloutBatchStatus contains status of current batch
 	RolloutBatchStatus `json:",inline"`
 	// Records contains all batches status details.
-	Records []RolloutRunBatchStatusRecord `json:"records,omitempty"`
+	Records []RolloutRunStepStatus `json:"records,omitempty"`
 }
 
 type RolloutRunPhase string
 
 const (
-	RolloutRunPhaseInitial     RolloutRunPhase = "Initial"
-	RolloutRunPhasePreRollout  RolloutRunPhase = "PreRollout"
-	RolloutRunPhasePausing     RolloutRunPhase = "Pausing"
-	RolloutRunPhasePaused      RolloutRunPhase = "Paused"
+	// RolloutRunPhaseInitial defines the initial phase of rolloutRun
+	RolloutRunPhaseInitial RolloutRunPhase = "Initial"
+	// RolloutRunPhasePreRollout defines the phase of rolloutRun before rollout
+	RolloutRunPhasePreRollout RolloutRunPhase = "PreRollout"
+	// RolloutRunPhasePausing defines the phase of rolloutRun pausing
+	RolloutRunPhasePausing RolloutRunPhase = "Pausing"
+	// RolloutRunPhasePaused defines the phase of rolloutRun paused
+	RolloutRunPhasePaused RolloutRunPhase = "Paused"
+	// RolloutRunPhaseProgressing defines the phase of rolloutRun progressing
 	RolloutRunPhaseProgressing RolloutRunPhase = "Progressing"
+	// RolloutRunPhasePostRollout defines the phase of rollout after progressing
 	RolloutRunPhasePostRollout RolloutRunPhase = "PostRollout"
-	RolloutRunPhaseCanceling   RolloutRunPhase = "Canceling"
-	RolloutRunPhaseCanceled    RolloutRunPhase = "Canceled"
-	RolloutRunPhaseSucceeded   RolloutRunPhase = "Succeeded"
+	// RolloutRunPhaseCanceling defines the phase of rolloutRun canceling
+	RolloutRunPhaseCanceling RolloutRunPhase = "Canceling"
+	// RolloutRunPhaseCanceled defines the phase of rolloutRun canceled
+	RolloutRunPhaseCanceled RolloutRunPhase = "Canceled"
+	// RolloutRunPhaseFailed defines the phase of rolloutRun succeeded
+	RolloutRunPhaseSucceeded RolloutRunPhase = "Succeeded"
 )
 
-type RolloutRunBatchStatusRecord struct {
+type RolloutRunStepStatus struct {
 	// Index is the id of the batch
 	Index *int32 `json:"index,omitempty"`
 	// State is Rollout step state
-	State RolloutBatchStepState `json:"state,omitempty"`
+	State RolloutStepState `json:"state,omitempty"`
 	// StartTime is the time when the stage started
 	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`
@@ -171,10 +181,12 @@ type RolloutRunBatchStatusRecord struct {
 	Targets []RolloutWorkloadStatus `json:"targets,omitempty"`
 	// Webhooks contains webhook status
 	// +optional
-	Webhooks []BatchWebhookStatus `json:"webhooks,omitempty"`
+	Webhooks []RolloutWebhookStatus `json:"webhooks,omitempty"`
 }
 
-type BatchWebhookStatus struct {
+type RolloutWebhookStatus struct {
+	// Current webhook worker state
+	State RolloutWebhookState `json:"state,omitempty"`
 	// Webhook Type
 	HookType HookType `json:"hookType,omitempty"`
 	// Webhook Name
@@ -183,16 +195,15 @@ type BatchWebhookStatus struct {
 	CodeReasonMessage `json:",inline"`
 	// Failure count
 	FailureCount int32 `json:"failureCount,omitempty"`
-	// Current webhook worker state
-	State WebhookState `json:"state,omitempty"`
 }
 
-type WebhookState string
+// RolloutWebhookState indicates current state of webhook webhook.
+type RolloutWebhookState string
 
 const (
-	WebhookRunning   = "Running"
-	WebhookOnHold    = "OnHold"
-	WebhookCompleted = "Completed"
+	WebhookRunning   RolloutWebhookState = "Running"
+	WebhookOnHold    RolloutWebhookState = "OnHold"
+	WebhookCompleted RolloutWebhookState = "Completed"
 )
 
 func (r *RolloutRun) IsCompleted() bool {

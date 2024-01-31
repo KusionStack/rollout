@@ -59,7 +59,7 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 	// shorten long message
 	hookResult.Message = utils.Abbreviate(hookResult.Message, 1024)
 
-	ctx.SetWebhookStatus(rolloutv1alpha1.BatchWebhookStatus(*hookResult))
+	ctx.SetWebhookStatus(rolloutv1alpha1.RolloutWebhookStatus(*hookResult))
 
 	if hookResult.State == rolloutv1alpha1.WebhookOnHold &&
 		hookResult.Code == rolloutv1alpha1.WebhookReviewCodeError &&
@@ -74,7 +74,7 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 
 	if nextWebhook != nil {
 		// add empty status to start next webhook
-		ctx.SetWebhookStatus(rolloutv1alpha1.BatchWebhookStatus{
+		ctx.SetWebhookStatus(rolloutv1alpha1.RolloutWebhookStatus{
 			HookType: hookType,
 			Name:     nextWebhook.Name,
 		})
@@ -93,7 +93,7 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 
 type webhookWithStatus struct {
 	*rolloutv1alpha1.RolloutWebhook
-	status *rolloutv1alpha1.BatchWebhookStatus
+	status *rolloutv1alpha1.RolloutWebhookStatus
 }
 
 func (r *webhookExecutorImpl) findCurrentAndNextWebhook(executorContext *ExecutorContext, hookType rolloutv1alpha1.HookType) (*webhookWithStatus, *rolloutv1alpha1.RolloutWebhook) {
@@ -104,7 +104,7 @@ func (r *webhookExecutorImpl) findCurrentAndNextWebhook(executorContext *Executo
 	}
 
 	index := 0
-	var currentWebhookStatus *rolloutv1alpha1.BatchWebhookStatus
+	var currentWebhookStatus *rolloutv1alpha1.RolloutWebhookStatus
 
 	if latestStatus != nil {
 		tempI := pie.FindFirstUsing(webhooks, func(rw rolloutv1alpha1.RolloutWebhook) bool {
@@ -130,7 +130,7 @@ func (r *webhookExecutorImpl) findCurrentAndNextWebhook(executorContext *Executo
 	return currentWebhook, next
 }
 
-func (r *webhookExecutorImpl) startOrGetWebhookWorker(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType, webhookCfg rolloutv1alpha1.RolloutWebhook, lastStatus *rolloutv1alpha1.BatchWebhookStatus) (*webhook.Result, bool, error) {
+func (r *webhookExecutorImpl) startOrGetWebhookWorker(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType, webhookCfg rolloutv1alpha1.RolloutWebhook, lastStatus *rolloutv1alpha1.RolloutWebhookStatus) (*webhook.Result, bool, error) {
 	run := ctx.RolloutRun
 	key := run.UID
 	worker, ok := r.webhookManager.Get(key)

@@ -202,7 +202,7 @@ var _ = Describe("StatefulSet", func() {
 				}
 
 				if rolloutRun.Status.BatchStatus.RolloutBatchStatus.CurrentBatchIndex != 0 ||
-					rolloutRun.Status.BatchStatus.RolloutBatchStatus.CurrentBatchState != rolloutv1alpha1.BatchStepStatePaused {
+					rolloutRun.Status.BatchStatus.RolloutBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPaused {
 					return false
 				}
 
@@ -237,8 +237,8 @@ var _ = Describe("StatefulSet", func() {
 				currentBatchIndex := rolloutRun.Status.BatchStatus.CurrentBatchIndex
 				currentBatchState := rolloutRun.Status.BatchStatus.CurrentBatchState
 				if currentBatchIndex != 1 ||
-					currentBatchState != rolloutv1alpha1.BatchStepStatePaused ||
-					rolloutRun.Status.BatchStatus.Records[0].State != rolloutv1alpha1.BatchStepStateSucceeded {
+					currentBatchState != rolloutv1alpha1.RolloutStepPaused ||
+					rolloutRun.Status.BatchStatus.Records[0].State != rolloutv1alpha1.RolloutStepSucceeded {
 					By(fmt.Sprintf("HappyPath: first batch idx=%d, state=%s", currentBatchIndex, currentBatchState))
 					return false
 				}
@@ -289,8 +289,8 @@ var _ = Describe("StatefulSet", func() {
 				currentBatchIndex := rolloutRun.Status.BatchStatus.CurrentBatchIndex
 				currentBatchState := rolloutRun.Status.BatchStatus.CurrentBatchState
 				if currentBatchIndex != 2 ||
-					currentBatchState != rolloutv1alpha1.BatchStepStatePaused ||
-					rolloutRun.Status.BatchStatus.Records[1].State != rolloutv1alpha1.BatchStepStateSucceeded {
+					currentBatchState != rolloutv1alpha1.RolloutStepPaused ||
+					rolloutRun.Status.BatchStatus.Records[1].State != rolloutv1alpha1.RolloutStepSucceeded {
 					By(fmt.Sprintf("HappyPath: second batch idx=%d, state=%s", currentBatchIndex, currentBatchState))
 					return false
 				}
@@ -340,8 +340,8 @@ var _ = Describe("StatefulSet", func() {
 				currentBatchIndex := rolloutRun.Status.BatchStatus.CurrentBatchIndex
 				currentBatchState := rolloutRun.Status.BatchStatus.CurrentBatchState
 				if currentBatchIndex != 2 ||
-					currentBatchState != rolloutv1alpha1.BatchStepStateSucceeded ||
-					rolloutRun.Status.BatchStatus.Records[2].State != rolloutv1alpha1.BatchStepStateSucceeded {
+					currentBatchState != rolloutv1alpha1.RolloutStepSucceeded ||
+					rolloutRun.Status.BatchStatus.Records[2].State != rolloutv1alpha1.RolloutStepSucceeded {
 					By(fmt.Sprintf("HappyPath: third batch idx=%d, state=%s", currentBatchIndex, currentBatchState))
 					return false
 				}

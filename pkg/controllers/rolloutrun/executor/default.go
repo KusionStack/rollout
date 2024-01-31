@@ -115,7 +115,7 @@ func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error)
 		// init BatchStatus
 		newStatus := ctx.NewStatus
 		if len(newStatus.BatchStatus.CurrentBatchState) == 0 {
-			newStatus.BatchStatus.CurrentBatchState = BatchStateInitial
+			newStatus.BatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
 		}
 		preCurrentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 		preCurrentBatchState := newStatus.BatchStatus.CurrentBatchState

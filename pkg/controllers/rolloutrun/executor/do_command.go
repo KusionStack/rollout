@@ -25,8 +25,8 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 		}
-		if currentBatchState == BatchStatePaused {
-			newBatchStatus.CurrentBatchState = BatchStatePreBatchHook
+		if currentBatchState == rolloutv1alpha1.RolloutStepPaused {
+			newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPreBatchStepHook
 			newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
 		}
 	case rolloutapis.AnnoManualCommandRetry:
@@ -43,7 +43,7 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 			if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
 				currentBatchIndex++
 				newBatchStatus.CurrentBatchIndex = currentBatchIndex
-				newBatchStatus.CurrentBatchState = BatchStateInitial
+				newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
 			} else {
 				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 			}

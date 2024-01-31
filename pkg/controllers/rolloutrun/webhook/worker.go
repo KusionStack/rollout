@@ -29,7 +29,7 @@ import (
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe/http"
 )
 
-type Result rolloutv1alpha1.BatchWebhookStatus
+type Result rolloutv1alpha1.RolloutWebhookStatus
 
 // WebhookWorker handles the periodic webhook works.
 type WebhookWorker interface {
