@@ -52,31 +52,33 @@ func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result,
 	result = ctrl.Result{Requeue: true}
 
 	switch newStatus.BatchStatus.CurrentBatchState {
-	case BatchStateInitial:
+	case rolloutv1alpha1.RolloutStepPending:
 		e.doBatchInitial(ctx)
-	case BatchStatePaused:
+	case rolloutv1alpha1.RolloutStepPaused:
 		// do nothing
 		result.Requeue = false
-	case BatchStatePreBatchHook:
+	case rolloutv1alpha1.RolloutStepPreBatchStepHook:
 		var webhookDone bool
 		webhookDone, result, err = e.webhook.Do(ctx, rolloutv1alpha1.PreBatchStepHook)
 		if webhookDone {
-			ctx.MoveToNextState(BatchStateRunning)
+			ctx.MoveToNextState(rolloutv1alpha1.RolloutStepRunning)
 		}
-	case BatchStateRunning:
+	case rolloutv1alpha1.RolloutStepRunning:
 		result, err = e.doBatchUpgrading(ctx)
-	case BatchStatePostBatchHook:
+	case rolloutv1alpha1.RolloutStepPostBatchStepHook:
 		var webhookDone bool
 		webhookDone, result, err = e.webhook.Do(ctx, rolloutv1alpha1.PostBatchStepHook)
 		if webhookDone {
-			ctx.MoveToNextState(BatchStateSucceeded)
+			ctx.MoveToNextState(rolloutv1alpha1.RolloutStepSucceeded)
 		}
-	case BatchStateSucceeded:
+	case rolloutv1alpha1.RolloutStepSucceeded:
 		e.doBatchSucceeded(ctx)
-		if newStatus.BatchStatus.CurrentBatchState == BatchStateSucceeded &&
+		if newStatus.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepSucceeded &&
 			int(newStatus.BatchStatus.CurrentBatchIndex) >= (len(rolloutRun.Spec.Batch.Batches)-1) {
 			done = true
 		}
+	case rolloutv1alpha1.RolloutStepCanceled:
+		done = true
 	}
 	return done, result, err
 }
@@ -87,10 +89,10 @@ func (e *batchExecutor) doBatchInitial(ctx *ExecutorContext) {
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 
 	if ctx.RolloutRun.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
-		newBatchStatus.CurrentBatchState = BatchStatePaused
+		newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPaused
 		newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
 	} else {
-		newBatchStatus.RolloutBatchStatus.CurrentBatchState = BatchStatePreBatchHook
+		newBatchStatus.RolloutBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPreBatchStepHook
 		if newBatchStatus.Records[currentBatchIndex].StartTime == nil {
 			newBatchStatus.Records[currentBatchIndex].StartTime = &metav1.Time{Time: time.Now()}
 		}
@@ -104,17 +106,17 @@ func (e *batchExecutor) doBatchSucceeded(ctx *ExecutorContext) {
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 
 	if int(currentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
-		newBatchStatus.CurrentBatchState = rolloutv1alpha1.BatchStepStatePending
+		newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
 		newBatchStatus.CurrentBatchIndex = currentBatchIndex + 1
 		if int(newBatchStatus.CurrentBatchIndex) < len(newBatchStatus.Records) {
-			newBatchStatus.Records[newBatchStatus.CurrentBatchIndex] = rolloutv1alpha1.RolloutRunBatchStatusRecord{
+			newBatchStatus.Records[newBatchStatus.CurrentBatchIndex] = rolloutv1alpha1.RolloutRunStepStatus{
 				Index: ptr.To(newBatchStatus.CurrentBatchIndex),
-				State: rolloutv1alpha1.BatchStepStatePending,
+				State: rolloutv1alpha1.RolloutStepPending,
 			}
 		} else {
-			newBatchStatus.Records = append(newBatchStatus.Records, rolloutv1alpha1.RolloutRunBatchStatusRecord{
+			newBatchStatus.Records = append(newBatchStatus.Records, rolloutv1alpha1.RolloutRunStepStatus{
 				Index: ptr.To(newBatchStatus.CurrentBatchIndex),
-				State: rolloutv1alpha1.BatchStepStatePending,
+				State: rolloutv1alpha1.RolloutStepPending,
 			})
 		}
 	}

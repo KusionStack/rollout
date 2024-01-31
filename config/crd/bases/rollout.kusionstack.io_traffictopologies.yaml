@@ -178,8 +178,8 @@ spec:
                 description: Topologies information aggregated by workload
                 items:
                   properties:
-                    backendRoutings:
-                      description: backend routing references
+                    backendRoutingName:
+                      description: backend routing reference The name of the backendRouting referent
                       items:
                         type: string
                       type: array

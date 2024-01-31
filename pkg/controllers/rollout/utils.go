@@ -40,7 +40,6 @@ func resetRolloutStatus(status *rolloutv1alpha1.RolloutStatus, rolloutID string,
 	// clean all existing status
 	status.RolloutID = rolloutID
 	status.Phase = phase
-	status.BatchStatus = nil
 	status.Conditions = []rolloutv1alpha1.Condition{}
 }
 

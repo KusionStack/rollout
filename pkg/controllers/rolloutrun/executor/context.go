@@ -52,14 +52,18 @@ func (c *ExecutorContext) Initialize() {
 		}
 
 		if c.RolloutRun.Spec.Canary != nil && newStatus.CanaryStatus == nil {
-			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunBatchStatusRecord{
-				State: rolloutv1alpha1.BatchStepStatePending,
+			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+				State: rolloutv1alpha1.RolloutStepPending,
 			}
 		}
 		// init BatchStatus
 		if c.RolloutRun.Spec.Batch != nil {
 			if newStatus.BatchStatus == nil {
-				newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
+				newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchState: rolloutv1alpha1.RolloutStepPending,
+					},
+				}
 			}
 			// resize records
 			specBatches := len(c.RolloutRun.Spec.Batch.Batches)
@@ -68,9 +72,9 @@ func (c *ExecutorContext) Initialize() {
 				for i := 0; i < specBatches-statusBatches; i++ {
 					newStatus.BatchStatus.Records = append(
 						newStatus.BatchStatus.Records,
-						rolloutv1alpha1.RolloutRunBatchStatusRecord{
+						rolloutv1alpha1.RolloutRunStepStatus{
 							Index: ptr.To(int32(statusBatches + i)),
-							State: rolloutv1alpha1.BatchStepStatePending,
+							State: rolloutv1alpha1.RolloutStepPending,
 						},
 					)
 				}
@@ -93,7 +97,7 @@ func filterWebhooks(hookType rolloutv1alpha1.HookType, rolloutRun *rolloutv1alph
 	})
 }
 
-func (c *ExecutorContext) GetWebhooksAndLatestStatusBy(hookType rolloutv1alpha1.HookType) ([]rolloutv1alpha1.RolloutWebhook, *rolloutv1alpha1.BatchWebhookStatus) {
+func (c *ExecutorContext) GetWebhooksAndLatestStatusBy(hookType rolloutv1alpha1.HookType) ([]rolloutv1alpha1.RolloutWebhook, *rolloutv1alpha1.RolloutWebhookStatus) {
 	c.Initialize()
 
 	run := c.RolloutRun
@@ -103,14 +107,14 @@ func (c *ExecutorContext) GetWebhooksAndLatestStatusBy(hookType rolloutv1alpha1.
 		// no webhooks
 		return nil, nil
 	}
-	var webhookStatuses []rolloutv1alpha1.BatchWebhookStatus
+	var webhookStatuses []rolloutv1alpha1.RolloutWebhookStatus
 	if c.inCanary() {
 		webhookStatuses = newStatus.CanaryStatus.Webhooks
 	} else {
 		index := newStatus.BatchStatus.CurrentBatchIndex
 		webhookStatuses = newStatus.BatchStatus.Records[index].Webhooks
 	}
-	var status *rolloutv1alpha1.BatchWebhookStatus
+	var status *rolloutv1alpha1.RolloutWebhookStatus
 	if len(webhookStatuses) > 0 {
 		latestStatus := &webhookStatuses[len(webhookStatuses)-1]
 		if latestStatus.HookType == hookType {
@@ -120,7 +124,7 @@ func (c *ExecutorContext) GetWebhooksAndLatestStatusBy(hookType rolloutv1alpha1.
 	return webhooks, status
 }
 
-func (c *ExecutorContext) SetWebhookStatus(status rolloutv1alpha1.BatchWebhookStatus) {
+func (c *ExecutorContext) SetWebhookStatus(status rolloutv1alpha1.RolloutWebhookStatus) {
 	c.Initialize()
 
 	newStatus := c.NewStatus
@@ -132,11 +136,11 @@ func (c *ExecutorContext) SetWebhookStatus(status rolloutv1alpha1.BatchWebhookSt
 	}
 }
 
-func isFinalStepState(state rolloutv1alpha1.RolloutBatchStepState) bool {
-	return state == rolloutv1alpha1.BatchStepStateSucceeded || state == rolloutv1alpha1.BatchStepStateCanceled
+func isFinalStepState(state rolloutv1alpha1.RolloutStepState) bool {
+	return state == rolloutv1alpha1.RolloutStepSucceeded || state == rolloutv1alpha1.RolloutStepCanceled
 }
 
-func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutBatchStepState) {
+func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutStepState) {
 	c.Initialize()
 
 	newStatus := c.NewStatus
@@ -155,10 +159,10 @@ func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutBatch
 	}
 }
 
-func appendWebhookStatus(origin []rolloutv1alpha1.BatchWebhookStatus, input rolloutv1alpha1.BatchWebhookStatus) []rolloutv1alpha1.BatchWebhookStatus {
+func appendWebhookStatus(origin []rolloutv1alpha1.RolloutWebhookStatus, input rolloutv1alpha1.RolloutWebhookStatus) []rolloutv1alpha1.RolloutWebhookStatus {
 	length := len(origin)
 	if length == 0 {
-		return []rolloutv1alpha1.BatchWebhookStatus{input}
+		return []rolloutv1alpha1.RolloutWebhookStatus{input}
 	}
 
 	if origin[length-1].HookType == input.HookType && origin[length-1].Name == input.Name {
@@ -178,8 +182,8 @@ func (r *ExecutorContext) inCanary() bool {
 		if canaryStatus == nil {
 			return true
 		}
-		if canaryStatus.State == rolloutv1alpha1.BatchStepStateCanceled ||
-			canaryStatus.State == rolloutv1alpha1.BatchStepStateSucceeded {
+		if canaryStatus.State == rolloutv1alpha1.RolloutStepCanceled ||
+			canaryStatus.State == rolloutv1alpha1.RolloutStepSucceeded {
 			return false
 		}
 		return true

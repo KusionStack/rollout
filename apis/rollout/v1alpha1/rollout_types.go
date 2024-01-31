@@ -105,8 +105,6 @@ type RolloutStatus struct {
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// RolloutID is reference to rolloutRun name.
 	RolloutID string `json:"rolloutID,omitempty"`
-	// BatchStatus describes the state of the active batch release
-	BatchStatus *RolloutBatchStatus `json:"batchStatus,omitempty"`
 }
 
 // RolloutPhase indicates the current rollout phase
@@ -121,8 +119,6 @@ const (
 	RolloutPhaseProgressing RolloutPhase = "Progressing"
 	// RolloutPhaseTerminating indicates the rollout is terminating
 	RolloutPhaseTerminating RolloutPhase = "Terminating"
-	// RolloutRunPhaseCompleted indicates the rolloutRun is finished
-	RolloutRunPhaseCompleted RolloutPhase = "Completed"
 )
 
 const (
@@ -156,7 +152,7 @@ type RolloutBatchStatus struct {
 	// CurrentBatchIndex defines the current batch index of batch release progress.
 	CurrentBatchIndex int32 `json:"currentBatchIndex"`
 	// CurrentBatchState indicates the current batch state.
-	CurrentBatchState RolloutBatchStepState `json:"currentBatchState,omitempty"`
+	CurrentBatchState RolloutStepState `json:"currentBatchState,omitempty"`
 }
 
 type RolloutReplicasSummary struct {
@@ -186,29 +182,27 @@ type RolloutWorkloadStatus struct {
 	StableRevision string `json:"stableRevision,omitempty"`
 	// UpdatedRevision is the updated template revision used to generate pods.
 	UpdatedRevision string `json:"updatedRevision,omitempty"`
-	// PodTemplateHash is used to distinguish different version of pod
-	PodTemplateHash string `json:"podTemplateHash,omitempty"`
 }
 
-type RolloutBatchStepState string
+type RolloutStepState string
 
 const (
-	// BatchStepStatePending means the step is pending.
-	BatchStepStatePending RolloutBatchStepState = "Pending"
-	// BatchStepStatePreCanaryStepHook means the step is in pre canary hook
-	BatchStepStatePreCanaryStepHook RolloutBatchStepState = RolloutBatchStepState(PreCanaryStepHook)
-	// BatchStepStatePreBatchStepHook means the step is in pre batch hook
-	BatchStepStatePreBatchStepHook RolloutBatchStepState = RolloutBatchStepState(PreBatchStepHook)
-	// BatchStepStateRunning means the step is running.
-	BatchStepStateRunning RolloutBatchStepState = "Running"
-	// BatchStepStatePostCanaryStepHook means the step is in post canary hook
-	BatchStepStatePostCanaryStepHook RolloutBatchStepState = RolloutBatchStepState(PostCanaryStepHook)
-	// BatchStepStatePostBatchStepHook means the step is in post batch hook
-	BatchStepStatePostBatchStepHook RolloutBatchStepState = RolloutBatchStepState(PostBatchStepHook)
-	// BatchStepStateSucceeded means the step is completed.
-	BatchStepStateSucceeded RolloutBatchStepState = "Succeeded"
-	// BatchStepStatePaused means the step is paused.
-	BatchStepStatePaused RolloutBatchStepState = "Paused"
-	// BatchStepStateCanceled means the step is canceled.
-	BatchStepStateCanceled RolloutBatchStepState = "Canceled"
+	// RolloutStepPending means the step is pending.
+	RolloutStepPending RolloutStepState = "Pending"
+	// RolloutStepPaused means the step is paused.
+	RolloutStepPaused RolloutStepState = "Paused"
+	// RolloutStepPreCanaryStepHook means the step is in pre canary hook
+	RolloutStepPreCanaryStepHook RolloutStepState = RolloutStepState(PreCanaryStepHook)
+	// RolloutStepPreBatchStepHook means the step is in pre batch hook
+	RolloutStepPreBatchStepHook RolloutStepState = RolloutStepState(PreBatchStepHook)
+	// RolloutStepRunning means the step is running.
+	RolloutStepRunning RolloutStepState = "Running"
+	// RolloutStepPostCanaryStepHook means the step is in post canary hook
+	RolloutStepPostCanaryStepHook RolloutStepState = RolloutStepState(PostCanaryStepHook)
+	// RolloutStepPostBatchStepHook means the step is in post batch hook
+	RolloutStepPostBatchStepHook RolloutStepState = RolloutStepState(PostBatchStepHook)
+	// RolloutStepSucceeded means the step is completed.
+	RolloutStepSucceeded RolloutStepState = "Succeeded"
+	// RolloutStepCanceled means the step is canceled.
+	RolloutStepCanceled RolloutStepState = "Canceled"
 )

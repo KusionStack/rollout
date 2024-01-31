@@ -117,8 +117,9 @@ type TrafficTopologyStatus struct {
 type TopologyInfo struct {
 	// workload reference name and cluster
 	WorkloadRef CrossClusterObjectNameReference `json:"workloadRef,omitempty"`
-	// backend routing references
-	BackendRoutings []string `json:"backendRoutings,omitempty"`
+	// backend routing reference
+	// The name of the backendRouting referent
+	BackendRoutingName []string `json:"backendRoutingName,omitempty"`
 }
 
 // +genclient

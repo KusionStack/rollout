@@ -392,7 +392,7 @@ func TestDo(t *testing.T) {
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 0 ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePostRollout ||
-					newBatchStatus.RolloutBatchStatus.CurrentBatchState != rolloutv1alpha1.BatchStepStatePending {
+					newBatchStatus.RolloutBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPending {
 					return false, nil
 				}
 				return true, nil
@@ -456,14 +456,14 @@ func TestDoCommand(t *testing.T) {
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 1, CurrentBatchState: BatchStatePaused,
+						CurrentBatchIndex: 1, CurrentBatchState: rolloutv1alpha1.RolloutStepPaused,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State:      BatchStateSucceeded,
+							State:      rolloutv1alpha1.RolloutStepSucceeded,
 							StartTime:  &metav1.Time{Time: time.Now()},
 							FinishTime: &metav1.Time{Time: time.Now()},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
+							Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
 								{
 									Name:              "wh-01",
 									FailureCount:      2,
@@ -474,7 +474,7 @@ func TestDoCommand(t *testing.T) {
 						},
 						{
 							StartTime: &metav1.Time{Time: time.Now()},
-							State:     BatchStatePaused,
+							State:     rolloutv1alpha1.RolloutStepPaused,
 						},
 					},
 				}
@@ -493,19 +493,19 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook ||
+					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPreBatchStepHook ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false, nil
 				}
 
 				batchStatus := newBatchStatus.RolloutBatchStatus
 				if batchStatus.CurrentBatchIndex != 1 ||
-					batchStatus.CurrentBatchState != BatchStatePreBatchHook {
+					batchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPreBatchStepHook {
 					return false, nil
 				}
 
 				if newBatchStatus.Records[1].StartTime == nil ||
-					newBatchStatus.Records[1].State != BatchStatePreBatchHook {
+					newBatchStatus.Records[1].State != rolloutv1alpha1.RolloutStepPreBatchStepHook {
 					return false, nil
 				}
 
@@ -519,13 +519,13 @@ func TestDoCommand(t *testing.T) {
 				rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey] = rolloutapis.AnnoManualCommandRetry
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
+						CurrentBatchIndex: 0, CurrentBatchState: rolloutv1alpha1.RolloutStepPreBatchStepHook,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State:     BatchStatePreBatchHook,
+							State:     rolloutv1alpha1.RolloutStepPreBatchStepHook,
 							StartTime: &metav1.Time{Time: time.Now()},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
+							Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
 								{
 									Name:              "wh-01",
 									FailureCount:      2,
@@ -555,19 +555,19 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook ||
+					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPreBatchStepHook ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false, nil
 				}
 
 				batchStatus := newBatchStatus.RolloutBatchStatus
 				if batchStatus.CurrentBatchIndex != 0 ||
-					batchStatus.CurrentBatchState != BatchStatePreBatchHook {
+					batchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPreBatchStepHook {
 					return false, nil
 				}
 
 				if newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook {
+					newBatchStatus.Records[0].State != rolloutv1alpha1.RolloutStepPreBatchStepHook {
 					return false, nil
 				}
 
@@ -597,14 +597,14 @@ func TestDoCommand(t *testing.T) {
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 1, CurrentBatchState: BatchStatePaused,
+						CurrentBatchIndex: 1, CurrentBatchState: rolloutv1alpha1.RolloutStepPaused,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State:      BatchStateSucceeded,
+							State:      rolloutv1alpha1.RolloutStepSucceeded,
 							StartTime:  &metav1.Time{Time: time.Now()},
 							FinishTime: &metav1.Time{Time: time.Now()},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
+							Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
 								{
 									Name:              "wh-01",
 									FailureCount:      2,
@@ -614,7 +614,7 @@ func TestDoCommand(t *testing.T) {
 							},
 						},
 						{
-							StartTime: &metav1.Time{Time: time.Now()}, State: BatchStatePaused,
+							StartTime: &metav1.Time{Time: time.Now()}, State: rolloutv1alpha1.RolloutStepPaused,
 						},
 					},
 				}
@@ -633,19 +633,19 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					newBatchStatus.RolloutBatchStatus.CurrentBatchState != BatchStatePaused ||
+					newBatchStatus.RolloutBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPaused ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePausing {
 					return false, nil
 				}
 
 				batchStatus := newBatchStatus.RolloutBatchStatus
 				if batchStatus.CurrentBatchIndex != 1 ||
-					batchStatus.CurrentBatchState != BatchStatePaused {
+					batchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPaused {
 					return false, nil
 				}
 
 				if newBatchStatus.Records[1].StartTime == nil ||
-					newBatchStatus.Records[1].State != BatchStatePaused {
+					newBatchStatus.Records[1].State != rolloutv1alpha1.RolloutStepPaused {
 					return false, nil
 				}
 
@@ -675,14 +675,14 @@ func TestDoCommand(t *testing.T) {
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 1, CurrentBatchState: BatchStatePaused,
+						CurrentBatchIndex: 1, CurrentBatchState: rolloutv1alpha1.RolloutStepPaused,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State:      BatchStateSucceeded,
+							State:      rolloutv1alpha1.RolloutStepSucceeded,
 							StartTime:  &metav1.Time{Time: time.Now()},
 							FinishTime: &metav1.Time{Time: time.Now()},
-							Webhooks: []rolloutv1alpha1.BatchWebhookStatus{
+							Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
 								{
 									Name:              "wh-01",
 									FailureCount:      2,
@@ -693,7 +693,7 @@ func TestDoCommand(t *testing.T) {
 						},
 						{
 							StartTime: &metav1.Time{Time: time.Now()},
-							State:     BatchStatePaused,
+							State:     rolloutv1alpha1.RolloutStepPaused,
 						},
 					},
 				}
@@ -712,19 +712,19 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					newBatchStatus.CurrentBatchState != BatchStatePaused ||
+					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPaused ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
 					return false, nil
 				}
 
 				batchStatus := newBatchStatus.RolloutBatchStatus
 				if batchStatus.CurrentBatchIndex != 1 ||
-					batchStatus.CurrentBatchState != BatchStatePaused {
+					batchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPaused {
 					return false, nil
 				}
 
 				if newBatchStatus.Records[1].StartTime == nil ||
-					newBatchStatus.Records[1].State != BatchStatePaused {
+					newBatchStatus.Records[1].State != rolloutv1alpha1.RolloutStepPaused {
 					return false, nil
 				}
 
@@ -738,9 +738,9 @@ func TestDoCommand(t *testing.T) {
 				rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey] = rolloutapis.AnnoManualCommandSkip
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStatePreBatchHook,
+						CurrentBatchIndex: 0, CurrentBatchState: rolloutv1alpha1.RolloutStepPreBatchStepHook,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()}}, {}},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{{State: rolloutv1alpha1.RolloutStepPreBatchStepHook, StartTime: &metav1.Time{Time: time.Now()}}, {}},
 				}
 				rolloutRun.Status.Error = &rolloutv1alpha1.CodeReasonMessage{Code: "PreBatchStepHookError", Reason: "WebhookFailureThresholdExceeded"}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{
@@ -762,14 +762,14 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					newBatchStatus.CurrentBatchState != BatchStateInitial ||
+					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPending ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
 					return false, nil
 				}
 
 				batchStatus := newBatchStatus.RolloutBatchStatus
 				if batchStatus.CurrentBatchIndex != 1 ||
-					batchStatus.CurrentBatchState != BatchStateInitial {
+					batchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPending {
 					return false, nil
 				}
 
@@ -788,11 +788,11 @@ func TestDoCommand(t *testing.T) {
 				rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey] = rolloutapis.AnnoManualCommandSkip
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 1, CurrentBatchState: BatchStatePreBatchHook,
+						CurrentBatchIndex: 1, CurrentBatchState: rolloutv1alpha1.RolloutStepPreBatchStepHook,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
-						{State: BatchStateSucceeded, StartTime: &metav1.Time{Time: time.Now()}, FinishTime: &metav1.Time{Time: time.Now()}},
-						{State: BatchStatePreBatchHook, StartTime: &metav1.Time{Time: time.Now()}},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{State: rolloutv1alpha1.RolloutStepSucceeded, StartTime: &metav1.Time{Time: time.Now()}, FinishTime: &metav1.Time{Time: time.Now()}},
+						{State: rolloutv1alpha1.RolloutStepPreBatchStepHook, StartTime: &metav1.Time{Time: time.Now()}},
 					},
 				}
 				rolloutRun.Status.Error = &rolloutv1alpha1.CodeReasonMessage{
@@ -818,19 +818,19 @@ func TestDoCommand(t *testing.T) {
 				newBatchStatus := newStatus.BatchStatus
 				if newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 2 ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook ||
+					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPreBatchStepHook ||
 					newStatus.Phase != rolloutv1alpha1.RolloutRunPhasePostRollout {
 					return false, nil
 				}
 
 				batchStatus := newBatchStatus.RolloutBatchStatus
 				if batchStatus.CurrentBatchIndex != 1 ||
-					batchStatus.CurrentBatchState != BatchStatePreBatchHook {
+					batchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPreBatchStepHook {
 					return false, nil
 				}
 
 				if newBatchStatus.Records[1].StartTime == nil ||
-					newBatchStatus.Records[1].State != BatchStatePreBatchHook {
+					newBatchStatus.Records[1].State != rolloutv1alpha1.RolloutStepPreBatchStepHook {
 					return false, nil
 				}
 
@@ -872,7 +872,7 @@ func TestDoBatchInitial(t *testing.T) {
 			makeExecutorContext: func(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun) *ExecutorContext {
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					Records: make([]rolloutv1alpha1.RolloutRunBatchStatusRecord, 1),
+					Records: make([]rolloutv1alpha1.RolloutRunStepStatus, 1),
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
@@ -891,8 +891,8 @@ func TestDoBatchInitial(t *testing.T) {
 					newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 1 ||
 					newBatchStatus.Records[0].StartTime == nil ||
-					newBatchStatus.Records[0].State != BatchStatePreBatchHook ||
-					newBatchStatus.CurrentBatchState != BatchStatePreBatchHook {
+					newBatchStatus.Records[0].State != rolloutv1alpha1.RolloutStepPreBatchStepHook ||
+					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPreBatchStepHook {
 					return false, nil
 				}
 				return true, nil
@@ -917,9 +917,9 @@ func TestDoBatchSucceeded(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStateSucceeded,
+						CurrentBatchIndex: 0, CurrentBatchState: rolloutv1alpha1.RolloutStepSucceeded,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{State: BatchStateSucceeded, StartTime: &metav1.Time{Time: time.Now()}, FinishTime: &metav1.Time{Time: time.Now()}}},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{{State: rolloutv1alpha1.RolloutStepSucceeded, StartTime: &metav1.Time{Time: time.Now()}, FinishTime: &metav1.Time{Time: time.Now()}}},
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
@@ -938,13 +938,13 @@ func TestDoBatchSucceeded(t *testing.T) {
 				if newBatchStatus.CurrentBatchIndex != 0 ||
 					newStatus.Error != nil ||
 					len(newBatchStatus.Records) != 1 ||
-					newBatchStatus.CurrentBatchState != BatchStateSucceeded {
+					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepSucceeded {
 					return false, nil
 				}
 
 				if newBatchStatus.Records[0].StartTime == nil ||
 					newBatchStatus.Records[0].FinishTime == nil ||
-					newBatchStatus.Records[0].State != BatchStateSucceeded {
+					newBatchStatus.Records[0].State != rolloutv1alpha1.RolloutStepSucceeded {
 					return false, nil
 				}
 
@@ -958,9 +958,9 @@ func TestDoBatchSucceeded(t *testing.T) {
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchIndex: 0, CurrentBatchState: BatchStateSucceeded,
+						CurrentBatchIndex: 0, CurrentBatchState: rolloutv1alpha1.RolloutStepSucceeded,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{{State: BatchStateSucceeded, StartTime: &metav1.Time{Time: time.Now()}, FinishTime: &metav1.Time{Time: time.Now()}}},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{{State: rolloutv1alpha1.RolloutStepSucceeded, StartTime: &metav1.Time{Time: time.Now()}, FinishTime: &metav1.Time{Time: time.Now()}}},
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{
 					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-1"}, Replicas: intstr.FromInt(1)}}},
@@ -977,14 +977,14 @@ func TestDoBatchSucceeded(t *testing.T) {
 				newBatchStatus := rolloutRun.Status.BatchStatus
 				if newBatchStatus.CurrentBatchIndex != 1 ||
 					newStatus.Error != nil ||
-					newBatchStatus.CurrentBatchState != BatchStateInitial {
+					newBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPending {
 					return false, nil
 				}
 
 				if len(newBatchStatus.Records) != 1 ||
 					newBatchStatus.Records[0].StartTime == nil ||
 					newBatchStatus.Records[0].FinishTime == nil ||
-					newBatchStatus.Records[0].State != BatchStateSucceeded {
+					newBatchStatus.Records[0].State != rolloutv1alpha1.RolloutStepSucceeded {
 					return false, nil
 				}
 

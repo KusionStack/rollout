@@ -114,19 +114,6 @@ spec:
           status:
             description: RolloutStatus defines the observed state of Rollout
             properties:
-              batchStatus:
-                description: BatchStatus describes the state of the active batch release
-                properties:
-                  currentBatchIndex:
-                    description: CurrentBatchIndex defines the current batch index of batch release progress.
-                    format: int32
-                    type: integer
-                  currentBatchState:
-                    description: CurrentBatchState indicates the current batch state.
-                    type: string
-                required:
-                - currentBatchIndex
-                type: object
               conditions:
                 description: Conditions is the list of conditions
                 items:

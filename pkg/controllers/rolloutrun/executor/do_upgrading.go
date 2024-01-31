@@ -89,7 +89,7 @@ func (r *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (ctrl.Result, err
 	}
 
 	// all workloads are ready now, move to next phase
-	newStatus.BatchStatus.CurrentBatchState = BatchStatePostBatchHook
+	newStatus.BatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPostBatchStepHook
 	newStatus.BatchStatus.Records[currentBatchIndex].State = newStatus.BatchStatus.CurrentBatchState
 
 	return ctrl.Result{Requeue: true}, nil

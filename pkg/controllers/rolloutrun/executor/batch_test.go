@@ -51,11 +51,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.BatchStepStatePending,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepPending,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.BatchStepStatePending,
+							State: rolloutv1alpha1.RolloutStepPending,
 						},
 					},
 				}
@@ -67,8 +67,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.BatchStepStatePreBatchStepHook, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.BatchStepStatePreBatchStepHook, status.BatchStatus.Records[0].State)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepPreBatchStepHook, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepPreBatchStepHook, status.BatchStatus.Records[0].State)
 			},
 		},
 		{
@@ -83,11 +83,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.BatchStepStatePending,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepPending,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.BatchStepStatePending,
+							State: rolloutv1alpha1.RolloutStepPending,
 						},
 					},
 				}
@@ -99,8 +99,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.BatchStepStatePaused, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.BatchStepStatePaused, status.BatchStatus.Records[0].State)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.Records[0].State)
 			},
 		},
 		{
@@ -115,11 +115,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.BatchStepStatePaused,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepPaused,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.BatchStepStatePaused,
+							State: rolloutv1alpha1.RolloutStepPaused,
 						},
 					},
 				}
@@ -131,8 +131,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.BatchStepStatePaused, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.BatchStepStatePaused, status.BatchStatus.Records[0].State)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.Records[0].State)
 			},
 		},
 		{
@@ -147,11 +147,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.BatchStepStatePreBatchStepHook,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepPreBatchStepHook,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.BatchStepStatePreBatchStepHook,
+							State: rolloutv1alpha1.RolloutStepPreBatchStepHook,
 						},
 					},
 				}
@@ -163,8 +163,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.BatchStepStateRunning, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.BatchStepStateRunning, status.BatchStatus.Records[0].State)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepRunning, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepRunning, status.BatchStatus.Records[0].State)
 			},
 		},
 		{
@@ -180,11 +180,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.BatchStepStateRunning,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepRunning,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.BatchStepStateRunning,
+							State: rolloutv1alpha1.RolloutStepRunning,
 						},
 					},
 				}
@@ -216,11 +216,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.BatchStepStatePostBatchStepHook,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepPostBatchStepHook,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.BatchStepStatePostBatchStepHook,
+							State: rolloutv1alpha1.RolloutStepPostBatchStepHook,
 						},
 					},
 				}
@@ -232,8 +232,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.BatchStepStateSucceeded, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.BatchStepStateSucceeded, status.BatchStatus.Records[0].State)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepSucceeded, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepSucceeded, status.BatchStatus.Records[0].State)
 			},
 		},
 		{
@@ -252,11 +252,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.BatchStepStateSucceeded,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepSucceeded,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.BatchStepStateSucceeded,
+							State: rolloutv1alpha1.RolloutStepSucceeded,
 						},
 					},
 				}
@@ -268,9 +268,9 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.BatchStepStatePending, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepPending, status.BatchStatus.CurrentBatchState)
 				assert.EqualValues(1, status.BatchStatus.CurrentBatchIndex)
-				assert.EqualValues(rolloutv1alpha1.BatchStepStatePending, status.BatchStatus.Records[1].State)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepPending, status.BatchStatus.Records[1].State)
 			},
 		},
 		{
@@ -286,11 +286,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.BatchStepStateSucceeded,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepSucceeded,
 					},
-					Records: []rolloutv1alpha1.RolloutRunBatchStatusRecord{
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.BatchStepStateSucceeded,
+							State: rolloutv1alpha1.RolloutStepSucceeded,
 						},
 					},
 				}
@@ -302,8 +302,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.BatchStepStateSucceeded, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.BatchStepStateSucceeded, status.BatchStatus.Records[0].State)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepSucceeded, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(rolloutv1alpha1.RolloutStepSucceeded, status.BatchStatus.Records[0].State)
 			},
 		},
 	}

@@ -546,9 +546,6 @@ spec:
                                 description: ObservedGeneration is the most recent generation observed for this workload.
                                 format: int64
                                 type: integer
-                              podTemplateHash:
-                                description: PodTemplateHash is used to distinguish different version of pod
-                                type: string
                               replicas:
                                 description: Replicas is the desired number of pods targeted by workload
                                 format: int32
@@ -647,9 +644,6 @@ spec:
                           description: ObservedGeneration is the most recent generation observed for this workload.
                           format: int64
                           type: integer
-                        podTemplateHash:
-                          description: PodTemplateHash is used to distinguish different version of pod
-                          type: string
                         replicas:
                           description: Replicas is the desired number of pods targeted by workload
                           format: int32
@@ -780,9 +774,6 @@ spec:
                       description: ObservedGeneration is the most recent generation observed for this workload.
                       format: int64
                       type: integer
-                    podTemplateHash:
-                      description: PodTemplateHash is used to distinguish different version of pod
-                      type: string
                     replicas:
                       description: Replicas is the desired number of pods targeted by workload
                       format: int32
