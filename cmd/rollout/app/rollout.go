@@ -22,7 +22,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/component-base/version/verflag"
-	"kusionstack.io/kube-utils/controller/initializer"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,14 +29,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"kusionstack.io/rollout/cmd/rollout/app/options"
+	"kusionstack.io/rollout/pkg/controllers"
 	"kusionstack.io/rollout/pkg/utils/cli"
+	"kusionstack.io/rollout/pkg/webhook"
 )
 
 var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func NewRolloutCommand(initializer initializer.Interface) *cobra.Command {
+func NewRolloutCommand() *cobra.Command {
 	opt := options.NewOptions()
 
 	cmd := &cobra.Command{
@@ -56,22 +57,23 @@ func NewRolloutCommand(initializer initializer.Interface) *cobra.Command {
 			verflag.PrintAndExitIfRequested()
 			cli.PrintFlags(setupLog, cmd.Flags())
 
-			return Run(opt, initializer)
+			return Run(opt)
 		},
 	}
 
-	cli.AddFlagsAndUsage(cmd, opt.Flags(initializer))
+	cli.AddFlagsAndUsage(cmd, opt.Flags(controllers.Initializer, webhook.Initializer))
 
 	return cmd
 }
 
-func Run(opt *options.Options, initializer initializer.Interface) error {
+func Run(opt *options.Options) error {
 	ctx := ctrl.SetupSignalHandler()
 
 	options := ctrl.Options{
 		Scheme:                 scheme.Scheme,
 		MetricsBindAddress:     opt.MetricsBindAddress,
 		Port:                   9443,
+		CertDir:                opt.CertDir,
 		HealthProbeBindAddress: opt.HealthProbeBindAddress,
 		LeaderElection:         opt.LeaderElect,
 		LeaderElectionID:       "rollout.kusionstack.io",
@@ -124,9 +126,14 @@ func Run(opt *options.Options, initializer initializer.Interface) error {
 		os.Exit(1)
 	}
 
-	err = initializer.SetupWithManager(mgr)
+	err = controllers.Initializer.SetupWithManager(mgr)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize controllers")
+	}
+
+	err = webhook.Initializer.SetupWithManager(mgr)
+	if err != nil {
+		setupLog.Error(err, "failed to initialize webhooks")
 	}
 
 	//+kubebuilder:scaffold:builder

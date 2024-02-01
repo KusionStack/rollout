@@ -21,7 +21,7 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	currentBatchState := newBatchStatus.CurrentBatchState
 	switch cmd {
-	case rolloutapis.AnnoManualCommandResume, rolloutapis.AnnoManualCommandContinue:
+	case rolloutapis.AnnoManualCommandResume, rolloutapis.AnnoManualCommandContinue: // nolint
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 		}

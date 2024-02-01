@@ -22,13 +22,12 @@ import (
 	"k8s.io/component-base/logs"
 
 	"kusionstack.io/rollout/cmd/rollout/app"
-	"kusionstack.io/rollout/pkg/controllers"
 )
 
 func main() {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	command := app.NewRolloutCommand(controllers.Initializer)
+	command := app.NewRolloutCommand()
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
