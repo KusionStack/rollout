@@ -180,9 +180,7 @@ spec:
                   properties:
                     backendRoutingName:
                       description: backend routing reference The name of the backendRouting referent
-                      items:
-                        type: string
-                      type: array
+                      type: string
                     workloadRef:
                       description: workload reference name and cluster
                       properties:

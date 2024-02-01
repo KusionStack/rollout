@@ -119,7 +119,7 @@ type TopologyInfo struct {
 	WorkloadRef CrossClusterObjectNameReference `json:"workloadRef,omitempty"`
 	// backend routing reference
 	// The name of the backendRouting referent
-	BackendRoutingName []string `json:"backendRoutingName,omitempty"`
+	BackendRoutingName string `json:"backendRoutingName,omitempty"`
 }
 
 // +genclient
