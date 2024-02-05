@@ -15,6 +15,7 @@
 package workload
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -50,4 +51,24 @@ func CheckPartitionReady(status rolloutv1alpha1.RolloutWorkloadStatus, partiton 
 	}
 
 	return status.UpdatedAvailableReplicas >= partiton
+}
+
+// PatchMetadata patches metadata with the given patch
+func PatchMetadata(meta *metav1.ObjectMeta, patch rolloutv1alpha1.MetadataPatch) {
+	if patch.Labels != nil {
+		if meta.Labels == nil {
+			meta.Labels = make(map[string]string)
+		}
+		for k, v := range patch.Labels {
+			meta.Labels[k] = v
+		}
+	}
+	if patch.Annotations != nil {
+		if meta.Annotations == nil {
+			meta.Annotations = make(map[string]string)
+		}
+		for k, v := range patch.Annotations {
+			meta.Annotations[k] = v
+		}
+	}
 }

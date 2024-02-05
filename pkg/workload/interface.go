@@ -59,7 +59,7 @@ type Interface interface {
 	// It should return true if the workload changed.
 	//
 	// NOTE: This function must be idempotent.
-	UpgradePartition(partition intstr.IntOrString) (bool, error)
+	UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error)
 
 	// UpdateOnConflict try its best to updates the workload on conflict.
 	UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error

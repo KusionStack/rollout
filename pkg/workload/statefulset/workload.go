@@ -82,7 +82,7 @@ func (w *realWorkload) IsWaitingRollout() bool {
 	return false
 }
 
-func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
+func (w *realWorkload) UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error) {
 	if w.obj.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {
 		return false, fmt.Errorf("rollout can not upgrade partition in StatefulSet if the upgrade strategy type is not RollingUpdate")
 	}
@@ -115,7 +115,7 @@ func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, err
 			return fmt.Errorf("expect client.Object to be *appsv1.StatefulSet")
 		}
 
-		// TODO: add batch info in annotation
+		workload.PatchMetadata(&sts.ObjectMeta, metadataPatch)
 		sts.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
 			Type: appsv1.RollingUpdateStatefulSetStrategyType,
 			RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
