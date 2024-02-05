@@ -99,10 +99,10 @@ type MetadataPatch struct {
 
 // ProgressingInfo is the rollout progressing info
 type ProgressingInfo struct {
-	RolloutName    string                 `json:"rollout,omitempty"`
-	RolloutRunName string                 `json:"rolloutRun,omitempty"`
-	Canary         *CanaryProgressingInfo `json:"canary,omitempty"`
-	Batch          *BatchProgressingInfo  `json:"batch,omitempty"`
+	RolloutName string                 `json:"rollout,omitempty"`
+	RolloutID   string                 `json:"rolloutID,omitempty"`
+	Canary      *CanaryProgressingInfo `json:"canary,omitempty"`
+	Batch       *BatchProgressingInfo  `json:"batch,omitempty"`
 }
 
 type CanaryProgressingInfo struct {

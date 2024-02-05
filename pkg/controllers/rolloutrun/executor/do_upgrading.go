@@ -100,8 +100,8 @@ func (r *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (ctrl.Result, err
 
 func progressMetadataPatch(ctx *ExecutorContext) rolloutv1alpha1.MetadataPatch {
 	info := rolloutv1alpha1.ProgressingInfo{
-		RolloutName:    ctx.Rollout.Name,
-		RolloutRunName: ctx.RolloutRun.Name,
+		RolloutName: ctx.Rollout.Name,
+		RolloutID:   ctx.Rollout.Status.RolloutID,
 		Batch: &rolloutv1alpha1.BatchProgressingInfo{
 			CurrentBatchIndex: ctx.NewStatus.BatchStatus.CurrentBatchIndex,
 		},
