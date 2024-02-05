@@ -94,7 +94,7 @@ func (*fakeWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj c
 }
 
 // UpgradePartition implements workload.Interface.
-func (w *fakeWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
+func (w *fakeWorkload) UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error) {
 	partitionInt, _ := workload.CalculatePartitionReplicas(&w.Replicas, partition)
 	if partitionInt <= w.Partition {
 		// already updated

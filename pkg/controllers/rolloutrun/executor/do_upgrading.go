@@ -1,12 +1,14 @@
 package executor
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 )
@@ -36,6 +38,7 @@ func (r *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (ctrl.Result, err
 	logger.Info("do batch upgrading and check")
 
 	// upgrade partition
+	metadataPatch := progressMetadataPatch(ctx)
 	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
 	workloadChanged := false
 	for _, item := range currentBatch.Targets {
@@ -49,7 +52,7 @@ func (r *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (ctrl.Result, err
 		}
 
 		// upgradePartition is an idempotent function
-		changed, err := wi.UpgradePartition(item.Replicas)
+		changed, err := wi.UpgradePartition(item.Replicas, metadataPatch)
 		if err != nil {
 			newStatus.Error = newUpgradingError(
 				ReasonUpgradePartitionError,
@@ -93,4 +96,18 @@ func (r *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (ctrl.Result, err
 	newStatus.BatchStatus.Records[currentBatchIndex].State = newStatus.BatchStatus.CurrentBatchState
 
 	return ctrl.Result{Requeue: true}, nil
+}
+
+func progressMetadataPatch(ctx *ExecutorContext) rolloutv1alpha1.MetadataPatch {
+	info := rolloutv1alpha1.ProgressingInfo{
+		RolloutName:    ctx.Rollout.Name,
+		RolloutRunName: ctx.RolloutRun.Name,
+		Batch: &rolloutv1alpha1.BatchProgressingInfo{
+			CurrentBatchIndex: ctx.NewStatus.BatchStatus.CurrentBatchIndex,
+		},
+	}
+	progress, _ := json.Marshal(info)
+	return rolloutv1alpha1.MetadataPatch{
+		Annotations: map[string]string{rollout.AnnoRolloutProgressingInfo: string(progress)},
+	}
 }

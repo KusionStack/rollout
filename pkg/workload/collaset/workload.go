@@ -72,7 +72,7 @@ func (w *realWorkload) IsWaitingRollout() bool {
 }
 
 // UpgradePartition upgrades the workload to the specified partition
-func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, error) {
+func (w *realWorkload) UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error) {
 	expectedPartition, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
 	if err != nil {
 		return false, err
@@ -93,6 +93,7 @@ func (w *realWorkload) UpgradePartition(partition intstr.IntOrString) (bool, err
 		if !ok {
 			return fmt.Errorf("expect client.Object to be *operatingv1alpha1.CollaSet")
 		}
+		workload.PatchMetadata(&collaset.ObjectMeta, metadataPatch)
 		collaset.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.RollingUpdateCollaSetStrategy{
 			ByPartition: &operatingv1alpha1.ByPartition{
 				Partition: ptr.To[int32](expectedPartition),

@@ -86,13 +86,13 @@ type CodeReasonMessage struct {
 	Message string `json:"message,omitempty"`
 }
 
-// PodTemplateMetadataPatch is a patch for metadata in workload.podTemplate.
-type PodTemplateMetadataPatch struct {
-	// Annotations are additional metadata that can be included within a podTemplate.
+// MetadataPatch is a patch for metadata
+type MetadataPatch struct {
+	// Annotations are additional metadata that can be included.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 
-	// Labels are additional metadata that can be included within a podTemplate.
+	// Labels are additional metadata that can be included.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 }
