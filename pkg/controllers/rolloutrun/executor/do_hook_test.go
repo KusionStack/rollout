@@ -248,6 +248,7 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 					State: rolloutv1alpha1.RolloutStepPreCanaryStepHook,
 					Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
 						{
+							State:             rolloutv1alpha1.WebhookCompleted,
 							HookType:          rolloutv1alpha1.PreCanaryStepHook,
 							Name:              webhook1.Name,
 							CodeReasonMessage: webhook1Error,

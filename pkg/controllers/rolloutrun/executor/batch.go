@@ -17,11 +17,7 @@
 package executor
 
 import (
-	"time"
-
 	"github.com/go-logr/logr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -41,6 +37,7 @@ func newBatchExecutor(logger logr.Logger, webhook webhookExecutor) *batchExecuto
 
 func (e *batchExecutor) loggerWithContext(executorContext *ExecutorContext) logr.Logger {
 	return executorContext.loggerWithContext(e.logger).WithValues(
+		"step", "batch",
 		"batchIndex", executorContext.NewStatus.BatchStatus.CurrentBatchIndex,
 	)
 }
@@ -89,14 +86,9 @@ func (e *batchExecutor) doBatchInitial(ctx *ExecutorContext) {
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 
 	if ctx.RolloutRun.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
-		newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPaused
-		newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
+		ctx.MoveToNextState(rolloutv1alpha1.RolloutStepPaused)
 	} else {
-		newBatchStatus.RolloutBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPreBatchStepHook
-		if newBatchStatus.Records[currentBatchIndex].StartTime == nil {
-			newBatchStatus.Records[currentBatchIndex].StartTime = &metav1.Time{Time: time.Now()}
-		}
-		newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
+		ctx.MoveToNextState(rolloutv1alpha1.RolloutStepPreBatchStepHook)
 	}
 }
 
@@ -108,16 +100,5 @@ func (e *batchExecutor) doBatchSucceeded(ctx *ExecutorContext) {
 	if int(currentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
 		newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
 		newBatchStatus.CurrentBatchIndex = currentBatchIndex + 1
-		if int(newBatchStatus.CurrentBatchIndex) < len(newBatchStatus.Records) {
-			newBatchStatus.Records[newBatchStatus.CurrentBatchIndex] = rolloutv1alpha1.RolloutRunStepStatus{
-				Index: ptr.To(newBatchStatus.CurrentBatchIndex),
-				State: rolloutv1alpha1.RolloutStepPending,
-			}
-		} else {
-			newBatchStatus.Records = append(newBatchStatus.Records, rolloutv1alpha1.RolloutRunStepStatus{
-				Index: ptr.To(newBatchStatus.CurrentBatchIndex),
-				State: rolloutv1alpha1.RolloutStepPending,
-			})
-		}
 	}
 }

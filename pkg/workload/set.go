@@ -49,7 +49,7 @@ func (s *Set) Matches(match *rolloutv1alpha1.ResourceMatch) []Interface {
 	for i := range s.list {
 		w := s.list[i]
 		info := w.GetInfo()
-		if matcher.Matches(info.Cluster, info.Name, info.Labels) {
+		if matcher.Matches(info.ClusterName, info.Name, info.Labels) {
 			result = append(result, w)
 		}
 	}
@@ -59,13 +59,13 @@ func (s *Set) Matches(match *rolloutv1alpha1.ResourceMatch) []Interface {
 func (s *Set) add(in Interface) {
 	info := in.GetInfo()
 
-	_, ok := s.set[info.Cluster]
+	_, ok := s.set[info.ClusterName]
 	if !ok {
-		s.set[info.Cluster] = map[string]int{}
+		s.set[info.ClusterName] = map[string]int{}
 	}
 
 	s.list = append(s.list, in)
-	s.set[info.Cluster][info.Name] = len(s.list) - 1
+	s.set[info.ClusterName][info.Name] = len(s.list) - 1
 }
 
 func (s *Set) Get(cluster, name string) Interface {

@@ -19,12 +19,14 @@ import (
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
@@ -32,7 +34,7 @@ import (
 
 var GVK = appsv1.SchemeGroupVersion.WithKind("StatefulSet")
 
-type realWorkload struct {
+type workloadImpl struct {
 	info workload.Info
 
 	obj *appsv1.StatefulSet
@@ -41,28 +43,11 @@ type realWorkload struct {
 }
 
 // GetInfo implements workload.Interface.
-func (w *realWorkload) GetInfo() workload.Info {
+func (w *workloadImpl) GetInfo() workload.Info {
 	return w.info
 }
 
-func (w *realWorkload) GetStatus() rolloutv1alpha1.RolloutWorkloadStatus {
-	return rolloutv1alpha1.RolloutWorkloadStatus{
-		Name:               w.info.Name,
-		Cluster:            w.info.Cluster,
-		Generation:         w.obj.Generation,
-		ObservedGeneration: w.obj.Status.ObservedGeneration,
-		StableRevision:     w.obj.Status.CurrentRevision,
-		UpdatedRevision:    w.obj.Status.UpdateRevision,
-		RolloutReplicasSummary: rolloutv1alpha1.RolloutReplicasSummary{
-			Replicas:                 *w.obj.Spec.Replicas,
-			UpdatedReplicas:          w.obj.Status.UpdatedReplicas,
-			UpdatedReadyReplicas:     w.obj.Status.UpdatedReplicas,
-			UpdatedAvailableReplicas: w.obj.Status.UpdatedReplicas,
-		},
-	}
-}
-
-func (w *realWorkload) UpdateObject(obj client.Object) {
+func (w *workloadImpl) UpdateObject(obj client.Object) {
 	sts, ok := obj.(*appsv1.StatefulSet)
 	if !ok {
 		return
@@ -70,7 +55,7 @@ func (w *realWorkload) UpdateObject(obj client.Object) {
 	w.obj = sts
 }
 
-func (w *realWorkload) IsWaitingRollout() bool {
+func (w *workloadImpl) IsWaitingRollout() bool {
 	sts := w.obj
 
 	if len(sts.Status.CurrentRevision) != 0 &&
@@ -82,7 +67,7 @@ func (w *realWorkload) IsWaitingRollout() bool {
 	return false
 }
 
-func (w *realWorkload) UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error) {
+func (w *workloadImpl) UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error) {
 	if w.obj.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {
 		return false, fmt.Errorf("rollout can not upgrade partition in StatefulSet if the upgrade strategy type is not RollingUpdate")
 	}
@@ -130,9 +115,9 @@ func (w *realWorkload) UpgradePartition(partition intstr.IntOrString, metadataPa
 	return true, nil
 }
 
-func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error {
+func (w *workloadImpl) UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error {
 	obj := w.obj
-	result, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, w.info.Cluster), w.client, w.client, obj, func() error {
+	result, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, w.info.ClusterName), w.client, w.client, obj, func() error {
 		return modifyFunc(obj)
 	})
 	if err != nil {
@@ -143,4 +128,73 @@ func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj
 		w.obj = obj
 	}
 	return nil
+}
+
+func (w *workloadImpl) EnsureCanaryWorkload(canaryReplicas intstr.IntOrString, canaryMetadataPatch, podTemplatePatch *rolloutv1alpha1.MetadataPatch) (workload.Interface, error) {
+	replicas, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, canaryReplicas)
+	if err != nil {
+		return nil, err
+	}
+
+	// create canary resource
+	canaryObj := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   w.info.Namespace,
+			Name:        w.info.Name + "-canary",
+			Labels:      w.obj.Labels,
+			Annotations: w.obj.Annotations,
+			Finalizers: []string{
+				rolloutapi.FinalizerCanaryResourceProtection,
+			},
+		},
+		Spec: *w.obj.Spec.DeepCopy(),
+	}
+
+	ctx := clusterinfo.WithCluster(context.TODO(), w.info.ClusterName)
+	_, err = controllerutil.CreateOrUpdate(ctx, w.client, canaryObj, func() error {
+		canaryObj.Spec.Replicas = &replicas
+		if len(podTemplatePatch.Labels) > 0 {
+			if canaryObj.Spec.Selector.MatchLabels == nil {
+				canaryObj.Spec.Selector.MatchLabels = make(map[string]string)
+			}
+			for k, v := range podTemplatePatch.Labels {
+				canaryObj.Spec.Selector.MatchLabels[k] = v
+			}
+		}
+		applyPodTemplateMetadataPatch(canaryObj, podTemplatePatch)
+		// TODO: we also need to change canaryObj.Spec.ServiceName and VolumeClaimTemplates and volumes in podTemplate
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &workloadImpl{
+		info:   workload.NewInfoFrom(w.info.ClusterName, GVK, canaryObj, getStatus(canaryObj)),
+		client: w.client,
+		obj:    canaryObj,
+	}, nil
+}
+
+func applyPodTemplateMetadataPatch(obj *appsv1.StatefulSet, patch *rolloutv1alpha1.MetadataPatch) {
+	if patch == nil {
+		return
+	}
+	if patch.Labels != nil {
+		if obj.Spec.Template.Labels == nil {
+			obj.Spec.Template.Labels = make(map[string]string)
+		}
+		for k, v := range patch.Labels {
+			obj.Spec.Template.Labels[k] = v
+		}
+	}
+	if patch.Annotations != nil {
+		if obj.Spec.Template.Annotations == nil {
+			obj.Spec.Template.Annotations = make(map[string]string)
+		}
+		for k, v := range patch.Annotations {
+			obj.Spec.Template.Annotations[k] = v
+		}
+	}
 }

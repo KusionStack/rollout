@@ -283,15 +283,16 @@ func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.Rol
 		iInfo := allWorkloads[i].GetInfo()
 		jInfo := allWorkloads[j].GetInfo()
 
-		if iInfo.Cluster == jInfo.Cluster {
+		if iInfo.ClusterName == jInfo.ClusterName {
 			return iInfo.Name < jInfo.Name
 		}
 
-		return iInfo.Cluster < jInfo.Cluster
+		return iInfo.ClusterName < jInfo.ClusterName
 	})
 	workloadStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, len(allWorkloads))
 	for i, w := range allWorkloads {
-		workloadStatuses[i] = w.GetStatus()
+		info := w.GetInfo()
+		workloadStatuses[i] = info.APIStatus()
 	}
 	newStatus.TargetStatuses = workloadStatuses
 }

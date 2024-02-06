@@ -20,3 +20,11 @@ const (
 	LabelWorkload    = "rollout.kusionstack.io/workload"
 	LabelGeneratedBy = "rollout.kusionstack.io/generated-by"
 )
+
+// canary labels
+const (
+	LabelCanary                 = "rollout.kusionstack.io/canary"
+	LabelPodRevision            = "pod.rollout.kusionstack.io/revision"
+	LabelValuePodRevisionBase   = "base"
+	LabelValuePodRevisionCanary = "canary"
+)

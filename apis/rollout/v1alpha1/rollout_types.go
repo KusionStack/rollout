@@ -187,22 +187,35 @@ type RolloutWorkloadStatus struct {
 type RolloutStepState string
 
 const (
-	// RolloutStepPending means the step is pending.
+	// RolloutStepPending indicates that the step is pending.
 	RolloutStepPending RolloutStepState = "Pending"
-	// RolloutStepPaused means the step is paused.
+
+	// RolloutStepPaused indicates that the step is paused.
 	RolloutStepPaused RolloutStepState = "Paused"
-	// RolloutStepPreCanaryStepHook means the step is in pre canary hook
+
+	// RolloutStepPreCanaryStepHook indicates that the step is in the pre-canary hook.
 	RolloutStepPreCanaryStepHook RolloutStepState = RolloutStepState(PreCanaryStepHook)
-	// RolloutStepPreBatchStepHook means the step is in pre batch hook
+
+	// RolloutStepPreBatchStepHook indicates that the step is in the pre-batch hook.
 	RolloutStepPreBatchStepHook RolloutStepState = RolloutStepState(PreBatchStepHook)
-	// RolloutStepRunning means the step is running.
+
+	// RolloutStepRunning indicates that the step is running.
 	RolloutStepRunning RolloutStepState = "Running"
-	// RolloutStepPostCanaryStepHook means the step is in post canary hook
+
+	// RolloutStepPostCanaryStepHook indicates that the step is in the post-canary hook.
 	RolloutStepPostCanaryStepHook RolloutStepState = RolloutStepState(PostCanaryStepHook)
-	// RolloutStepPostBatchStepHook means the step is in post batch hook
+
+	// RolloutStepPostBatchStepHook indicates that the step is in the post-batch hook.
 	RolloutStepPostBatchStepHook RolloutStepState = RolloutStepState(PostBatchStepHook)
-	// RolloutStepSucceeded means the step is completed.
+
+	// RolloutStepSucceeded indicates that the step is completed.
 	RolloutStepSucceeded RolloutStepState = "Succeeded"
-	// RolloutStepCanceled means the step is canceled.
+
+	// RolloutStepCanceled indicates that the step is canceled.
 	RolloutStepCanceled RolloutStepState = "Canceled"
+
+	// RolloutStepResourceRecycling indicates that the step is recycling resources.
+	// In Canary strategy, it occurs after the user confirms (Paused).
+	// In Batch strategy, it occurs before the PreBatchStepHook.
+	RolloutStepResourceRecycling RolloutStepState = "ResourceRecycling"
 )

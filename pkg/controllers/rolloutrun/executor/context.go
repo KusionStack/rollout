@@ -51,6 +51,7 @@ func (c *ExecutorContext) Initialize() {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
 		}
 
+		// init canary status
 		if c.RolloutRun.Spec.Canary != nil && newStatus.CanaryStatus == nil {
 			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
 				State: rolloutv1alpha1.RolloutStepPending,
@@ -59,27 +60,25 @@ func (c *ExecutorContext) Initialize() {
 		// init BatchStatus
 		if c.RolloutRun.Spec.Batch != nil {
 			if newStatus.BatchStatus == nil {
-				newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepPending,
-					},
-				}
+				newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
+			}
+			if len(newStatus.BatchStatus.CurrentBatchState) == 0 {
+				newStatus.BatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
 			}
 			// resize records
-			specBatches := len(c.RolloutRun.Spec.Batch.Batches)
-			statusBatches := len(newStatus.BatchStatus.Records)
-			if specBatches > statusBatches {
-				for i := 0; i < specBatches-statusBatches; i++ {
-					newStatus.BatchStatus.Records = append(
-						newStatus.BatchStatus.Records,
+			specBatchSize := len(c.RolloutRun.Spec.Batch.Batches)
+			statusBatchSize := len(newStatus.BatchStatus.Records)
+			if specBatchSize > statusBatchSize {
+				for i := 0; i < specBatchSize-statusBatchSize; i++ {
+					newStatus.BatchStatus.Records = append(newStatus.BatchStatus.Records,
 						rolloutv1alpha1.RolloutRunStepStatus{
-							Index: ptr.To(int32(statusBatches + i)),
+							Index: ptr.To(int32(statusBatchSize + i)),
 							State: rolloutv1alpha1.RolloutStepPending,
 						},
 					)
 				}
-			} else if specBatches < statusBatches {
-				newStatus.BatchStatus.Records = newStatus.BatchStatus.Records[:specBatches]
+			} else if specBatchSize < statusBatchSize {
+				newStatus.BatchStatus.Records = newStatus.BatchStatus.Records[:specBatchSize]
 			}
 		}
 	})
@@ -140,22 +139,42 @@ func isFinalStepState(state rolloutv1alpha1.RolloutStepState) bool {
 	return state == rolloutv1alpha1.RolloutStepSucceeded || state == rolloutv1alpha1.RolloutStepCanceled
 }
 
+func (c *ExecutorContext) GetCurrentState() (string, rolloutv1alpha1.RolloutStepState) {
+	if c.inCanary() {
+		return "canary", c.NewStatus.CanaryStatus.State
+	} else {
+		return "batch", c.NewStatus.BatchStatus.CurrentBatchState
+	}
+}
+
 func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutStepState) {
 	c.Initialize()
 
 	newStatus := c.NewStatus
 	if c.inCanary() {
 		newStatus.CanaryStatus.State = nextState
-		if isFinalStepState(nextState) {
+		if nextState == rolloutv1alpha1.RolloutStepPreCanaryStepHook {
+			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
+		} else if isFinalStepState(nextState) {
 			newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
 		}
 	} else {
 		index := newStatus.BatchStatus.CurrentBatchIndex
 		newStatus.BatchStatus.CurrentBatchState = nextState
 		newStatus.BatchStatus.Records[index].State = nextState
-		if isFinalStepState(nextState) {
+		if nextState == rolloutv1alpha1.RolloutStepPreBatchStepHook {
+			newStatus.BatchStatus.Records[index].StartTime = ptr.To(metav1.Now())
+		} else if isFinalStepState(nextState) {
 			newStatus.BatchStatus.Records[index].FinishTime = ptr.To(metav1.Now())
 		}
+	}
+}
+
+func (c *ExecutorContext) MoveToNextStateIfMatch(curState, nextState rolloutv1alpha1.RolloutStepState) {
+	c.Initialize()
+	_, state := c.GetCurrentState()
+	if state == curState {
+		c.MoveToNextState(nextState)
 	}
 }
 

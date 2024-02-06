@@ -19,15 +19,16 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 
 	batchError := newStatus.Error
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
-	currentBatchState := newBatchStatus.CurrentBatchState
 	switch cmd {
 	case rolloutapis.AnnoManualCommandResume, rolloutapis.AnnoManualCommandContinue: // nolint
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 		}
-		if currentBatchState == rolloutv1alpha1.RolloutStepPaused {
-			newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPreBatchStepHook
-			newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
+		if ctx.inCanary() {
+			// TODO: change next state to recycle canary resources
+			ctx.MoveToNextStateIfMatch(rolloutv1alpha1.RolloutStepPaused, rolloutv1alpha1.RolloutStepResourceRecycling)
+		} else {
+			ctx.MoveToNextStateIfMatch(rolloutv1alpha1.RolloutStepPaused, rolloutv1alpha1.RolloutStepPreBatchStepHook)
 		}
 	case rolloutapis.AnnoManualCommandRetry:
 		if batchError != nil {

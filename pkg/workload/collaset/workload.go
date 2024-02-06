@@ -24,42 +24,19 @@ var GVK = schema.GroupVersionKind{
 	Kind:    "CollaSet",
 }
 
-type realWorkload struct {
-	info workload.Info
-	obj  *operatingv1alpha1.CollaSet
-
+type workloadImpl struct {
+	info   workload.Info
+	obj    *operatingv1alpha1.CollaSet
 	client client.Client
 }
 
 // GetInfo returns basic workload informations.
-func (w *realWorkload) GetInfo() workload.Info {
+func (w *workloadImpl) GetInfo() workload.Info {
 	return w.info
 }
 
-func (w *realWorkload) GetStatus() rolloutv1alpha1.RolloutWorkloadStatus {
-	status := rolloutv1alpha1.RolloutWorkloadStatus{
-		Name:               w.info.Name,
-		Cluster:            w.info.Cluster,
-		StableRevision:     w.obj.Status.CurrentRevision,
-		Generation:         w.obj.Generation,
-		ObservedGeneration: w.obj.Status.ObservedGeneration,
-		RolloutReplicasSummary: rolloutv1alpha1.RolloutReplicasSummary{
-			Replicas:                 *w.obj.Spec.Replicas,
-			UpdatedReplicas:          w.obj.Status.UpdatedReplicas,
-			UpdatedReadyReplicas:     w.obj.Status.UpdatedReadyReplicas,
-			UpdatedAvailableReplicas: w.obj.Status.UpdatedAvailableReplicas,
-		},
-	}
-
-	if len(w.obj.Status.UpdatedRevision) > 0 {
-		status.UpdatedRevision = w.obj.Status.UpdatedRevision
-	}
-
-	return status
-}
-
 // IsWaitingRollout
-func (w *realWorkload) IsWaitingRollout() bool {
+func (w *workloadImpl) IsWaitingRollout() bool {
 	cd := w.obj
 	if cd.Status.UpdatedReplicas >= *cd.Spec.Replicas ||
 		cd.Status.UpdatedAvailableReplicas >= *cd.Spec.Replicas {
@@ -72,7 +49,7 @@ func (w *realWorkload) IsWaitingRollout() bool {
 }
 
 // UpgradePartition upgrades the workload to the specified partition
-func (w *realWorkload) UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error) {
+func (w *workloadImpl) UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error) {
 	expectedPartition, err := workload.CalculatePartitionReplicas(w.obj.Spec.Replicas, partition)
 	if err != nil {
 		return false, err
@@ -108,9 +85,9 @@ func (w *realWorkload) UpgradePartition(partition intstr.IntOrString, metadataPa
 	return true, nil
 }
 
-func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(client.Object) error) error {
+func (w *workloadImpl) UpdateOnConflict(ctx context.Context, modifyFunc func(client.Object) error) error {
 	obj := w.obj
-	result, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, w.info.Cluster), w.client, w.client, obj, func() error {
+	result, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, w.info.ClusterName), w.client, w.client, obj, func() error {
 		return modifyFunc(obj)
 	})
 	if err != nil {
@@ -121,4 +98,8 @@ func (w *realWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(cli
 		w.obj = obj
 	}
 	return nil
+}
+
+func (w *workloadImpl) EnsureCanaryWorkload(canaryReplicas intstr.IntOrString, canaryMetadataPatch, podMetadataPatch *rolloutv1alpha1.MetadataPatch) (workload.Interface, error) {
+	panic("unimplemented")
 }

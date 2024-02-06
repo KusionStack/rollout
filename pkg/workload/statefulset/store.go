@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -62,8 +63,8 @@ func (p *Storage) Wrap(cluster string, obj client.Object) (workload.Interface, e
 	if !ok {
 		return nil, fmt.Errorf("obj must be statefulset")
 	}
-	return &realWorkload{
-		info:   workload.NewInfo(cluster, GVK, obj),
+	return &workloadImpl{
+		info:   workload.NewInfoFrom(cluster, GVK, obj, getStatus(sts)),
 		client: p.client,
 		obj:    sts.DeepCopy(),
 	}, nil
@@ -79,4 +80,16 @@ func (p *Storage) Get(ctx context.Context, cluster, namespace, name string) (wor
 
 func (p *Storage) List(ctx context.Context, namespace string, match rolloutv1alpha1.ResourceMatch) ([]workload.Interface, error) {
 	return registry.GetWorkloadList(ctx, p.client, p, namespace, match)
+}
+
+func getStatus(obj *appsv1.StatefulSet) workload.Status {
+	return workload.Status{
+		ObservedGeneration:       obj.Status.ObservedGeneration,
+		StableRevision:           obj.Status.CurrentRevision,
+		UpdatedRevision:          obj.Status.UpdateRevision,
+		Replicas:                 ptr.Deref(obj.Spec.Replicas, 0),
+		UpdatedReplicas:          obj.Status.UpdatedReplicas,
+		UpdatedReadyReplicas:     obj.Status.UpdatedReplicas,
+		UpdatedAvailableReplicas: obj.Status.UpdatedReplicas,
+	}
 }

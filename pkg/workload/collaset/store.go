@@ -6,6 +6,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,14 +44,14 @@ func (p *Storage) NewObjectList() client.ObjectList {
 }
 
 func (p *Storage) Wrap(cluster string, obj client.Object) (workload.Interface, error) {
-	sts, ok := obj.(*operatingv1alpha1.CollaSet)
+	cs, ok := obj.(*operatingv1alpha1.CollaSet)
 	if !ok {
 		return nil, fmt.Errorf("obj must be CollaSet")
 	}
-	return &realWorkload{
-		info:   workload.NewInfo(cluster, GVK, obj),
+	return &workloadImpl{
+		info:   workload.NewInfoFrom(cluster, GVK, obj, getStatus(cs)),
 		client: p.client,
-		obj:    sts.DeepCopy(),
+		obj:    cs.DeepCopy(),
 	}, nil
 }
 
@@ -64,4 +65,16 @@ func (p *Storage) Get(ctx context.Context, cluster, namespace, name string) (wor
 
 func (p *Storage) List(ctx context.Context, namespace string, match rolloutv1alpha1.ResourceMatch) ([]workload.Interface, error) {
 	return registry.GetWorkloadList(ctx, p.client, p, namespace, match)
+}
+
+func getStatus(obj *operatingv1alpha1.CollaSet) workload.Status {
+	return workload.Status{
+		StableRevision:           obj.Status.CurrentRevision,
+		UpdatedRevision:          obj.Status.UpdatedRevision,
+		ObservedGeneration:       obj.Status.ObservedGeneration,
+		Replicas:                 ptr.Deref(obj.Spec.Replicas, 0),
+		UpdatedReplicas:          obj.Status.UpdatedReplicas,
+		UpdatedReadyReplicas:     obj.Status.UpdatedReadyReplicas,
+		UpdatedAvailableReplicas: obj.Status.UpdatedAvailableReplicas,
+	}
 }

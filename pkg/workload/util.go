@@ -45,14 +45,6 @@ func CalculatePartitionReplicas(totalReplicas *int32, partition intstr.IntOrStri
 	return int32(partitionInt), nil
 }
 
-func CheckPartitionReady(status rolloutv1alpha1.RolloutWorkloadStatus, partiton int32) bool {
-	if status.Generation != status.ObservedGeneration {
-		return false
-	}
-
-	return status.UpdatedAvailableReplicas >= partiton
-}
-
 // PatchMetadata patches metadata with the given patch
 func PatchMetadata(meta *metav1.ObjectMeta, patch rolloutv1alpha1.MetadataPatch) {
 	if patch.Labels != nil {

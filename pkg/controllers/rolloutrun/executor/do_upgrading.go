@@ -61,7 +61,7 @@ func (r *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (ctrl.Result, err
 			return ctrl.Result{}, errors.New(newStatus.Error.Message)
 		}
 
-		batchTargetStatuses = append(batchTargetStatuses, wi.GetStatus())
+		batchTargetStatuses = append(batchTargetStatuses, wi.GetInfo().APIStatus())
 
 		if changed {
 			workloadChanged = true
@@ -81,10 +81,11 @@ func (r *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (ctrl.Result, err
 		// target will not be nil here
 		target := ctx.Workloads.Get(item.Cluster, item.Name)
 
-		status := target.GetStatus()
+		info := target.GetInfo()
+		status := info.APIStatus()
 		partition, _ := workload.CalculatePartitionReplicas(&status.Replicas, item.Replicas)
 
-		if !workload.CheckPartitionReady(status, partition) {
+		if !info.CheckPartitionReady(partition) {
 			// ready
 			logger.Info("still waiting for target ready", "target", item.CrossClusterObjectNameReference)
 			return reconcile.Result{RequeueAfter: defaultRequeueAfter}, nil
