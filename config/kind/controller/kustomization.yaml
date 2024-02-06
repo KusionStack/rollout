@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: rollout-system
+
+labels:
+- includeSelectors: true
+  includeTemplates: true
+  pairs:
+    app: rollout-controller
+
+resources:
+- manager.yaml
+
+
+images:
+- name: rollout
+  newTag: d34d9c0d78

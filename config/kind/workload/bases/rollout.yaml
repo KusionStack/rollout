@@ -1,0 +1,32 @@
+
+apiVersion: rollout.kusionstack.io/v1alpha1
+kind: Rollout
+metadata:
+  name: rollout-demo
+spec:
+  strategyRef: rollout-demo
+  workloadRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    match:
+      selector:
+        matchLabels:
+          app: rollout-demo
+
+---
+
+apiVersion: rollout.kusionstack.io/v1alpha1
+kind: RolloutStrategy
+metadata:
+  name: rollout-demo
+canary:
+  replicas: 2
+  podTemplateMetadataPatch:
+    labels:
+      service.tag: "canary"
+batch:
+  batches:
+  - replicas: 1
+  - replicas: 3
+    breakpoint: true
+  - replicas: 100%

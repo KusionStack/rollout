@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rollout-demo2
+spec:
+  podManagementPolicy: Parallel
+  serviceName: rollout-demo2
+  replicas: 5
+  selector:
+    matchLabels:
+      cluster: cluster-b
+  template:
+    metadata:
+      labels:
+        cluster: cluster-b
+    spec:
+      containers:
+      - name: demo
+        image: alpine:3.14
+        imagePullPolicy: IfNotPresent
+        args: ["tail", "-f", "/etc/hosts"]
