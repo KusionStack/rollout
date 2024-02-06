@@ -12,23 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rollout
+package routeregistry
 
-const (
-	LabelControl     = "rollout.kusionstack.io/control"
-	LabelCreatedBy   = "rollout.kusionstack.io/created-by"
-	LabelWorkload    = "rollout.kusionstack.io/workload"
-	LabelGeneratedBy = "rollout.kusionstack.io/generated-by"
+import (
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	LabelRevisionKey         = "rollout.kusionstack.io/revision"
-	LabelRevisionCanaryValue = "canary"
-	LabelRevisionStableValue = "base"
+	"kusionstack.io/rollout/pkg/route/ingress"
+	"kusionstack.io/rollout/pkg/route/registry"
 )
 
-// canary labels
 const (
-	LabelCanary                 = "rollout.kusionstack.io/canary"
-	LabelPodRevision            = "pod.rollout.kusionstack.io/revision"
-	LabelValuePodRevisionBase   = "base"
-	LabelValuePodRevisionCanary = "canary"
+	InitializerName = "__internal_route_registry"
 )
+
+var (
+	DefaultRegistry = registry.NewRegistry()
+)
+
+func InitFunc(mgr manager.Manager) (bool, error) {
+	logger := mgr.GetLogger().WithName("init")
+	logger.Info("initialize default route registry")
+	DefaultRegistry.Register(ingress.NewStorage(mgr))
+	DefaultRegistry.SetupWithManger(mgr)
+	return true, nil
+}

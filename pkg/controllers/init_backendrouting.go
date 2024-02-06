@@ -19,9 +19,15 @@ package controllers
 import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"kusionstack.io/rollout/pkg/controllers/traffictopology"
+	"kusionstack.io/kube-utils/controller/initializer"
+	"kusionstack.io/rollout/pkg/controllers/backendregistry"
+	"kusionstack.io/rollout/pkg/controllers/backendrouting"
+	"kusionstack.io/rollout/pkg/controllers/routeregistry"
 )
 
 func init() {
-	utilruntime.Must(Initializer.Add(traffictopology.ControllerName, traffictopology.InitFunc))
+	utilruntime.Must(Initializer.Add(backendregistry.InitializerName, backendregistry.InitFunc, initializer.WithHidden()))
+	utilruntime.Must(Initializer.Add(routeregistry.InitializerName, routeregistry.InitFunc, initializer.WithHidden()))
+
+	utilruntime.Must(Initializer.Add(backendrouting.ControllerName, backendrouting.InitFunc))
 }
