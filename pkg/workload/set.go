@@ -14,10 +14,6 @@
 
 package workload
 
-import (
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-)
-
 type Set struct {
 	set  map[string]map[string]int
 	list []Interface
@@ -38,34 +34,34 @@ func (s *Set) ToSlice() []Interface {
 	return s.list
 }
 
-func (s *Set) Matches(match *rolloutv1alpha1.ResourceMatch) []Interface {
-	if match == nil || (match.Selector == nil && len(match.Names) == 0) {
-		// match all
-		return s.list
-	}
+// func (s *Set) Matches(match *rolloutv1alpha1.ResourceMatch) []Interface {
+// 	if match == nil || (match.Selector == nil && len(match.Names) == 0) {
+// 		// match all
+// 		return s.list
+// 	}
 
-	matcher := MatchAsMatcher(*match)
-	result := make([]Interface, 0)
-	for i := range s.list {
-		w := s.list[i]
-		info := w.GetInfo()
-		if matcher.Matches(info.Cluster, info.Name, info.Labels) {
-			result = append(result, w)
-		}
-	}
-	return result
-}
+// 	matcher := MatchAsMatcher(*match)
+// 	result := make([]Interface, 0)
+// 	for i := range s.list {
+// 		w := s.list[i]
+// 		info := w.GetInfo()
+// 		if matcher.Matches(info.ClusterName, info.Name, info.Labels) {
+// 			result = append(result, w)
+// 		}
+// 	}
+// 	return result
+// }
 
 func (s *Set) add(in Interface) {
 	info := in.GetInfo()
 
-	_, ok := s.set[info.Cluster]
+	_, ok := s.set[info.ClusterName]
 	if !ok {
-		s.set[info.Cluster] = map[string]int{}
+		s.set[info.ClusterName] = map[string]int{}
 	}
 
 	s.list = append(s.list, in)
-	s.set[info.Cluster][info.Name] = len(s.list) - 1
+	s.set[info.ClusterName][info.Name] = len(s.list) - 1
 }
 
 func (s *Set) Get(cluster, name string) Interface {

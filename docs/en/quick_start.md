@@ -15,7 +15,7 @@ Please install the following tools:
 Build the environment locally by running the script
 
 ```
-bash hack/local-up.sh
+bash hack/local-demo.sh
 ```
 
 The script performs the following tasks:

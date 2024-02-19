@@ -197,7 +197,7 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 					checkResut: func(assert *assert.Assertions, result Result) {
 						assert.EqualValues(rolloutv1alpha1.WebhookRunning, result.State)
 						assert.Equal(rolloutv1alpha1.WebhookReviewCodeProcessing, result.Code)
-						assert.Equal(0, result.FailureCount)
+						assert.EqualValues(0, result.FailureCount)
 					},
 				},
 				{
@@ -208,7 +208,7 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 					checkResut: func(assert *assert.Assertions, result Result) {
 						assert.EqualValues(rolloutv1alpha1.WebhookCompleted, result.State)
 						assert.Equal(rolloutv1alpha1.WebhookReviewCodeOK, result.Code)
-						assert.Equal(0, result.FailureCount)
+						assert.EqualValues(0, result.FailureCount)
 					},
 				},
 			},
@@ -227,7 +227,7 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 					checkResut: func(assert *assert.Assertions, result Result) {
 						assert.EqualValues(rolloutv1alpha1.WebhookRunning, result.State)
 						assert.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
-						assert.Equal(1, result.FailureCount)
+						assert.EqualValues(1, result.FailureCount)
 					},
 				},
 				{
@@ -235,7 +235,7 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 					checkResut: func(assert *assert.Assertions, result Result) {
 						assert.EqualValues(rolloutv1alpha1.WebhookOnHold, result.State)
 						assert.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
-						assert.Equal(2, result.FailureCount)
+						assert.EqualValues(2, result.FailureCount)
 					},
 				},
 				{
@@ -248,7 +248,7 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 					checkResut: func(assert *assert.Assertions, result Result) {
 						assert.EqualValues(rolloutv1alpha1.WebhookRunning, result.State)
 						assert.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
-						assert.Equal(3, result.FailureCount)
+						assert.EqualValues(3, result.FailureCount)
 					},
 				},
 				{
@@ -256,7 +256,7 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 					checkResut: func(assert *assert.Assertions, result Result) {
 						assert.EqualValues(rolloutv1alpha1.WebhookOnHold, result.State)
 						assert.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
-						assert.Equal(4, result.FailureCount)
+						assert.EqualValues(4, result.FailureCount)
 					},
 				},
 			},

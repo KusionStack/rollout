@@ -16,4 +16,6 @@ package rollout
 
 const (
 	FinalizerRolloutProtection = "finalizer.rollout.kusionstack.io/protection"
+
+	FinalizerCanaryResourceProtection = "finalizer.rollout.kusionstack.io/canary-release"
 )

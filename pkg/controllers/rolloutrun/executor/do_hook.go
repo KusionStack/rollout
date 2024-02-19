@@ -6,7 +6,6 @@ import (
 	"github.com/elliotchance/pie/v2"
 	"github.com/go-logr/logr"
 	"k8s.io/utils/ptr"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook"
@@ -22,7 +21,7 @@ const (
 )
 
 type webhookExecutor interface {
-	Do(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType) (bool, ctrl.Result, error)
+	Do(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType) (bool, time.Duration, error)
 }
 
 type webhookExecutorImpl struct {
@@ -39,10 +38,10 @@ func newWebhookExecutor(logger logr.Logger, webhookInitTime time.Duration) webho
 	}
 }
 
-func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType) (bool, ctrl.Result, error) {
+func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType) (bool, time.Duration, error) {
 	curWebhook, nextWebhook := r.findCurrentAndNextWebhook(ctx, hookType)
 	if curWebhook == nil {
-		return true, ctrl.Result{Requeue: true}, nil
+		return true, retryImmediately, nil
 	}
 
 	logger := ctx.loggerWithContext(r.logger)
@@ -51,7 +50,7 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 	hookResult, _, err := r.startOrGetWebhookWorker(ctx, hookType, *curWebhook.RolloutWebhook, curWebhook.status)
 	if err != nil {
 		logger.Error(err, "failed to get webhook result")
-		return false, ctrl.Result{Requeue: true}, err
+		return false, retryImmediately, err
 	}
 
 	logger.V(2).Info("get webhook result", "hookType", hookType, "webhook", curWebhook.Name, "result", hookResult)
@@ -69,7 +68,7 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 	}
 	if hookResult.State != rolloutv1alpha1.WebhookCompleted {
 		// the webhook sill running, requeue after defaultRequeueAfter duration
-		return false, ctrl.Result{RequeueAfter: defaultRequeueAfter}, nil
+		return false, retryDefault, nil
 	}
 
 	if nextWebhook != nil {
@@ -78,7 +77,7 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 			HookType: hookType,
 			Name:     nextWebhook.Name,
 		})
-		return false, ctrl.Result{Requeue: true}, nil
+		return false, retryImmediately, nil
 	}
 
 	// NOTE:
@@ -88,7 +87,7 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 	logger.Info("clean up final webhook", "hookType", hookType)
 	r.webhookManager.Stop(ctx.RolloutRun.UID)
 
-	return true, ctrl.Result{Requeue: true}, nil
+	return true, retryImmediately, nil
 }
 
 type webhookWithStatus struct {

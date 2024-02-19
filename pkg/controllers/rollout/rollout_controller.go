@@ -269,13 +269,9 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, instance *roll
 	errs := []error{}
 	for _, w := range workloads {
 		err := w.UpdateOnConflict(ctx, func(obj client.Object) error {
-			label := obj.GetLabels()
-			_, ok := label[rollout.LabelWorkload]
-			if !ok {
-				return nil
-			}
-			delete(label, rollout.LabelWorkload)
-			obj.SetLabels(label)
+			utils.MutateLabels(obj, func(labels map[string]string) {
+				delete(labels, rollout.LabelWorkload)
+			})
 			return nil
 		})
 		if err != nil {
@@ -360,14 +356,11 @@ func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, workloads
 	errs := []error{}
 	for _, w := range workloads {
 		info := w.GetInfo()
+		kind := strings.ToLower(info.Kind)
 		err := w.UpdateOnConflict(ctx, func(obj client.Object) error {
-			labels := obj.GetLabels()
-			if labels == nil {
-				labels = make(map[string]string)
-			}
-			kind := strings.ToLower(info.GVK.Kind)
-			labels[rollout.LabelWorkload] = kind
-			obj.SetLabels(labels)
+			utils.MutateLabels(obj, func(labels map[string]string) {
+				labels[rollout.LabelWorkload] = kind
+			})
 			return nil
 		})
 
@@ -477,8 +470,8 @@ func (r *RolloutReconciler) getCurrentRolloutRun(ctx context.Context, instance *
 		// get current active rolloutRun
 		wList := &rolloutv1alpha1.RolloutRunList{}
 		err := r.Client.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), wList, client.InNamespace(instance.Namespace), client.MatchingLabels{
-			rollout.LabelControl:   "true",
-			rollout.LabelCreatedBy: instance.Name,
+			rollout.LabelControl:     "true",
+			rollout.LabelGeneratedBy: instance.Name,
 		})
 		if err != nil {
 			return nil, err
@@ -551,6 +544,8 @@ func (r *RolloutReconciler) handleRunManualCommand(ctx context.Context, obj *rol
 	if run.IsCompleted() {
 		return nil
 	}
+
+	// TODO: add support for one time strategy
 
 	// update manual command to rollout run
 	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, run, func() error {

@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollout-controller
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: rollout-controller
+        image: rollout:local-up
+        imagePullPolicy: IfNotPresent
+        args:
+        - --federated-mode=false

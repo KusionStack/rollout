@@ -86,6 +86,11 @@ type CodeReasonMessage struct {
 	Message string `json:"message,omitempty"`
 }
 
+// Error implements error.
+func (c *CodeReasonMessage) Error() string {
+	return fmt.Sprintf("err: code=%q, reason=%q, message=%q", c.Code, c.Reason, c.Message)
+}
+
 // MetadataPatch is a patch for metadata
 type MetadataPatch struct {
 	// Annotations are additional metadata that can be included.
@@ -106,10 +111,8 @@ type ProgressingInfo struct {
 }
 
 type CanaryProgressingInfo struct {
-	Replicas int32 `json:"replicas"`
 }
 
 type BatchProgressingInfo struct {
 	CurrentBatchIndex int32 `json:"currentBatchIndex"`
-	Replicas          int32 `json:"replicas"`
 }

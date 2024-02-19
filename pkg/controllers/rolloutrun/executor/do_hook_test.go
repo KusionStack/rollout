@@ -5,10 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
@@ -81,16 +78,12 @@ var (
 		Reason:  "DoRequestError",
 		Message: `Post "webhook-3.test.url": unsupported protocol scheme ""`,
 	}
-
-	unimportantTargets = []rolloutv1alpha1.RolloutRunStepTarget{
-		newRunStepTarget("non-exist", "non-exits", intstr.FromInt(1)),
-	}
 )
 
 type fakeWebhookExecutor struct{}
 
-func (e *fakeWebhookExecutor) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType) (bool, reconcile.Result, error) {
-	return true, reconcile.Result{Requeue: true}, nil
+func (e *fakeWebhookExecutor) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType) (bool, time.Duration, error) {
+	return true, retryImmediately, nil
 }
 
 func newFakeWebhookExecutor() *fakeWebhookExecutor {
@@ -100,7 +93,7 @@ func newFakeWebhookExecutor() *fakeWebhookExecutor {
 type webhookTestCase struct {
 	name         string
 	getObjects   func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun)
-	assertResult func(assert *assert.Assertions, done bool, result reconcile.Result, err error)
+	assertResult func(assert *assert.Assertions, done bool, result time.Duration, err error)
 	assertStatus func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus)
 }
 
@@ -138,7 +131,7 @@ func Test_webhook_Retry(t *testing.T) {
 		Targets: unimportantTargets,
 	}
 	rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-		State: rolloutv1alpha1.RolloutStepPreCanaryStepHook,
+		State: StepPreCanaryStepHook,
 	}
 
 	ctx := createTestExecutorContext(rollout, rolloutRun, nil)
@@ -210,14 +203,14 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 					Targets: unimportantTargets,
 				}
 				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepPreCanaryStepHook,
+					State: StepPreCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.True(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.Equal(retryImmediately, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported")
@@ -245,9 +238,10 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 					Targets: unimportantTargets,
 				}
 				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepPreCanaryStepHook,
+					State: StepPreCanaryStepHook,
 					Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
 						{
+							State:             rolloutv1alpha1.WebhookCompleted,
 							HookType:          rolloutv1alpha1.PreCanaryStepHook,
 							Name:              webhook1.Name,
 							CodeReasonMessage: webhook1Error,
@@ -261,10 +255,10 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.False(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}, result)
+				assert.Equal(retryDefault, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				if assert.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set") {
@@ -300,14 +294,14 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 					Targets: unimportantTargets,
 				}
 				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepPreCanaryStepHook,
+					State: StepPreCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.False(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}, result)
+				assert.Equal(retryDefault, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Nil(status.Error, "This webhook has encountered a failure, but it is still running, no error will be reported")
@@ -335,14 +329,14 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 					Targets: unimportantTargets,
 				}
 				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepPreCanaryStepHook,
+					State: StepPreCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.False(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.Equal(retryImmediately, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Nil(status.Error)
@@ -377,14 +371,14 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 					},
 				}
 				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepPreCanaryStepHook,
+					State: StepPreCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.True(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.Equal(retryImmediately, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Nil(status.Error)
@@ -411,14 +405,14 @@ func Test_webhook_PostCanaryHookStep(t *testing.T) {
 					Targets: unimportantTargets,
 				}
 				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepPostCanaryStepHook,
+					State: StepPostCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.True(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.Equal(retryImmediately, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
@@ -445,14 +439,14 @@ func Test_webhook_PostCanaryHookStep(t *testing.T) {
 					Targets: unimportantTargets,
 				}
 				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepPostCanaryStepHook,
+					State: StepPostCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.False(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}, result)
+				assert.Equal(retryDefault, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				if assert.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {
@@ -491,10 +485,10 @@ func Test_webhook_PreBatchHookStep(t *testing.T) {
 
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.True(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.Equal(retryImmediately, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
@@ -522,21 +516,21 @@ func Test_webhook_PreBatchHookStep(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepPreBatchStepHook,
+						CurrentBatchState: StepPreBatchStepHook,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
 							Index: ptr.To[int32](0),
-							State: rolloutv1alpha1.RolloutStepPreBatchStepHook,
+							State: StepPreBatchStepHook,
 						},
 					},
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.False(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}, result)
+				assert.Equal(retryDefault, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				if assert.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {
@@ -575,10 +569,10 @@ func Test_webhook_PostBatchHookStep(t *testing.T) {
 
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.True(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.Equal(retryImmediately, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
@@ -606,21 +600,21 @@ func Test_webhook_PostBatchHookStep(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepPostBatchStepHook,
+						CurrentBatchState: StepPostBatchStepHook,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
 							Index: ptr.To[int32](0),
-							State: rolloutv1alpha1.RolloutStepPostBatchStepHook,
+							State: StepPostBatchStepHook,
 						},
 					},
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
 				assert.False(done)
 				assert.Nil(err)
-				assert.Equal(reconcile.Result{RequeueAfter: defaultRequeueAfter}, result)
+				assert.Equal(retryDefault, retry)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				if assert.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {

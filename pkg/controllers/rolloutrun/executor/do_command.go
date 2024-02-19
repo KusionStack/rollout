@@ -19,15 +19,10 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 
 	batchError := newStatus.Error
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
-	currentBatchState := newBatchStatus.CurrentBatchState
 	switch cmd {
 	case rolloutapis.AnnoManualCommandResume, rolloutapis.AnnoManualCommandContinue: // nolint
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
-		}
-		if currentBatchState == rolloutv1alpha1.RolloutStepPaused {
-			newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPreBatchStepHook
-			newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
 		}
 	case rolloutapis.AnnoManualCommandRetry:
 		if batchError != nil {
@@ -43,7 +38,7 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 			if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
 				currentBatchIndex++
 				newBatchStatus.CurrentBatchIndex = currentBatchIndex
-				newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
+				newBatchStatus.CurrentBatchState = StepPending
 			} else {
 				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 			}

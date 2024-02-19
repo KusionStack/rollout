@@ -11,21 +11,19 @@ import (
 	"kusionstack.io/rollout/pkg/utils"
 )
 
-const (
-	defaultRunTimeout   = 5
-	defaultRequeueAfter = time.Duration(5) * time.Second
-)
-
 type Executor struct {
 	logger logr.Logger
+	canary *canaryExecutor
 	batch  *batchExecutor
 }
 
 func NewDefaultExecutor(logger logr.Logger) *Executor {
 	webhookExec := newWebhookExecutor(logger, time.Second)
+	canaryExec := newCanaryExecutor(logger, webhookExec)
 	batchExec := newBatchExecutor(logger, webhookExec)
 	e := &Executor{
 		logger: logger,
+		canary: canaryExec,
 		batch:  batchExec,
 	}
 	return e
@@ -108,14 +106,23 @@ func (r *Executor) lifecycle(executorContext *ExecutorContext) (done bool, resul
 // doProcessing process canary and batch one-by-one
 func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error) {
 	rolloutRun := ctx.RolloutRun
+	newStatus := ctx.NewStatus
 
-	// TODO: do canary here
+	if ctx.inCanary() {
+		canaryDone, result, err := r.canary.Do(ctx)
+		if err != nil {
+			return false, result, err
+		}
+		if !canaryDone {
+			return false, result, nil
+		}
+		// canary is done, continue to do batch
+	}
 
 	if rolloutRun.Spec.Batch != nil && len(rolloutRun.Spec.Batch.Batches) > 0 {
 		// init BatchStatus
-		newStatus := ctx.NewStatus
 		if len(newStatus.BatchStatus.CurrentBatchState) == 0 {
-			newStatus.BatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
+			newStatus.BatchStatus.CurrentBatchState = StepPending
 		}
 		preCurrentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 		preCurrentBatchState := newStatus.BatchStatus.CurrentBatchState

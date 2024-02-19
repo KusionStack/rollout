@@ -17,107 +17,181 @@
 package executor
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/workload"
 )
 
 type batchExecutor struct {
-	logger  logr.Logger
-	webhook webhookExecutor
+	logger       logr.Logger
+	webhook      webhookExecutor
+	stateMachine *stepStateMachine
 }
 
 func newBatchExecutor(logger logr.Logger, webhook webhookExecutor) *batchExecutor {
-	return &batchExecutor{
-		logger:  logger,
-		webhook: webhook,
+	e := &batchExecutor{
+		logger:       logger,
+		webhook:      webhook,
+		stateMachine: newStepStateMachine(),
 	}
+
+	e.stateMachine.add(StepPending, StepPreBatchStepHook, e.doInit)
+	e.stateMachine.add(StepPreBatchStepHook, StepRunning, e.doPreStepHook)
+	e.stateMachine.add(StepRunning, StepPostBatchStepHook, e.doBatchUpgrading)
+	e.stateMachine.add(StepPostBatchStepHook, StepSucceeded, e.doPostStepHook)
+	e.stateMachine.add(StepSucceeded, "", skipStep)
+	return e
 }
 
 func (e *batchExecutor) loggerWithContext(executorContext *ExecutorContext) logr.Logger {
 	return executorContext.loggerWithContext(e.logger).WithValues(
+		"step", "batch",
 		"batchIndex", executorContext.NewStatus.BatchStatus.CurrentBatchIndex,
 	)
 }
 
 func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
 	newStatus := ctx.NewStatus
-	rolloutRun := ctx.RolloutRun
+	currentState := newStatus.BatchStatus.CurrentBatchState
 
-	result = ctrl.Result{Requeue: true}
+	stepDone, result, err := e.stateMachine.do(ctx, currentState)
 
-	switch newStatus.BatchStatus.CurrentBatchState {
-	case rolloutv1alpha1.RolloutStepPending:
-		e.doBatchInitial(ctx)
-	case rolloutv1alpha1.RolloutStepPaused:
-		// do nothing
-		result.Requeue = false
-	case rolloutv1alpha1.RolloutStepPreBatchStepHook:
-		var webhookDone bool
-		webhookDone, result, err = e.webhook.Do(ctx, rolloutv1alpha1.PreBatchStepHook)
-		if webhookDone {
-			ctx.MoveToNextState(rolloutv1alpha1.RolloutStepRunning)
+	if stepDone {
+		// move to next batch
+		currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
+		if int(currentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
+			newStatus.BatchStatus.CurrentBatchState = StepPending
+			newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
 		}
-	case rolloutv1alpha1.RolloutStepRunning:
-		result, err = e.doBatchUpgrading(ctx)
-	case rolloutv1alpha1.RolloutStepPostBatchStepHook:
-		var webhookDone bool
-		webhookDone, result, err = e.webhook.Do(ctx, rolloutv1alpha1.PostBatchStepHook)
-		if webhookDone {
-			ctx.MoveToNextState(rolloutv1alpha1.RolloutStepSucceeded)
-		}
-	case rolloutv1alpha1.RolloutStepSucceeded:
-		e.doBatchSucceeded(ctx)
-		if newStatus.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepSucceeded &&
-			int(newStatus.BatchStatus.CurrentBatchIndex) >= (len(rolloutRun.Spec.Batch.Batches)-1) {
-			done = true
-		}
-	case rolloutv1alpha1.RolloutStepCanceled:
+	}
+
+	if isFinalStepState(currentState) &&
+		isFinalStepState(newStatus.BatchStatus.CurrentBatchState) &&
+		int(newStatus.BatchStatus.CurrentBatchIndex+1) == len(ctx.RolloutRun.Spec.Batch.Batches) {
 		done = true
 	}
 	return done, result, err
 }
 
-// doBatchInitial process Initialized
-func (e *batchExecutor) doBatchInitial(ctx *ExecutorContext) {
-	newBatchStatus := ctx.NewStatus.BatchStatus
-	currentBatchIndex := newBatchStatus.CurrentBatchIndex
+func (e *batchExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, error) {
+	rolloutName := ctx.Rollout.Name
+	rolloutRunName := ctx.RolloutRun.Name
+	newStatus := ctx.NewStatus
+	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
+	currentBatch := ctx.RolloutRun.Spec.Batch.Batches[currentBatchIndex]
+
+	for _, item := range currentBatch.Targets {
+		wi := ctx.Workloads.Get(item.Cluster, item.Name)
+		if wi == nil {
+			return false, retryStop, newUpgradingError(
+				ReasonWorkloadInterfaceNotExist,
+				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
+			)
+		}
+
+		err := wi.BatchStrategy().Initialize(rolloutName, rolloutRunName, currentBatchIndex)
+		if err != nil {
+			return false, retryStop, newUpgradingError(
+				ReasonUpgradePartitionError,
+				fmt.Sprintf("failed to upgrade workload(%s) partition: %v", item.CrossClusterObjectNameReference, err),
+			)
+		}
+	}
 
 	if ctx.RolloutRun.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
-		newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPaused
-		newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
-	} else {
-		newBatchStatus.RolloutBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPreBatchStepHook
-		if newBatchStatus.Records[currentBatchIndex].StartTime == nil {
-			newBatchStatus.Records[currentBatchIndex].StartTime = &metav1.Time{Time: time.Now()}
-		}
-		newBatchStatus.Records[currentBatchIndex].State = newBatchStatus.CurrentBatchState
+		ctx.Pause()
 	}
+	return true, retryImmediately, nil
 }
 
-// doBatchSucceeded process succeeded state
-func (e *batchExecutor) doBatchSucceeded(ctx *ExecutorContext) {
-	newBatchStatus := ctx.NewStatus.BatchStatus
-	currentBatchIndex := newBatchStatus.CurrentBatchIndex
+func (e *batchExecutor) doPreStepHook(ctx *ExecutorContext) (bool, time.Duration, error) {
+	return e.webhook.Do(ctx, rolloutv1alpha1.PreBatchStepHook)
+}
 
-	if int(currentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
-		newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
-		newBatchStatus.CurrentBatchIndex = currentBatchIndex + 1
-		if int(newBatchStatus.CurrentBatchIndex) < len(newBatchStatus.Records) {
-			newBatchStatus.Records[newBatchStatus.CurrentBatchIndex] = rolloutv1alpha1.RolloutRunStepStatus{
-				Index: ptr.To(newBatchStatus.CurrentBatchIndex),
-				State: rolloutv1alpha1.RolloutStepPending,
-			}
-		} else {
-			newBatchStatus.Records = append(newBatchStatus.Records, rolloutv1alpha1.RolloutRunStepStatus{
-				Index: ptr.To(newBatchStatus.CurrentBatchIndex),
-				State: rolloutv1alpha1.RolloutStepPending,
-			})
+func (e *batchExecutor) doPostStepHook(ctx *ExecutorContext) (bool, time.Duration, error) {
+	return e.webhook.Do(ctx, rolloutv1alpha1.PostBatchStepHook)
+}
+
+const (
+	CodeUpgradingError = "UpgradingError"
+
+	ReasonUpgradePartitionError     = "UpgradePartitionError"
+	ReasonWorkloadStoreNotExist     = "WorkloadStoreNotExist"
+	ReasonWorkloadInterfaceNotExist = "WorkloadInterfaceNotExist"
+)
+
+// newUpgradingError construct CodeReasonMessage
+func newUpgradingError(reason string, msg string) *rolloutv1alpha1.CodeReasonMessage {
+	return &rolloutv1alpha1.CodeReasonMessage{Code: CodeUpgradingError, Reason: reason, Message: msg}
+}
+
+// doBatchUpgrading process upgrading state
+func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Duration, error) {
+	rolloutRun := ctx.RolloutRun
+	newStatus := ctx.NewStatus
+	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
+	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
+
+	logger := e.loggerWithContext(ctx)
+	logger.Info("do batch upgrading and check")
+
+	// upgrade partition
+	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
+	workloadChanged := false
+	for _, item := range currentBatch.Targets {
+		wi := ctx.Workloads.Get(item.Cluster, item.Name)
+		if wi == nil {
+			processErr := newUpgradingError(
+				ReasonWorkloadInterfaceNotExist,
+				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
+			)
+			return false, retryStop, processErr
+		}
+
+		// upgradePartition is an idempotent function
+		changed, err := wi.BatchStrategy().UpgradePartition(item.Replicas)
+		if err != nil {
+			processErr := newUpgradingError(
+				ReasonUpgradePartitionError,
+				fmt.Sprintf("failed to upgrade workload(%s) partition: %v", item.CrossClusterObjectNameReference, err),
+			)
+			return false, retryStop, processErr
+		}
+
+		batchTargetStatuses = append(batchTargetStatuses, wi.GetInfo().APIStatus())
+
+		if changed {
+			workloadChanged = true
 		}
 	}
+
+	// update target status in batch
+	newStatus.BatchStatus.Records[currentBatchIndex].Targets = batchTargetStatuses
+
+	if workloadChanged {
+		// check next time, give the controller a little time to react
+		return false, retryDefault, nil
+	}
+
+	// all workloads are updated now, then check if they are ready
+	for _, item := range currentBatch.Targets {
+		// target will not be nil here
+		target := ctx.Workloads.Get(item.Cluster, item.Name)
+
+		info := target.GetInfo()
+		status := info.APIStatus()
+		partition, _ := workload.CalculatePartitionReplicas(&status.Replicas, item.Replicas)
+
+		if !info.CheckPartitionReady(partition) {
+			// ready
+			logger.Info("still waiting for target ready", "target", item.CrossClusterObjectNameReference)
+			return false, retryDefault, nil
+		}
+	}
+	return true, retryImmediately, nil
 }

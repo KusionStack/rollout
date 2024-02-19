@@ -86,3 +86,21 @@ func mutate(f controllerutil.MutateFn, key client.ObjectKey, obj client.Object) 
 	}
 	return nil
 }
+
+func MutateLabels(obj client.Object, mutateFn func(labels map[string]string)) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	mutateFn(labels)
+	obj.SetLabels(labels)
+}
+
+func MutateAnnotations(obj client.Object, mutateFn func(annotations map[string]string)) {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	mutateFn(annotations)
+	obj.SetAnnotations(annotations)
+}

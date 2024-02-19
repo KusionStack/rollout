@@ -45,7 +45,7 @@ func enqueueRolloutForWorkloadHandler(reader client.Reader, scheme *runtime.Sche
 		gvk := kinds[0]
 
 		cluster := workload.GetClusterFromLabel(obj.GetLabels())
-		info := workload.NewInfo(cluster, gvk, obj)
+		info := workload.NewInfoFrom(cluster, gvk, obj, workload.Status{})
 		rollout, err := getRolloutForWorkload(reader, logger, info)
 		if err != nil {
 			logger.Error(err, "failed to get rollout for workload", "key", key.String(), "gvk", gvk.String())
@@ -58,7 +58,7 @@ func enqueueRolloutForWorkloadHandler(reader client.Reader, scheme *runtime.Sche
 			return nil
 		}
 
-		logger.V(1).Info("get matched rollout for workload", "workload", key.String(), "rollout", rollout.Name)
+		logger.V(2).Info("get matched rollout for workload", "workload", key.String(), "rollout", rollout.Name)
 		req := types.NamespacedName{Namespace: rollout.GetNamespace(), Name: rollout.GetName()}
 		return []reconcile.Request{{NamespacedName: req}}
 	}
@@ -88,14 +88,14 @@ func getRolloutForWorkload(
 		}
 		refGVK := refGV.WithKind(workloadRef.Kind)
 
-		if !reflect.DeepEqual(refGVK, workloadInfo.GVK) {
+		if !reflect.DeepEqual(refGVK, workloadInfo.GroupVersionKind) {
 			// group version kind not match
 			// logger.Info("gvk not match", "gvk", workloadInfo.GVK.String(), "refGVK", refGVK)
 			continue
 		}
 
 		macher := workload.MatchAsMatcher(workloadRef.Match)
-		if macher.Matches(workloadInfo.Cluster, workloadInfo.Name, workloadInfo.Labels) {
+		if macher.Matches(workloadInfo.ClusterName, workloadInfo.Name, workloadInfo.Labels) {
 			return &rollout, nil
 		}
 	}

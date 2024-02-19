@@ -20,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/storage/names"
 
-	"kusionstack.io/rollout/apis/rollout"
+	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
 	"kusionstack.io/rollout/pkg/features"
@@ -58,7 +58,7 @@ func filterWorkloadsByMatch(workloads []workload.Interface, match *rolloutv1alph
 	for i := range workloads {
 		w := workloads[i]
 		info := w.GetInfo()
-		if macher.Matches(info.Cluster, info.Name, info.Labels) {
+		if macher.Matches(info.ClusterName, info.Name, info.Labels) {
 			result = append(result, w)
 		}
 	}
@@ -72,8 +72,8 @@ func constructRolloutRun(instance *rolloutv1alpha1.Rollout, strategy *rolloutv1a
 			Namespace: instance.Namespace,
 			Name:      rolloutId,
 			Labels: map[string]string{
-				rollout.LabelControl:   "true",
-				rollout.LabelCreatedBy: instance.Name,
+				rolloutapi.LabelControl:     "true",
+				rolloutapi.LabelGeneratedBy: instance.Name,
 			},
 			Annotations:     map[string]string{},
 			OwnerReferences: []metav1.OwnerReference{*owner},
@@ -83,6 +83,7 @@ func constructRolloutRun(instance *rolloutv1alpha1.Rollout, strategy *rolloutv1a
 				APIVersion: instance.Spec.WorkloadRef.APIVersion,
 				Kind:       instance.Spec.WorkloadRef.Kind,
 			},
+			Canary: constructRolloutRunCanary(strategy.Canary, workloadWrappers),
 			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
 				Toleration: strategy.Batch.Toleration,
 				Batches:    constructRolloutRunBatches(strategy.Batch, workloadWrappers),
@@ -97,6 +98,33 @@ func constructRolloutRun(instance *rolloutv1alpha1.Rollout, strategy *rolloutv1a
 		run.Annotations[ontimestrategy.AnnoOneTimeStrategy] = string(data)
 	}
 	return run
+}
+
+func constructRolloutRunCanary(strategy *rolloutv1alpha1.CanaryStrategy, workloadWrappers []workload.Interface) *rolloutv1alpha1.RolloutRunCanaryStrategy {
+	if strategy == nil {
+		return nil
+	}
+	targets := make([]rolloutv1alpha1.RolloutRunStepTarget, 0)
+	filteredWorkloads := filterWorkloadsByMatch(workloadWrappers, strategy.Match)
+	for _, w := range filteredWorkloads {
+		info := w.GetInfo()
+		target := rolloutv1alpha1.RolloutRunStepTarget{
+			CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+				Cluster: info.ClusterName,
+				Name:    info.Name,
+			},
+			Replicas: strategy.Replicas,
+		}
+		targets = append(targets, target)
+	}
+
+	step := &rolloutv1alpha1.RolloutRunCanaryStrategy{
+		Targets:                  targets,
+		Traffic:                  strategy.Traffic,
+		Properties:               strategy.Properties,
+		PodTemplateMetadataPatch: strategy.PodTemplateMetadataPatch,
+	}
+	return step
 }
 
 func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloadWrappers []workload.Interface) []rolloutv1alpha1.RolloutRunStep {
@@ -118,7 +146,7 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 			info := w.GetInfo()
 			target := rolloutv1alpha1.RolloutRunStepTarget{
 				CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-					Cluster: info.Cluster,
+					Cluster: info.ClusterName,
 					Name:    info.Name,
 				},
 				Replicas: b.Replicas,
