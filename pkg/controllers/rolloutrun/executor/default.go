@@ -11,11 +11,6 @@ import (
 	"kusionstack.io/rollout/pkg/utils"
 )
 
-const (
-	defaultRunTimeout   = 5
-	defaultRequeueAfter = time.Duration(5) * time.Second
-)
-
 type Executor struct {
 	logger logr.Logger
 	canary *canaryExecutor
@@ -127,7 +122,7 @@ func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error)
 	if rolloutRun.Spec.Batch != nil && len(rolloutRun.Spec.Batch.Batches) > 0 {
 		// init BatchStatus
 		if len(newStatus.BatchStatus.CurrentBatchState) == 0 {
-			newStatus.BatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
+			newStatus.BatchStatus.CurrentBatchState = StepPending
 		}
 		preCurrentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 		preCurrentBatchState := newStatus.BatchStatus.CurrentBatchState

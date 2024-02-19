@@ -47,7 +47,7 @@ func CalculatePartitionReplicas(totalReplicas *int32, partition intstr.IntOrStri
 
 // PatchMetadata patches metadata with the given patch
 func PatchMetadata(meta *metav1.ObjectMeta, patch rolloutv1alpha1.MetadataPatch) {
-	if patch.Labels != nil {
+	if len(patch.Labels) > 0 {
 		if meta.Labels == nil {
 			meta.Labels = make(map[string]string)
 		}
@@ -55,7 +55,7 @@ func PatchMetadata(meta *metav1.ObjectMeta, patch rolloutv1alpha1.MetadataPatch)
 			meta.Labels[k] = v
 		}
 	}
-	if patch.Annotations != nil {
+	if len(patch.Annotations) > 0 {
 		if meta.Annotations == nil {
 			meta.Annotations = make(map[string]string)
 		}

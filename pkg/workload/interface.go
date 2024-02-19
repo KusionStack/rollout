@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
@@ -38,14 +39,51 @@ type Interface interface {
 	// UpdateOnConflict try its best to updates the workload on conflict.
 	UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error
 
+	// CanaryStrategy returns an interface for managing the canary strategy process.
+	CanaryStrategy() (CanaryStrategy, error)
+
+	// BatchStrategy returns an interface for managing the batch strategy process.
+	BatchStrategy() BatchStrategy
+}
+
+type BatchStrategy interface {
+	// Initialize initializes the stable workload.
+	// It claims the stable workload is in batch release process controlled by rolloutRun
+	Initialize(rollout, rolloutRun string, batchIndex int32) error
+
 	// UpgradePartition upgrades the workload to the specified partition
 	// It should return true if the workload changed.
 	//
 	// NOTE: This function must be idempotent.
-	UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error)
+	UpgradePartition(partition intstr.IntOrString) (bool, error)
+}
 
-	// EnsureCanaryWorkload ensures the canary workload is created and updated.
-	EnsureCanaryWorkload(canaryReplicas intstr.IntOrString, canaryMetadataPatch, podTemplatePatch *rolloutv1alpha1.MetadataPatch) (Interface, error)
+type CanaryStrategy interface {
+	StableInterface
+	CanaryInterface
+}
+
+type CanaryInterface interface {
+	// CreateOrUpdate ensures the canary workload is created and updated.
+	CreateOrUpdate(canaryReplicas intstr.IntOrString, podTemplatePatch *rolloutv1alpha1.MetadataPatch) (controllerutil.OperationResult, error)
+
+	// GetInfo returns basic canary workload informations.
+	GetCanaryInfo() Info
+
+	// Delete delete canary resources
+	Delete() error
+}
+
+type StableInterface interface {
+	// Initialize initializes the stable workload.
+	// It claims the stable workload is in canary release process controlled by rolloutRun
+	Initialize(rollout, rolloutRun string) error
+
+	// GetStableInfo returns basic stable workload informations.
+	GetStableInfo() Info
+
+	// Finalize finalizes the stable workload.
+	Finalize() error
 }
 
 // workload info

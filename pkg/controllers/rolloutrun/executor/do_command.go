@@ -24,12 +24,6 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 		}
-		if ctx.inCanary() {
-			// TODO: change next state to recycle canary resources
-			ctx.MoveToNextStateIfMatch(rolloutv1alpha1.RolloutStepPaused, rolloutv1alpha1.RolloutStepResourceRecycling)
-		} else {
-			ctx.MoveToNextStateIfMatch(rolloutv1alpha1.RolloutStepPaused, rolloutv1alpha1.RolloutStepPreBatchStepHook)
-		}
 	case rolloutapis.AnnoManualCommandRetry:
 		if batchError != nil {
 			newStatus.Error = nil
@@ -44,7 +38,7 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 			if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
 				currentBatchIndex++
 				newBatchStatus.CurrentBatchIndex = currentBatchIndex
-				newBatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
+				newBatchStatus.CurrentBatchState = StepPending
 			} else {
 				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 			}

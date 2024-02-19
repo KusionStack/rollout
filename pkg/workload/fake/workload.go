@@ -19,10 +19,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -32,20 +30,20 @@ var GVK = schema.GroupVersionKind{
 	Kind:    "FakeWorkload",
 }
 
-var _ workload.Interface = &fakeWorkload{}
+var _ workload.Interface = &workloadImpl{}
 
 type FakeWorkload interface {
 	workload.Interface
 	ChangeStatus(replicas, partition, ready int32) FakeWorkload
 }
 
-type fakeWorkload struct {
+type workloadImpl struct {
 	workload.Info
 	Partition int32
 }
 
 func New(cluster, namespace, name string) FakeWorkload {
-	w := &fakeWorkload{
+	w := &workloadImpl{
 		Info: workload.Info{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
@@ -67,32 +65,21 @@ func New(cluster, namespace, name string) FakeWorkload {
 }
 
 // GetInfo implements workload.Interface.
-func (w *fakeWorkload) GetInfo() workload.Info {
+func (w *workloadImpl) GetInfo() workload.Info {
 	return w.Info
 }
 
 // IsWaitingRollout implements workload.Interface.
-func (w *fakeWorkload) IsWaitingRollout() bool {
+func (w *workloadImpl) IsWaitingRollout() bool {
 	return w.Partition == 0
 }
 
 // UpdateOnConflict implements workload.Interface.
-func (*fakeWorkload) UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error {
+func (*workloadImpl) UpdateOnConflict(ctx context.Context, modifyFunc func(obj client.Object) error) error {
 	return nil
 }
 
-// UpgradePartition implements workload.Interface.
-func (w *fakeWorkload) UpgradePartition(partition intstr.IntOrString, metadataPatch rolloutv1alpha1.MetadataPatch) (bool, error) {
-	partitionInt, _ := workload.CalculatePartitionReplicas(&w.Status.Replicas, partition)
-	if partitionInt <= w.Partition {
-		// already updated
-		return false, nil
-	}
-	w.ChangeStatus(w.Status.Replicas, partitionInt, partitionInt)
-	return true, nil
-}
-
-func (w *fakeWorkload) ChangeStatus(replicas, partition, ready int32) FakeWorkload {
+func (w *workloadImpl) ChangeStatus(replicas, partition, ready int32) FakeWorkload {
 	w.Status.Replicas = replicas
 	w.Partition = partition
 	w.Status.UpdatedReplicas = ready
@@ -101,13 +88,5 @@ func (w *fakeWorkload) ChangeStatus(replicas, partition, ready int32) FakeWorklo
 	return w
 }
 
-func (w *fakeWorkload) EnsureCanaryWorkload(canaryReplicas intstr.IntOrString, canaryMetadataPatch, podMetadataPatch *rolloutv1alpha1.MetadataPatch) (workload.Interface, error) {
-	replicas, err := workload.CalculatePartitionReplicas(&w.Status.Replicas, canaryReplicas)
-	if err != nil {
-		return nil, err
-	}
-	canaryName := w.Name + "-canary"
-	canary := New(w.ClusterName, w.Namespace, canaryName)
-	canary.ChangeStatus(replicas, replicas, replicas)
-	return canary, nil
+func (w *workloadImpl) SetObject(_ client.Object) {
 }

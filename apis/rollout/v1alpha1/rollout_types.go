@@ -190,9 +190,6 @@ const (
 	// RolloutStepPending indicates that the step is pending.
 	RolloutStepPending RolloutStepState = "Pending"
 
-	// RolloutStepPaused indicates that the step is paused.
-	RolloutStepPaused RolloutStepState = "Paused"
-
 	// RolloutStepPreCanaryStepHook indicates that the step is in the pre-canary hook.
 	RolloutStepPreCanaryStepHook RolloutStepState = RolloutStepState(PreCanaryStepHook)
 
@@ -210,9 +207,6 @@ const (
 
 	// RolloutStepSucceeded indicates that the step is completed.
 	RolloutStepSucceeded RolloutStepState = "Succeeded"
-
-	// RolloutStepCanceled indicates that the step is canceled.
-	RolloutStepCanceled RolloutStepState = "Canceled"
 
 	// RolloutStepResourceRecycling indicates that the step is recycling resources.
 	// In Canary strategy, it occurs after the user confirms (Paused).

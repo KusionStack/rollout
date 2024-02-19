@@ -63,11 +63,7 @@ func (p *Storage) Wrap(cluster string, obj client.Object) (workload.Interface, e
 	if !ok {
 		return nil, fmt.Errorf("obj must be statefulset")
 	}
-	return &workloadImpl{
-		info:   workload.NewInfoFrom(cluster, GVK, obj, getStatus(sts)),
-		client: p.client,
-		obj:    sts.DeepCopy(),
-	}, nil
+	return newFrom(cluster, p.client, sts), nil
 }
 
 func (p *Storage) Get(ctx context.Context, cluster, namespace, name string) (workload.Interface, error) {

@@ -20,12 +20,26 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/fake"
+)
+
+var (
+	unimportantTargets = []rolloutv1alpha1.RolloutRunStepTarget{
+		newRunStepTarget("cluster-a", "test-0", intstr.FromInt(1)),
+	}
+
+	unimportantWorkloads = func() *workload.Set {
+		return workload.NewWorkloadSet(
+			fake.New("cluster-a", "default", "test-0").ChangeStatus(1, 1, 1),
+		)
+	}
 )
 
 func newTestBatchExecutor(webhook webhookExecutor) *batchExecutor {
@@ -51,24 +65,25 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepPending,
+						CurrentBatchState: StepPending,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.RolloutStepPending,
+							State: StepPending,
 						},
 					},
 				}
 				return rollout, rolloutRun
 			},
+			getWorkloads: unimportantWorkloads,
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
 				assert.False(done)
 				assert.Nil(err)
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.RolloutStepPreBatchStepHook, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.RolloutStepPreBatchStepHook, status.BatchStatus.Records[0].State)
+				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.Records[0].State)
 			},
 		},
 		{
@@ -83,58 +98,60 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepPending,
+						CurrentBatchState: StepPending,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.RolloutStepPending,
+							State: StepPending,
 						},
 					},
 				}
 				return rollout, rolloutRun
 			},
+			getWorkloads: unimportantWorkloads,
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
 				assert.False(done)
 				assert.Nil(err)
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.Records[0].State)
+				assert.EqualValues(rolloutv1alpha1.RolloutRunPhasePaused, status.Phase)
+				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.Records[0].State)
 			},
 		},
-		{
-			name: "Paused do nothing",
-			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+		// {
+		// 	name: "Paused do nothing",
+		// 	getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+		// 		rollout := testRollout.DeepCopy()
+		// 		rolloutRun := testRolloutRun.DeepCopy()
 
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Breakpoint: true,
-					Targets:    unimportantTargets,
-				}}
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepPaused,
-					},
-					Records: []rolloutv1alpha1.RolloutRunStepStatus{
-						{
-							State: rolloutv1alpha1.RolloutStepPaused,
-						},
-					},
-				}
-				return rollout, rolloutRun
-			},
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(reconcile.Result{}, result)
-			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.Records[0].State)
-			},
-		},
+		// 		rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+		// 			Breakpoint: true,
+		// 			Targets:    unimportantTargets,
+		// 		}}
+		// 		rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+		// 			RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+		// 				CurrentBatchState: rolloutv1alpha1.RolloutStepPaused,
+		// 			},
+		// 			Records: []rolloutv1alpha1.RolloutRunStepStatus{
+		// 				{
+		// 					State: rolloutv1alpha1.RolloutStepPaused,
+		// 				},
+		// 			},
+		// 		}
+		// 		return rollout, rolloutRun
+		// 	},
+		// 	assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+		// 		assert.False(done)
+		// 		assert.Nil(err)
+		// 		assert.Equal(reconcile.Result{}, result)
+		// 	},
+		// 	assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
+		// 		assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.CurrentBatchState)
+		// 		assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.Records[0].State)
+		// 	},
+		// },
 		{
 			name: "PreBatchStepHook to Running",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
@@ -147,11 +164,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepPreBatchStepHook,
+						CurrentBatchState: StepPreBatchStepHook,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.RolloutStepPreBatchStepHook,
+							State: StepPreBatchStepHook,
 						},
 					},
 				}
@@ -163,8 +180,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.RolloutStepRunning, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.RolloutStepRunning, status.BatchStatus.Records[0].State)
+				assert.EqualValues(StepRunning, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepRunning, status.BatchStatus.Records[0].State)
 			},
 		},
 		{
@@ -180,11 +197,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepRunning,
+						CurrentBatchState: StepRunning,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.RolloutStepRunning,
+							State: StepRunning,
 						},
 					},
 				}
@@ -216,11 +233,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepPostBatchStepHook,
+						CurrentBatchState: StepPostBatchStepHook,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.RolloutStepPostBatchStepHook,
+							State: StepPostBatchStepHook,
 						},
 					},
 				}
@@ -232,8 +249,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.RolloutStepSucceeded, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.RolloutStepSucceeded, status.BatchStatus.Records[0].State)
+				assert.EqualValues(StepSucceeded, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepSucceeded, status.BatchStatus.Records[0].State)
 			},
 		},
 		{
@@ -252,11 +269,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepSucceeded,
+						CurrentBatchState: StepSucceeded,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.RolloutStepSucceeded,
+							State: StepSucceeded,
 						},
 					},
 				}
@@ -268,9 +285,9 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.RolloutStepPending, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepPending, status.BatchStatus.CurrentBatchState)
 				assert.EqualValues(1, status.BatchStatus.CurrentBatchIndex)
-				assert.EqualValues(rolloutv1alpha1.RolloutStepPending, status.BatchStatus.Records[1].State)
+				assert.EqualValues(StepPending, status.BatchStatus.Records[1].State)
 			},
 		},
 		{
@@ -286,11 +303,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: rolloutv1alpha1.RolloutStepSucceeded,
+						CurrentBatchState: StepSucceeded,
 					},
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{
-							State: rolloutv1alpha1.RolloutStepSucceeded,
+							State: StepSucceeded,
 						},
 					},
 				}
@@ -302,8 +319,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.RolloutStepSucceeded, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(rolloutv1alpha1.RolloutStepSucceeded, status.BatchStatus.Records[0].State)
+				assert.EqualValues(StepSucceeded, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepSucceeded, status.BatchStatus.Records[0].State)
 			},
 		},
 	}
@@ -322,6 +339,247 @@ func Test_BatchExecutor_Do(t *testing.T) {
 			assert := assert.New(t)
 			tt.assertResult(assert, done, got, err)
 			tt.assertStatus(assert, ctx.NewStatus)
+		})
+	}
+}
+
+func newRunStepTarget(cluster, name string, replicas intstr.IntOrString) rolloutv1alpha1.RolloutRunStepTarget {
+	return rolloutv1alpha1.RolloutRunStepTarget{
+		CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+			Cluster: cluster,
+			Name:    name,
+		},
+		Replicas: replicas,
+	}
+}
+
+func Test_BatchExecutor_Do_Running(t *testing.T) {
+	tests := []struct {
+		name         string
+		getObjects   func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun)
+		getWorkloads func() *workload.Set
+		assertResult func(assert *assert.Assertions, done bool, result reconcile.Result, err error)
+		assertStatus func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus)
+	}{
+		{
+			name: "batch target is empty",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := testRollout.DeepCopy()
+				rolloutRun := testRolloutRun.DeepCopy()
+
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Targets: nil,
+				}}
+
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{
+							State: StepRunning,
+						},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.False(done)
+			},
+			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
+				assert.Nil(status.Error)
+			},
+		},
+		{
+			name: "workflow instance not found",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := testRollout.DeepCopy()
+				rolloutRun := testRolloutRun.DeepCopy()
+
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("non-exist", "non-exits", intstr.FromInt(1)),
+					},
+				}}
+
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{
+							Index:     ptr.To[int32](0),
+							State:     StepRunning,
+							StartTime: ptr.To(metav1.Now()),
+						},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+				assert.Equal(reconcile.Result{}, result)
+				assert.False(done)
+			},
+		},
+		{
+			name: "upgrade workload and then requeue after 5 seconds",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := testRollout.DeepCopy()
+				rolloutRun := testRolloutRun.DeepCopy()
+
+				// setup rolloutRun
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-0", intstr.FromInt(1)),
+					},
+				}}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{
+							Index:     ptr.To[int32](0),
+							State:     StepRunning,
+							StartTime: ptr.To(metav1.Now()),
+						},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			getWorkloads: func() *workload.Set {
+				return workload.NewWorkloadSet(fake.New("cluster-a", "default", "test-0"))
+			},
+			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{RequeueAfter: retryDefault}, result)
+				assert.False(done)
+			},
+			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
+				assert.Len(status.BatchStatus.Records, 1)
+				assert.Len(status.BatchStatus.Records[0].Targets, 1)
+			},
+		},
+		{
+			name: "waiting for workload ready",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := testRollout.DeepCopy()
+				rolloutRun := testRolloutRun.DeepCopy()
+
+				// setup rolloutRun
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-0", intstr.FromInt(10)),
+					},
+				}}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{
+							Index:     ptr.To[int32](0),
+							State:     StepRunning,
+							StartTime: ptr.To(metav1.Now()),
+						},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			getWorkloads: func() *workload.Set {
+				return workload.NewWorkloadSet(fake.New("cluster-a", "default", "test-0").ChangeStatus(100, 10, 1))
+			},
+			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{RequeueAfter: retryDefault}, result)
+				assert.False(done)
+			},
+			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
+				assert.Len(status.BatchStatus.Records, 1)
+				assert.Len(status.BatchStatus.Records[0].Targets, 1)
+				assert.EqualValues(100, status.BatchStatus.Records[0].Targets[0].Replicas)
+				assert.EqualValues(1, status.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas)
+			},
+		},
+		{
+			name: "all workload ready, move to next state",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := testRollout.DeepCopy()
+				rolloutRun := testRolloutRun.DeepCopy()
+
+				// setup rolloutRun
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-0", intstr.FromInt(10)),
+						newRunStepTarget("cluster-b", "test-0", intstr.FromInt(10)),
+					},
+				}}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{
+							Index:     ptr.To[int32](0),
+							State:     StepRunning,
+							StartTime: ptr.To(metav1.Now()),
+						},
+					},
+				}
+
+				return rollout, rolloutRun
+			},
+			getWorkloads: func() *workload.Set {
+				return workload.NewWorkloadSet(
+					fake.New("cluster-a", "default", "test-0").ChangeStatus(100, 10, 10),
+					fake.New("cluster-b", "default", "test-0").ChangeStatus(100, 10, 10),
+				)
+			},
+			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{Requeue: true}, result)
+				assert.False(done)
+			},
+			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
+				// check records
+				assert.Len(status.BatchStatus.Records, 1)
+				// check targets
+				assert.Len(status.BatchStatus.Records[0].Targets, 2)
+				assert.EqualValues(100, status.BatchStatus.Records[0].Targets[0].Replicas)
+				assert.EqualValues(10, status.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas)
+				// check state
+				assert.Equal(StepPostBatchStepHook, status.BatchStatus.CurrentBatchState)
+				assert.Equal(StepPostBatchStepHook, status.BatchStatus.Records[0].State)
+			},
+		},
+	}
+
+	executor := newTestBatchExecutor(newFakeWebhookExecutor())
+	for i := range tests {
+		tt := tests[i]
+		t.Run(tt.name, func(t *testing.T) {
+			rollout, rolloutRun := tt.getObjects()
+			var workloads *workload.Set
+			if tt.getWorkloads != nil {
+				workloads = tt.getWorkloads()
+			}
+			ctx := createTestExecutorContext(rollout, rolloutRun, workloads)
+			done, got, err := executor.Do(ctx)
+			assert := assert.New(t)
+			tt.assertResult(assert, done, got, err)
+			if tt.assertStatus != nil {
+				tt.assertStatus(assert, ctx.NewStatus)
+			}
 		})
 	}
 }

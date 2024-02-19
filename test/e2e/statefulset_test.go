@@ -196,19 +196,19 @@ var _ = Describe("StatefulSet", func() {
 					return false
 				}
 
-				if rolloutRun.Status.BatchStatus == nil ||
-					rolloutRun.Status.Phase != rolloutv1alpha1.RolloutRunPhaseProgressing {
-					return false
+				currentPhase := rolloutRun.Status.Phase
+				currentBatchIndex := rolloutRun.Status.BatchStatus.CurrentBatchIndex
+				currentBatchState := rolloutRun.Status.BatchStatus.CurrentBatchState
+
+				if rolloutRun.Status.BatchStatus != nil &&
+					currentPhase == rolloutv1alpha1.RolloutRunPhasePaused &&
+					currentBatchIndex == 0 &&
+					currentBatchState == rolloutv1alpha1.RolloutStepPreBatchStepHook {
+					By("HappyPath: ensure trigger rolloutRun")
+					return true
 				}
 
-				if rolloutRun.Status.BatchStatus.RolloutBatchStatus.CurrentBatchIndex != 0 ||
-					rolloutRun.Status.BatchStatus.RolloutBatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPaused {
-					return false
-				}
-
-				By("HappyPath: ensure trigger rolloutRun")
-
-				return true
+				return false
 			}, "60s", "1s").Should(BeTrue())
 		}
 
@@ -234,12 +234,13 @@ var _ = Describe("StatefulSet", func() {
 					return false
 				}
 
+				currentPhase := rolloutRun.Status.Phase
 				currentBatchIndex := rolloutRun.Status.BatchStatus.CurrentBatchIndex
 				currentBatchState := rolloutRun.Status.BatchStatus.CurrentBatchState
-				if currentBatchIndex != 1 ||
-					currentBatchState != rolloutv1alpha1.RolloutStepPaused ||
-					rolloutRun.Status.BatchStatus.Records[0].State != rolloutv1alpha1.RolloutStepSucceeded {
-					By(fmt.Sprintf("HappyPath: first batch idx=%d, state=%s", currentBatchIndex, currentBatchState))
+
+				if !(currentPhase == rolloutv1alpha1.RolloutRunPhasePaused &&
+					currentBatchIndex == 1 &&
+					currentBatchState == rolloutv1alpha1.RolloutStepPreBatchStepHook) {
 					return false
 				}
 
@@ -286,12 +287,18 @@ var _ = Describe("StatefulSet", func() {
 					return false
 				}
 
+				if rolloutRun.Status.BatchStatus.Records[0].State != rolloutv1alpha1.RolloutStepSucceeded {
+					// still waiting
+					return false
+				}
+
+				currentPhase := rolloutRun.Status.Phase
 				currentBatchIndex := rolloutRun.Status.BatchStatus.CurrentBatchIndex
 				currentBatchState := rolloutRun.Status.BatchStatus.CurrentBatchState
-				if currentBatchIndex != 2 ||
-					currentBatchState != rolloutv1alpha1.RolloutStepPaused ||
-					rolloutRun.Status.BatchStatus.Records[1].State != rolloutv1alpha1.RolloutStepSucceeded {
-					By(fmt.Sprintf("HappyPath: second batch idx=%d, state=%s", currentBatchIndex, currentBatchState))
+
+				if !(currentPhase == rolloutv1alpha1.RolloutRunPhasePaused &&
+					currentBatchIndex == 2 &&
+					currentBatchState == rolloutv1alpha1.RolloutStepPreBatchStepHook) {
 					return false
 				}
 

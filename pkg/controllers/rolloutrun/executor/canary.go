@@ -18,27 +18,46 @@ package executor
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
+func newDoCanaryError(reason, msg string) *rolloutv1alpha1.CodeReasonMessage {
+	return &rolloutv1alpha1.CodeReasonMessage{
+		Code:    "DoCanaryError",
+		Reason:  reason,
+		Message: msg,
+	}
+}
+
 type canaryExecutor struct {
-	logger  logr.Logger
-	webhook webhookExecutor
+	logger       logr.Logger
+	webhook      webhookExecutor
+	stateMachine *stepStateMachine
 }
 
 func newCanaryExecutor(logger logr.Logger, webhook webhookExecutor) *canaryExecutor {
-	return &canaryExecutor{
-		logger:  logger,
-		webhook: webhook,
+	e := &canaryExecutor{
+		logger:       logger,
+		webhook:      webhook,
+		stateMachine: newStepStateMachine(),
 	}
+
+	e.stateMachine.add(StepPending, StepPreCanaryStepHook, e.doInit)
+	e.stateMachine.add(StepPreCanaryStepHook, StepRunning, e.doPreStepHook)
+	e.stateMachine.add(StepRunning, StepPostCanaryStepHook, e.doCanary)
+	e.stateMachine.add(StepPostCanaryStepHook, StepResourceRecycling, e.doPostStepHook)
+	e.stateMachine.add(StepResourceRecycling, StepSucceeded, skipStep)
+	e.stateMachine.add(StepSucceeded, "", skipStep)
+
+	return e
 }
 
 func (e *canaryExecutor) loggerWithContext(ctx *ExecutorContext) logr.Logger {
@@ -49,46 +68,58 @@ func (e *canaryExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result
 	if !ctx.inCanary() {
 		return true, ctrl.Result{Requeue: true}, nil
 	}
-	newStatus := ctx.NewStatus
 
-	result = ctrl.Result{Requeue: true}
+	currentState := ctx.NewStatus.CanaryStatus.State
 
-	switch newStatus.CanaryStatus.State {
-	case rolloutv1alpha1.RolloutStepPending:
-		ctx.MoveToNextState(rolloutv1alpha1.RolloutStepPreCanaryStepHook)
-	case rolloutv1alpha1.RolloutStepPreCanaryStepHook:
-		var webhookDone bool
-		webhookDone, result, err = e.webhook.Do(ctx, rolloutv1alpha1.PreCanaryStepHook)
-		if webhookDone {
-			ctx.MoveToNextState(rolloutv1alpha1.RolloutStepRunning)
-		}
-	case rolloutv1alpha1.RolloutStepRunning:
-		var canaryDone bool
-		canaryDone, result, err = e.doCanary(ctx)
-		if canaryDone {
-			ctx.MoveToNextState(rolloutv1alpha1.RolloutStepPostCanaryStepHook)
-		}
-	case rolloutv1alpha1.RolloutStepPostCanaryStepHook:
-		var webhookDone bool
-		webhookDone, result, err = e.webhook.Do(ctx, rolloutv1alpha1.PostCanaryStepHook)
-		if webhookDone {
-			ctx.MoveToNextState(rolloutv1alpha1.RolloutStepPaused)
-		}
-	case rolloutv1alpha1.RolloutStepPaused:
-		// waiting for user confirm, do nothing
-		result.Requeue = false
-	case rolloutv1alpha1.RolloutStepResourceRecycling:
-		result.Requeue = true
-	case rolloutv1alpha1.RolloutStepSucceeded, rolloutv1alpha1.RolloutStepCanceled:
-		done = true
-		result.Requeue = false
-	}
-	return done, result, err
+	return e.stateMachine.do(ctx, currentState)
 }
 
-func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, ctrl.Result, error) {
+func (e *canaryExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, error) {
+	rollout := ctx.Rollout
 	rolloutRun := ctx.RolloutRun
-	newStatus := ctx.NewStatus
+	for _, item := range rolloutRun.Spec.Canary.Targets {
+		wi := ctx.Workloads.Get(item.Cluster, item.Name)
+		if wi == nil {
+			return false, retryStop, newDoCanaryError(
+				ReasonWorkloadInterfaceNotExist,
+				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
+			)
+		}
+
+		canaryStrategy, err := wi.CanaryStrategy()
+		if err != nil {
+			return false, retryStop, newDoCanaryError(
+				"InternalError",
+				fmt.Sprintf("failed to get canary strategy, err: %v", err),
+			)
+		}
+
+		err = canaryStrategy.Initialize(rollout.Name, rolloutRun.Name)
+		if err != nil {
+			return false, retryStop, newDoCanaryError(
+				"InitializeFailed",
+				fmt.Sprintf("failed to initialize canary strategy, err: %v", err),
+			)
+		}
+	}
+
+	return true, retryDefault, nil
+}
+
+func (e *canaryExecutor) doPreStepHook(ctx *ExecutorContext) (bool, time.Duration, error) {
+	return e.webhook.Do(ctx, rolloutv1alpha1.PreCanaryStepHook)
+}
+
+func (e *canaryExecutor) doPostStepHook(ctx *ExecutorContext) (bool, time.Duration, error) {
+	done, retry, err := e.webhook.Do(ctx, rolloutv1alpha1.PostCanaryStepHook)
+	if done {
+		ctx.Pause()
+	}
+	return done, retry, err
+}
+
+func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, error) {
+	rolloutRun := ctx.RolloutRun
 	// 1.a. do traffic initialization
 
 	// 1.b. waiting for traffic
@@ -97,39 +128,51 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, ctrl.Result, erro
 	logger := e.loggerWithContext(ctx)
 	logger.Info("about to create canary resources and check")
 
-	canaryWorkloads := make([]workload.Interface, 0)
+	canaryWorkloads := make([]workload.CanaryStrategy, 0)
 
 	patch := appendBuiltinPodTemplateMetadataPatch(rolloutRun.Spec.Canary.PodTemplateMetadataPatch)
-	canaryMetadataPatch := &rolloutv1alpha1.MetadataPatch{
-		Labels: map[string]string{
-			rolloutapi.LabelCanary: "true",
-		},
-	}
+
+	changed := false
+
 	for _, item := range rolloutRun.Spec.Canary.Targets {
 		wi := ctx.Workloads.Get(item.Cluster, item.Name)
 		if wi == nil {
-			newStatus.Error = newUpgradingError(
+			return false, retryStop, newDoCanaryError(
 				ReasonWorkloadInterfaceNotExist,
 				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
 			)
-			return false, ctrl.Result{}, errors.New(newStatus.Error.Message)
 		}
 
-		canaryWI, err := wi.EnsureCanaryWorkload(item.Replicas, canaryMetadataPatch, patch)
+		canaryStrategy, err := wi.CanaryStrategy()
 		if err != nil {
-			newStatus.Error = newUpgradingError(
-				ReasonUpgradePartitionError,
+			return false, retryStop, newDoCanaryError(
+				"InternalError",
+				fmt.Sprintf("failed to get canary strategy, err: %v", err),
+			)
+		}
+
+		result, err := canaryStrategy.CreateOrUpdate(item.Replicas, patch)
+		if err != nil {
+			return false, retryStop, newDoCanaryError(
+				"CreateOrUpdateFailed",
 				fmt.Sprintf("failed to ensure canary resource for workload(%s), err: %v", item.CrossClusterObjectNameReference, err),
 			)
-			return false, ctrl.Result{}, errors.New(newStatus.Error.Message)
 		}
 
-		canaryWorkloads = append(canaryWorkloads, canaryWI)
+		if result != controllerutil.OperationResultNone {
+			changed = true
+		}
+
+		canaryWorkloads = append(canaryWorkloads, canaryStrategy)
+	}
+
+	if changed {
+		return false, retryDefault, nil
 	}
 
 	// 2.b. waiting canary workload ready
 	for _, cw := range canaryWorkloads {
-		info := cw.GetInfo()
+		info := cw.GetCanaryInfo()
 		if !info.CheckPartitionReady(info.Status.Replicas) {
 			// ready
 			logger.Info("still waiting for canary target ready",
@@ -138,7 +181,7 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, ctrl.Result, erro
 				"replicas", info.Status.Replicas,
 				"readyReplicas", info.Status.UpdatedAvailableReplicas,
 			)
-			return false, reconcile.Result{RequeueAfter: defaultRequeueAfter}, nil
+			return false, retryDefault, nil
 		}
 	}
 
@@ -147,8 +190,8 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, ctrl.Result, erro
 	// 3.b. waiting for traffic ready
 
 	// 4. move to next state
-	// ctx.MoveToNextState(rolloutv1alpha1.RolloutStepPostCanaryStepHook)
-	return true, ctrl.Result{Requeue: true}, nil
+	// ctx.MoveToNextState(StepPostCanaryStepHook)
+	return true, retryImmediately, nil
 }
 
 func appendBuiltinPodTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch) *rolloutv1alpha1.MetadataPatch {

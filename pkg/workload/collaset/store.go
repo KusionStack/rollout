@@ -48,11 +48,7 @@ func (p *Storage) Wrap(cluster string, obj client.Object) (workload.Interface, e
 	if !ok {
 		return nil, fmt.Errorf("obj must be CollaSet")
 	}
-	return &workloadImpl{
-		info:   workload.NewInfoFrom(cluster, GVK, obj, getStatus(cs)),
-		client: p.client,
-		obj:    cs.DeepCopy(),
-	}, nil
+	return newFrom(cluster, p.client, cs), nil
 }
 
 func (p *Storage) Get(ctx context.Context, cluster, namespace, name string) (workload.Interface, error) {

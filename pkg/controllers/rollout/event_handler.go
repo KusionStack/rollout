@@ -58,7 +58,7 @@ func enqueueRolloutForWorkloadHandler(reader client.Reader, scheme *runtime.Sche
 			return nil
 		}
 
-		logger.V(1).Info("get matched rollout for workload", "workload", key.String(), "rollout", rollout.Name)
+		logger.V(2).Info("get matched rollout for workload", "workload", key.String(), "rollout", rollout.Name)
 		req := types.NamespacedName{Namespace: rollout.GetNamespace(), Name: rollout.GetName()}
 		return []reconcile.Request{{NamespacedName: req}}
 	}

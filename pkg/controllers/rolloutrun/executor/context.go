@@ -54,7 +54,7 @@ func (c *ExecutorContext) Initialize() {
 		// init canary status
 		if c.RolloutRun.Spec.Canary != nil && newStatus.CanaryStatus == nil {
 			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-				State: rolloutv1alpha1.RolloutStepPending,
+				State: StepPending,
 			}
 		}
 		// init BatchStatus
@@ -63,7 +63,7 @@ func (c *ExecutorContext) Initialize() {
 				newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
 			}
 			if len(newStatus.BatchStatus.CurrentBatchState) == 0 {
-				newStatus.BatchStatus.CurrentBatchState = rolloutv1alpha1.RolloutStepPending
+				newStatus.BatchStatus.CurrentBatchState = StepPending
 			}
 			// resize records
 			specBatchSize := len(c.RolloutRun.Spec.Batch.Batches)
@@ -73,7 +73,7 @@ func (c *ExecutorContext) Initialize() {
 					newStatus.BatchStatus.Records = append(newStatus.BatchStatus.Records,
 						rolloutv1alpha1.RolloutRunStepStatus{
 							Index: ptr.To(int32(statusBatchSize + i)),
-							State: rolloutv1alpha1.RolloutStepPending,
+							State: StepPending,
 						},
 					)
 				}
@@ -136,7 +136,7 @@ func (c *ExecutorContext) SetWebhookStatus(status rolloutv1alpha1.RolloutWebhook
 }
 
 func isFinalStepState(state rolloutv1alpha1.RolloutStepState) bool {
-	return state == rolloutv1alpha1.RolloutStepSucceeded || state == rolloutv1alpha1.RolloutStepCanceled
+	return state == StepSucceeded
 }
 
 func (c *ExecutorContext) GetCurrentState() (string, rolloutv1alpha1.RolloutStepState) {
@@ -153,7 +153,7 @@ func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutStepS
 	newStatus := c.NewStatus
 	if c.inCanary() {
 		newStatus.CanaryStatus.State = nextState
-		if nextState == rolloutv1alpha1.RolloutStepPreCanaryStepHook {
+		if nextState == StepPreCanaryStepHook {
 			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
 		} else if isFinalStepState(nextState) {
 			newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
@@ -162,10 +162,29 @@ func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutStepS
 		index := newStatus.BatchStatus.CurrentBatchIndex
 		newStatus.BatchStatus.CurrentBatchState = nextState
 		newStatus.BatchStatus.Records[index].State = nextState
-		if nextState == rolloutv1alpha1.RolloutStepPreBatchStepHook {
+		if nextState == StepPreBatchStepHook {
 			newStatus.BatchStatus.Records[index].StartTime = ptr.To(metav1.Now())
 		} else if isFinalStepState(nextState) {
 			newStatus.BatchStatus.Records[index].FinishTime = ptr.To(metav1.Now())
+		}
+	}
+}
+
+func (c *ExecutorContext) Pause() {
+	c.Initialize()
+	c.NewStatus.Phase = rolloutv1alpha1.RolloutRunPhasePaused
+}
+
+func (c *ExecutorContext) Fail(err error) {
+	c.Initialize()
+	crm, ok := err.(*rolloutv1alpha1.CodeReasonMessage)
+	if ok {
+		c.NewStatus.Error = crm
+	} else {
+		c.NewStatus.Error = &rolloutv1alpha1.CodeReasonMessage{
+			Code:    "Error",
+			Reason:  "ExecutorFailed",
+			Message: err.Error(),
 		}
 	}
 }
@@ -201,8 +220,8 @@ func (r *ExecutorContext) inCanary() bool {
 		if canaryStatus == nil {
 			return true
 		}
-		if canaryStatus.State == rolloutv1alpha1.RolloutStepCanceled ||
-			canaryStatus.State == rolloutv1alpha1.RolloutStepSucceeded {
+
+		if isFinalStepState(canaryStatus.State) {
 			return false
 		}
 		return true
