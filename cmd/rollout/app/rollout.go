@@ -38,9 +38,7 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func NewRolloutCommand() *cobra.Command {
-	opt := options.NewOptions()
-
+func NewRolloutCommand(opt *options.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "rollout",
 		SilenceUsage: true,
@@ -94,10 +92,11 @@ func Run(opt *options.Options) error {
 		setupLog.Info("federated mode enabled")
 		// multiClusterManager manages syncing clusters
 		multiClusterCfg := &multicluster.ManagerConfig{
-			FedConfig:     config.GetConfigOrDie(),
-			ClusterScheme: scheme.Scheme,
-			ResyncPeriod:  0 * time.Second,
-			Log:           ctrl.Log.WithName("multicluster"),
+			FedConfig:             config.GetConfigOrDie(),
+			ClusterManagermentGVR: opt.ClusterManagementGVR,
+			ClusterScheme:         scheme.Scheme,
+			ResyncPeriod:          0 * time.Second,
+			Log:                   ctrl.Log.WithName("multicluster"),
 		}
 		multiClusterManager, newMultiClusterCache, newMultiClusterClient, err := multicluster.NewManager(multiClusterCfg, multicluster.Options{})
 		if err != nil {
