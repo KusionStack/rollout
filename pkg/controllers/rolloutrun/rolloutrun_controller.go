@@ -313,7 +313,6 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, instance *r
 		instance.Status.ObservedGeneration = instance.Generation
 		return nil
 	})
-
 	if err != nil {
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "FailedUpdateStatus", "failed to update rolloutRun %q status: %v", key, err)
 		r.Logger.Error(err, "failed to update rolloutRun status", "rolloutRun", key)

@@ -26,6 +26,7 @@ import (
 	"k8s.io/component-base/term"
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog/v2"
+	_ "sigs.k8s.io/controller-runtime/pkg/client/config" // init kubeconfig flag
 )
 
 func AddFlagsAndUsage(cmd *cobra.Command, namedFlagSets cliflag.NamedFlagSets) {
@@ -33,6 +34,8 @@ func AddFlagsAndUsage(cmd *cobra.Command, namedFlagSets cliflag.NamedFlagSets) {
 
 	// add version flag
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
+	// add go flags, e.g kubeconfig
+	AddGoFlags(namedFlagSets.FlagSet("global"))
 	// add klog
 	AddKlogFlags(namedFlagSets.FlagSet("klog"))
 	// add help
@@ -72,4 +75,8 @@ func PrintFlags(logger logr.Logger, flags *pflag.FlagSet) {
 	flags.VisitAll(func(flag *pflag.Flag) {
 		logger.V(1).Info(fmt.Sprintf("FLAG: --%s=%q", flag.Name, flag.Value))
 	})
+}
+
+func AddGoFlags(fs *pflag.FlagSet) {
+	fs.AddGoFlagSet(flag.CommandLine)
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/component-base/version/verflag"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -34,9 +35,7 @@ import (
 	"kusionstack.io/rollout/pkg/webhook"
 )
 
-var (
-	setupLog = ctrl.Log.WithName("setup")
-)
+var setupLog = ctrl.Log.WithName("setup")
 
 func NewRolloutCommand(opt *options.Options) *cobra.Command {
 	cmd := &cobra.Command{
@@ -88,15 +87,17 @@ func Run(opt *options.Options) error {
 		// LeaderElectionReleaseOnCancel: true,
 	}
 
+	restConfig := GetRESTConfigOrDie()
+
 	if opt.FederatedMode {
 		setupLog.Info("federated mode enabled")
 		// multiClusterManager manages syncing clusters
 		multiClusterCfg := &multicluster.ManagerConfig{
-			FedConfig:             config.GetConfigOrDie(),
-			ClusterManagermentGVR: opt.ClusterManagementGVR,
-			ClusterScheme:         scheme.Scheme,
-			ResyncPeriod:          0 * time.Second,
-			Log:                   ctrl.Log.WithName("multicluster"),
+			FedConfig:            restConfig,
+			ClusterManagementGVR: opt.ClusterManagementGVR,
+			ClusterScheme:        scheme.Scheme,
+			ResyncPeriod:         0 * time.Second,
+			Log:                  ctrl.Log.WithName("multicluster"),
 		}
 		multiClusterManager, newMultiClusterCache, newMultiClusterClient, err := multicluster.NewManager(multiClusterCfg, multicluster.Options{})
 		if err != nil {
@@ -119,7 +120,7 @@ func Run(opt *options.Options) error {
 		setupLog.Info("federated mode disabled")
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	mgr, err := ctrl.NewManager(restConfig, options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -152,4 +153,11 @@ func Run(opt *options.Options) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+func GetRESTConfigOrDie() *rest.Config {
+	restConfig := config.GetConfigOrDie()
+	restConfig.QPS = 100
+	restConfig.Burst = 200
+	return restConfig
 }
