@@ -28,7 +28,8 @@ import (
 func main() {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	command := app.NewRolloutCommand(options.NewOptions())
+	opt := options.NewOptions()
+	command := app.NewRolloutCommand(opt)
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
