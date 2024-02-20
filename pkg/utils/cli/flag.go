@@ -35,7 +35,7 @@ func AddFlagsAndUsage(cmd *cobra.Command, namedFlagSets cliflag.NamedFlagSets) {
 	// add version flag
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	// add go flags, e.g kubeconfig
-	AddGoFlags(namedFlagSets.FlagSet("global"))
+	AddKubeconfigFlag(namedFlagSets.FlagSet("global"))
 	// add klog
 	AddKlogFlags(namedFlagSets.FlagSet("klog"))
 	// add help
@@ -77,6 +77,10 @@ func PrintFlags(logger logr.Logger, flags *pflag.FlagSet) {
 	})
 }
 
-func AddGoFlags(fs *pflag.FlagSet) {
-	fs.AddGoFlagSet(flag.CommandLine)
+func AddKubeconfigFlag(fs *pflag.FlagSet) {
+	f := flag.CommandLine.Lookup("kubeconfig")
+	if f == nil {
+		return
+	}
+	fs.AddGoFlag(f)
 }
