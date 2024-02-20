@@ -7,6 +7,30 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - rollout.kusionstack.io
   resources:
   - backendroutings
@@ -18,6 +42,21 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - backendroutings/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - backendroutings/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - rollout.kusionstack.io
   resources:
