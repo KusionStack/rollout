@@ -21,9 +21,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -32,15 +33,18 @@ import (
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
+	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
 )
 
 type TPControllerAdapter struct {
 	client.Client
+	workloadRegistry workloadregistry.Registry
 }
 
-func NewTPControllerAdapter(c client.Client) *TPControllerAdapter {
+func NewTPControllerAdapter(c client.Client, workloadRegistry workloadregistry.Registry) *TPControllerAdapter {
 	return &TPControllerAdapter{
 		c,
+		workloadRegistry,
 	}
 }
 
@@ -65,14 +69,9 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 		return expected, fmt.Errorf("not type of TrafficTopology")
 	}
 
-	backendApiVersion := ""
-	backendKind := "Service"
-	if trafficTopology.Spec.Backend.APIVersion != nil {
-		backendApiVersion = *trafficTopology.Spec.Backend.APIVersion
-	}
-	if trafficTopology.Spec.Backend.Kind != nil {
-		backendKind = *trafficTopology.Spec.Backend.Kind
-	}
+	backendApiVersion := ptr.Deref(trafficTopology.Spec.Backend.APIVersion, "")
+	backendKind := ptr.Deref(trafficTopology.Spec.Backend.Kind, "Service")
+
 	// caution:
 	// for InClusterTrafficType, clusterName of brBackend will be changed
 	brBackend := v1alpha1.CrossClusterObjectReference{
@@ -87,14 +86,9 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 
 	brRoutes := make([]v1alpha1.CrossClusterObjectReference, len(trafficTopology.Spec.Routes))
 	for i, route := range trafficTopology.Spec.Routes {
-		routeApiVersion := "gateway.networking.k8s.io/v1"
-		routeKind := "HTTPRoute"
-		if route.APIVersion != nil {
-			routeApiVersion = *route.APIVersion
-		}
-		if route.Kind != nil {
-			routeKind = *route.Kind
-		}
+		routeApiVersion := ptr.Deref(route.APIVersion, "gateway.networking.k8s.io/v1")
+		routeKind := ptr.Deref(route.Kind, "HTTPRoute")
+
 		brRoutes[i] = v1alpha1.CrossClusterObjectReference{
 			ObjectTypeRef: v1alpha1.ObjectTypeRef{
 				APIVersion: routeApiVersion,
@@ -104,6 +98,17 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 				Name: route.Name,
 			},
 		}
+	}
+
+	workloadStore, err := t.workloadRegistry.Get(schema.FromAPIVersionAndKind(
+		trafficTopology.Spec.WorkloadRef.APIVersion, trafficTopology.Spec.WorkloadRef.Kind))
+	if err != nil {
+		return expected, err
+	}
+
+	workloads, err := workloadStore.List(ctx, trafficTopology.Namespace, trafficTopology.Spec.WorkloadRef.Match)
+	if err != nil {
+		return expected, err
 	}
 
 	switch trafficTopology.Spec.TrafficType {
@@ -124,44 +129,29 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 			BackendRouting:     br,
 		}
 
-		workloadInfos := trafficTopology.Spec.WorkloadRef.Match.Names
-		if trafficTopology.Spec.WorkloadRef.Match.Selector != nil {
-			workloads := &unstructured.UnstructuredList{}
-			workloads.SetAPIVersion(trafficTopology.Spec.WorkloadRef.APIVersion)
-			workloads.SetKind(trafficTopology.Spec.WorkloadRef.Kind)
-
-			selector, err := metav1.LabelSelectorAsSelector(trafficTopology.Spec.WorkloadRef.Match.Selector)
-			if err != nil {
-				return expected, err
-			}
-			err = t.List(clusterinfo.WithCluster(ctx, clusterinfo.Clusters), workloads, &client.ListOptions{
-				LabelSelector: selector,
-			})
-			if err != nil {
-				return expected, err
-			}
-			for _, workload := range workloads.Items {
-				workloadInfos = append(workloadInfos, v1alpha1.CrossClusterObjectNameReference{
-					Name:    workload.GetName(),
-					Cluster: workload.GetLabels()[clusterinfo.ClusterLabelKey],
-				})
+		workloadInfos := make([]v1alpha1.CrossClusterObjectNameReference, len(workloads))
+		for idx, workload := range workloads {
+			workloadInfos[idx] = v1alpha1.CrossClusterObjectNameReference{
+				Name:    workload.GetInfo().Name,
+				Cluster: workload.GetInfo().ClusterName,
 			}
 		}
-		backendRoutingEmployer.Workloads = workloadInfos
 
+		backendRoutingEmployer.Workloads = workloadInfos
 		expected = []rsFrameController.IEmployer{backendRoutingEmployer}
 
 	case v1alpha1.InClusterTrafficType:
-		brNameTREmployerMap := make(map[string]TPEmployer)
-		for _, matchName := range trafficTopology.Spec.WorkloadRef.Match.Names {
+		brNameTPEmployerMap := make(map[string]TPEmployer)
+		for _, workload := range workloads {
+			clusterName := workload.GetInfo().ClusterName
 			brName := employer.GetName() + "-ics"
-			if matchName.Cluster != "" {
-				brName = brName + "-" + matchName.Cluster
+			if clusterName != "" {
+				brName = brName + "-" + clusterName
 			}
-			brBackend.Cluster = matchName.Cluster
+			brBackend.Cluster = clusterName
 			brRoutesCopy := make([]v1alpha1.CrossClusterObjectReference, len(brRoutes))
 			for i, brRoute := range brRoutes {
-				brRoute.Cluster = matchName.Cluster
+				brRoute.Cluster = clusterName
 				brRoutesCopy[i] = brRoute
 			}
 			br := v1alpha1.BackendRouting{
@@ -175,86 +165,30 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 					Routes:      brRoutesCopy,
 				},
 			}
-			trEmployer, ok := brNameTREmployerMap[brName]
+			trEmployer, ok := brNameTPEmployerMap[brName]
 			if !ok {
-				brNameTREmployerMap[brName] = TPEmployer{
+				brNameTPEmployerMap[brName] = TPEmployer{
 					BackendRoutingName: brName,
 					BackendRouting:     br,
 					Workloads: []v1alpha1.CrossClusterObjectNameReference{
-						matchName,
+						v1alpha1.CrossClusterObjectNameReference{
+							Cluster: clusterName,
+							Name:    workload.GetInfo().Name,
+						},
 					},
 				}
 			} else {
-				trEmployer.Workloads = append(trEmployer.Workloads, matchName)
-				brNameTREmployerMap[brName] = trEmployer
+				trEmployer.Workloads = append(trEmployer.Workloads, v1alpha1.CrossClusterObjectNameReference{
+					Cluster: clusterName,
+					Name:    workload.GetInfo().Name,
+				})
+				brNameTPEmployerMap[brName] = trEmployer
 			}
 		}
 
-		if trafficTopology.Spec.WorkloadRef.Match.Selector != nil {
-			workloads := &unstructured.UnstructuredList{}
-			workloads.SetAPIVersion(trafficTopology.Spec.WorkloadRef.APIVersion)
-			workloads.SetKind(trafficTopology.Spec.WorkloadRef.Kind)
-
-			selector, err := metav1.LabelSelectorAsSelector(trafficTopology.Spec.WorkloadRef.Match.Selector)
-			if err != nil {
-				return expected, err
-			}
-			err = t.List(clusterinfo.WithCluster(ctx, clusterinfo.Clusters), workloads, &client.ListOptions{
-				LabelSelector: selector,
-			})
-			if err != nil {
-				return expected, err
-			}
-
-			for _, workload := range workloads.Items {
-				clusterName := workload.GetLabels()[clusterinfo.ClusterLabelKey]
-				brName := employer.GetName() + "-ics"
-				if clusterName != "" {
-					brName = brName + "-" + clusterName
-				}
-				brBackend.Cluster = clusterName
-				brRoutesCopy := make([]v1alpha1.CrossClusterObjectReference, len(brRoutes))
-				for i, brRoute := range brRoutes {
-					brRoute.Cluster = clusterName
-					brRoutesCopy[i] = brRoute
-				}
-				br := v1alpha1.BackendRouting{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      brName,
-						Namespace: employer.GetNamespace(),
-					},
-					Spec: v1alpha1.BackendRoutingSpec{
-						TrafficType: v1alpha1.InClusterTrafficType,
-						Backend:     brBackend,
-						Routes:      brRoutesCopy,
-					},
-				}
-				trEmployer, ok := brNameTREmployerMap[brName]
-				if !ok {
-					brNameTREmployerMap[brName] = TPEmployer{
-						BackendRoutingName: brName,
-						BackendRouting:     br,
-						Workloads: []v1alpha1.CrossClusterObjectNameReference{
-							v1alpha1.CrossClusterObjectNameReference{
-								Cluster: clusterName,
-								Name:    workload.GetName(),
-							},
-						},
-					}
-				} else {
-					trEmployer.Workloads = append(trEmployer.Workloads, v1alpha1.CrossClusterObjectNameReference{
-						Cluster: clusterName,
-						Name:    workload.GetName(),
-					})
-					brNameTREmployerMap[brName] = trEmployer
-				}
-			}
+		for _, tpEmployer := range brNameTPEmployerMap {
+			expected = append(expected, tpEmployer)
 		}
-
-		for _, trEmployer := range brNameTREmployerMap {
-			expected = append(expected, trEmployer)
-		}
-
 	}
 	return expected, nil
 }

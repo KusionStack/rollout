@@ -48,7 +48,7 @@ func (s *serviceBackend) ForkCanary(canaryName, controllerName string) client.Ob
 	if canaryBackend.Spec.Selector == nil {
 		canaryBackend.Spec.Selector = make(map[string]string)
 	}
-	canaryBackend.Spec.Selector[rollout.LabelRevisionKey] = rollout.LabelRevisionCanaryValue
+	canaryBackend.Spec.Selector[rollout.LabelPodRevision] = rollout.LabelRevisionCanaryValue
 	return canaryBackend
 }
 
@@ -64,6 +64,6 @@ func (s *serviceBackend) ForkStable(stableName, controllerName string) client.Ob
 	if stableBackend.Spec.Selector == nil {
 		stableBackend.Spec.Selector = make(map[string]string)
 	}
-	stableBackend.Spec.Selector[rollout.LabelRevisionKey] = rollout.LabelRevisionStableValue
+	stableBackend.Spec.Selector[rollout.LabelPodRevision] = rollout.LabelRevisionStableValue
 	return stableBackend
 }

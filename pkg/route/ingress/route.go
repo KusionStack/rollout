@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	v1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -98,8 +99,7 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, strategy v1alpha1.Tra
 		}
 	}
 
-	// 404, need create
-	if err != nil {
+	_, err = controllerutil.CreateOrUpdate(clusterinfo.WithCluster(ctx, i.cluster), i.client, canaryIgs, func() error {
 		canaryIgs.Spec = igs.Spec
 		canaryIgs.Name = canaryIgsName
 		canaryIgs.Namespace = igs.Namespace
@@ -110,32 +110,14 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, strategy v1alpha1.Tra
 			if value != "" {
 				canaryIgs.Annotations[key] = value
 			}
+			if value == "" {
+				delete(canaryIgs.Annotations, key)
+			}
 		}
-		return i.client.Create(clusterinfo.WithCluster(ctx, i.cluster), canaryIgs)
-	}
+		return nil
+	})
 
-	// check if update
-	needUpdate := false
-	if canaryIgs.Annotations == nil {
-		canaryIgs.Annotations = make(map[string]string)
-	}
-	for key, value := range annosCanaryNeedCheck {
-		if canaryIgs.Annotations[key] == value {
-			continue
-		}
-		if value != "" {
-			canaryIgs.Annotations[key] = value
-			needUpdate = true
-		}
-		if value == "" {
-			delete(canaryIgs.Annotations, key)
-			needUpdate = true
-		}
-	}
-	if needUpdate {
-		return i.client.Update(clusterinfo.WithCluster(ctx, i.cluster), canaryIgs)
-	}
-	return nil
+	return err
 }
 
 func (i *ingressRoute) RemoveCanaryRoute(ctx context.Context) error {
