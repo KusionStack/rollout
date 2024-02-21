@@ -189,9 +189,9 @@ func mutatePod(ownerAnnos map[string]string, pod *corev1.Pod) bool {
 	if ownerInfo == "" || podInfo == ownerInfo {
 		return false
 	}
-	rrNameInOwner := gjson.Get(ownerInfo, "rolloutRun").String()
-	rrNameInPod := gjson.Get(podInfo, "rolloutRun").String()
-	if rrNameInOwner == rrNameInPod {
+	idInOwner := gjson.Get(ownerInfo, "rolloutID").String()
+	idInPod := gjson.Get(podInfo, "rolloutID").String()
+	if idInOwner == idInPod {
 		return false
 	}
 
