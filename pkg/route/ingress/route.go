@@ -46,16 +46,6 @@ func (i *ingressRoute) GetRouteObject() client.Object {
 
 func (i *ingressRoute) AddCanaryRoute(ctx context.Context, strategy v1alpha1.TrafficStrategy) error {
 	igs := i.obj
-	// check if canary ingress exist first
-	canaryIgsName := igs.Name + "-canary"
-	canaryIgs := &networkingv1.Ingress{}
-	err := i.client.Get(clusterinfo.WithCluster(ctx, i.cluster), types.NamespacedName{
-		Namespace: igs.Namespace,
-		Name:      canaryIgsName,
-	}, canaryIgs)
-	if err != nil && !errors.IsNotFound(err) {
-		return err
-	}
 
 	annosCanaryNeedCheck := map[string]string{
 		AnnoCanaryWeight:           "",
@@ -99,10 +89,12 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, strategy v1alpha1.Tra
 		}
 	}
 
-	_, err = controllerutil.CreateOrUpdate(clusterinfo.WithCluster(ctx, i.cluster), i.client, canaryIgs, func() error {
+	canaryIgs := &networkingv1.Ingress{}
+	canaryIgs.Name = igs.Name + "-canary"
+	canaryIgs.Namespace = igs.Namespace
+
+	_, err := controllerutil.CreateOrUpdate(clusterinfo.WithCluster(ctx, i.cluster), i.client, canaryIgs, func() error {
 		canaryIgs.Spec = igs.Spec
-		canaryIgs.Name = canaryIgsName
-		canaryIgs.Namespace = igs.Namespace
 		if canaryIgs.Annotations == nil {
 			canaryIgs.Annotations = make(map[string]string)
 		}
