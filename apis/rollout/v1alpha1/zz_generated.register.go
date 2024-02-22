@@ -65,6 +65,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RolloutStrategy{},
 		&RolloutStrategyList{},
 		&RolloutWebhookReview{},
+		&TrafficTopology{},
+		&BackendRouting{},
 	)
 	// AddToGroupVersion allows the serialization of client types like ListOptions.
 	v1.AddToGroupVersion(scheme, SchemeGroupVersion)
