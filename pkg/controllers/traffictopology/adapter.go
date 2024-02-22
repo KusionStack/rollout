@@ -69,6 +69,21 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 		return expected, fmt.Errorf("not type of TrafficTopology")
 	}
 
+	workloadStore, err := t.workloadRegistry.Get(schema.FromAPIVersionAndKind(
+		trafficTopology.Spec.WorkloadRef.APIVersion, trafficTopology.Spec.WorkloadRef.Kind))
+	if err != nil {
+		return expected, err
+	}
+
+	workloads, err := workloadStore.List(ctx, trafficTopology.Namespace, trafficTopology.Spec.WorkloadRef.Match)
+	if err != nil {
+		return expected, err
+	}
+
+	if len(workloads) == 0 {
+		return expected, nil
+	}
+
 	backendApiVersion := ptr.Deref(trafficTopology.Spec.Backend.APIVersion, "")
 	backendKind := ptr.Deref(trafficTopology.Spec.Backend.Kind, "Service")
 
@@ -98,17 +113,6 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 				Name: route.Name,
 			},
 		}
-	}
-
-	workloadStore, err := t.workloadRegistry.Get(schema.FromAPIVersionAndKind(
-		trafficTopology.Spec.WorkloadRef.APIVersion, trafficTopology.Spec.WorkloadRef.Kind))
-	if err != nil {
-		return expected, err
-	}
-
-	workloads, err := workloadStore.List(ctx, trafficTopology.Namespace, trafficTopology.Spec.WorkloadRef.Match)
-	if err != nil {
-		return expected, err
 	}
 
 	switch trafficTopology.Spec.TrafficType {
@@ -393,7 +397,8 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 	}
 
 	conditionReadyStatus := metav1.ConditionFalse
-	if len(cudEmployerResults.FailCreated) == 0 && len(cudEmployerResults.FailUpdated) == 0 && len(cudEmployerResults.FailDeleted) == 0 {
+	if len(cudEmployerResults.FailCreated) == 0 && len(cudEmployerResults.FailUpdated) == 0 && len(cudEmployerResults.FailDeleted) == 0 &&
+		(len(cudEmployerResults.SuccCreated) != 0 || len(cudEmployerResults.SuccUpdated) != 0 || len(cudEmployerResults.Unchanged) != 0) {
 		conditionReadyStatus = metav1.ConditionTrue
 	}
 
@@ -406,6 +411,9 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 				tp.Status.Conditions[i].LastTransitionTime = metav1.Time{
 					Time: time.Now(),
 				}
+				tp.Status.Conditions[i].LastUpdateTime = metav1.Time{
+					Time: time.Now(),
+				}
 				break
 			}
 		}
@@ -414,6 +422,9 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 				Type:   v1alpha1.TrafficTopologyConditionReady,
 				Status: conditionReadyStatus,
 				LastTransitionTime: metav1.Time{
+					Time: time.Now(),
+				},
+				LastUpdateTime: metav1.Time{
 					Time: time.Now(),
 				},
 			})
