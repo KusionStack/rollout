@@ -22,6 +22,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -30,6 +33,48 @@ import (
 )
 
 var _ = Describe("traffic-topology-controller", func() {
+	It("fed adds 2 clusters", func() {
+		for i := 1; i < 3; i++ {
+			name := fmt.Sprintf("cluster%d", i)
+
+			var replicas int32 = 1
+			err := fedClient.Create(ctx, &appsv1.Deployment{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "default",
+					Name:      name,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &v1.LabelSelector{
+						MatchLabels: map[string]string{
+							"cluster": name,
+						},
+					},
+					Replicas: &replicas,
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{
+								"cluster": name,
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  name,
+									Image: "kennethreitz/httpbin",
+								},
+							},
+						},
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		var deployments appsv1.DeploymentList
+		err := fedClient.List(ctx, &deployments)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(deployments.Items)).To(Equal(2))
+	})
 
 	Context("InCluster TrafficTopology", func() {
 		tp0 := &v1alpha1.TrafficTopology{
@@ -67,25 +112,391 @@ var _ = Describe("traffic-topology-controller", func() {
 		}
 
 		It("no workloads selected", func() {
-			err := fedClient.Create(clusterinfo.WithCluster(context.Background(), clusterinfo.Fed), tp0)
+			err := fedClient.Create(clusterinfo.WithCluster(ctx, clusterinfo.Fed), tp0)
 			Expect(err).NotTo(HaveOccurred())
 
-			tpTmp := &v1alpha1.TrafficTopology{}
-			err = fedClient.Get(clusterinfo.WithCluster(context.Background(), clusterinfo.Fed), types.NamespacedName{
-				Name:      tp0.Name,
-				Namespace: tp0.Namespace,
-			}, tpTmp)
-			fmt.Println(tpTmp)
+			Eventually(func() bool {
+				events, err := fedClientSet.CoreV1().Events("default").List(context.TODO(), v1.ListOptions{
+					FieldSelector: "involvedObject.name=tp-controller-ut-tp0",
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "rollout.kusionstack.io/v1alpha1",
+						Kind:       "TrafficTopology",
+					}})
+				if err != nil {
+					return false
+				}
+				for _, evt := range events.Items {
+					if evt.Reason == "ReconcileSucceed" &&
+						evt.Message == "" {
+						return true
+					}
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
-			time.Sleep(10 * time.Second)
-
-			err = fedClient.Get(clusterinfo.WithCluster(context.Background(), clusterinfo.Fed), types.NamespacedName{
-				Name:      tp0.Name,
-				Namespace: tp0.Namespace,
-			}, tpTmp)
-			fmt.Println(tpTmp)
+			Eventually(func() bool {
+				tpTmp := &v1alpha1.TrafficTopology{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Name:      tp0.Name,
+					Namespace: tp0.Namespace,
+				}, tpTmp)
+				if err != nil {
+					return false
+				}
+				cleanFlzAdded := false
+				for _, flz := range tpTmp.GetFinalizers() {
+					if flz == "resource-consist.kusionstack.io/clean-tp-controller-ut-tp0" {
+						cleanFlzAdded = true
+					}
+				}
+				if !cleanFlzAdded {
+					return false
+				}
+				for _, condition := range tpTmp.Status.Conditions {
+					if condition.Type == v1alpha1.TrafficTopologyConditionReady && condition.Status == v1.ConditionFalse {
+						return true
+					}
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
 
+		It("2 local cluster has workloads selected by traffictopology", func() {
+			var replicas int32 = 1
+			stsCluster1 := &appsv1.StatefulSet{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "tp-ut-sts1",
+					Namespace: "default",
+					Labels: map[string]string{
+						"app":       "tp-controller-ut-sts",
+						"component": "tp-controller-ut-comp",
+					},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Selector: &v1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app":       "tp-controller-ut-sts",
+							"component": "tp-controller-ut-comp",
+						},
+					},
+					Replicas: &replicas,
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{
+								"app":       "tp-controller-ut-sts",
+								"component": "tp-controller-ut-comp",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "tp-ut-sts1",
+									Image: "kennethreitz/httpbin",
+								},
+							},
+						},
+					},
+				},
+			}
+			err := clusterClient1.Create(ctx, stsCluster1)
+			Expect(err).Should(BeNil())
+
+			stsCluster2 := &appsv1.StatefulSet{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "tp-ut-sts2",
+					Namespace: "default",
+					Labels: map[string]string{
+						"app":       "tp-controller-ut-sts",
+						"component": "tp-controller-ut-comp",
+					},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Selector: &v1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app":       "tp-controller-ut-sts",
+							"component": "tp-controller-ut-comp",
+						},
+					},
+					Replicas: &replicas,
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{
+								"app":       "tp-controller-ut-sts",
+								"component": "tp-controller-ut-comp",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "tp-ut-sts2",
+									Image: "kennethreitz/httpbin",
+								},
+							},
+						},
+					},
+				},
+			}
+			err = clusterClient2.Create(ctx, stsCluster2)
+			Expect(err).Should(BeNil())
+
+			// trigger traffic topology reconcile
+			tpTmp := &v1alpha1.TrafficTopology{}
+			err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+				Name:      tp0.Name,
+				Namespace: tp0.Namespace,
+			}, tpTmp)
+			if tpTmp.Labels == nil {
+				tpTmp.Labels = make(map[string]string)
+			}
+			tpTmp.Labels["trigger"] = "x"
+			err = fedClient.Update(clusterinfo.WithCluster(ctx, clusterinfo.Fed), tpTmp)
+			Expect(err).Should(BeNil())
+
+			Eventually(func() bool {
+				tpTmp := &v1alpha1.TrafficTopology{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Name:      tp0.Name,
+					Namespace: tp0.Namespace,
+				}, tpTmp)
+				if err != nil {
+					return false
+				}
+				for _, condition := range tpTmp.Status.Conditions {
+					if condition.Type == v1alpha1.TrafficTopologyConditionReady && condition.Status == v1.ConditionTrue {
+						return true
+					}
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.BackendRouting{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Namespace: "default",
+					Name:      tpTmp.Name + "-ics-cluster1",
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				if brTmp.Spec.TrafficType == v1alpha1.InClusterTrafficType && brTmp.Spec.Backend.Cluster == "cluster1" &&
+					brTmp.Spec.Backend.Kind == "Service" && brTmp.Spec.Backend.Name == "tp-controller-ut-comp-backend" &&
+					len(brTmp.Spec.Routes) == 1 && brTmp.Spec.Routes[0].Kind == "HTTPRoute" &&
+					brTmp.Spec.Routes[0].Name == "tp-controller-ut-comp-route0" && brTmp.Spec.Routes[0].Cluster == "cluster1" {
+					return true
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.BackendRouting{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Namespace: "default",
+					Name:      tpTmp.Name + "-ics-cluster2",
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				if brTmp.Spec.TrafficType == v1alpha1.InClusterTrafficType && brTmp.Spec.Backend.Cluster == "cluster2" &&
+					brTmp.Spec.Backend.Kind == "Service" && brTmp.Spec.Backend.Name == "tp-controller-ut-comp-backend" &&
+					len(brTmp.Spec.Routes) == 1 && brTmp.Spec.Routes[0].Kind == "HTTPRoute" &&
+					brTmp.Spec.Routes[0].Name == "tp-controller-ut-comp-route0" && brTmp.Spec.Routes[0].Cluster == "cluster2" {
+					return true
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+		})
+
+		It("cluster2's workload deleted", func() {
+			stsCluster2 := &appsv1.StatefulSet{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "tp-ut-sts2",
+					Namespace: "default",
+					Labels: map[string]string{
+						"app":       "tp-controller-ut-sts",
+						"component": "tp-controller-ut-comp",
+					},
+				},
+			}
+			err := clusterClient2.Delete(ctx, stsCluster2)
+			Expect(err).Should(BeNil())
+
+			Eventually(func() bool {
+				stsTmp := &appsv1.StatefulSet{}
+				err = clusterClient2.Get(ctx, types.NamespacedName{
+					Namespace: "default",
+					Name:      "tp-ut-sts2",
+				}, stsTmp)
+				if !errors.IsNotFound(err) {
+					return false
+				}
+				return true
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			// trigger traffic topology reconcile
+			tpTmp := &v1alpha1.TrafficTopology{}
+			err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+				Name:      tp0.Name,
+				Namespace: tp0.Namespace,
+			}, tpTmp)
+			if tpTmp.Labels == nil {
+				tpTmp.Labels = make(map[string]string)
+			}
+			tpTmp.Labels["trigger"] = "xx"
+			err = fedClient.Update(clusterinfo.WithCluster(ctx, clusterinfo.Fed), tpTmp)
+			Expect(err).Should(BeNil())
+
+			Eventually(func() bool {
+				tpTmp := &v1alpha1.TrafficTopology{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Name:      tp0.Name,
+					Namespace: tp0.Namespace,
+				}, tpTmp)
+				if err != nil {
+					return false
+				}
+				for _, condition := range tpTmp.Status.Conditions {
+					if condition.Type == v1alpha1.TrafficTopologyConditionReady && condition.Status == v1.ConditionTrue {
+						return true
+					}
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.BackendRouting{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Namespace: "default",
+					Name:      tp0.Name + "-ics-cluster1",
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				if brTmp.Spec.TrafficType == v1alpha1.InClusterTrafficType && brTmp.Spec.Backend.Cluster == "cluster1" &&
+					brTmp.Spec.Backend.Kind == "Service" && brTmp.Spec.Backend.Name == "tp-controller-ut-comp-backend" &&
+					len(brTmp.Spec.Routes) == 1 && brTmp.Spec.Routes[0].Kind == "HTTPRoute" &&
+					brTmp.Spec.Routes[0].Name == "tp-controller-ut-comp-route0" && brTmp.Spec.Routes[0].Cluster == "cluster1" {
+					return true
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.BackendRouting{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Namespace: "default",
+					Name:      tp0.Name + "-ics-cluster2",
+				}, brTmp)
+				if !errors.IsNotFound(err) {
+					return false
+				}
+				return true
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+		})
+
+	})
+
+	Context("MultiCluster TrafficTopology", func() {
+		tp1 := &v1alpha1.TrafficTopology{
+			TypeMeta: v1.TypeMeta{
+				Kind:       "TrafficTopology",
+				APIVersion: "rollout.kusionstack.io/v1alpha1",
+			},
+			ObjectMeta: v1.ObjectMeta{
+				Name:      "tp-controller-ut-tp1",
+				Namespace: "default",
+			},
+			Spec: v1alpha1.TrafficTopologySpec{
+				WorkloadRef: v1alpha1.WorkloadRef{
+					APIVersion: "apps/v1",
+					Kind:       "StatefulSet",
+					Match: v1alpha1.ResourceMatch{
+						Selector: &v1.LabelSelector{
+							MatchLabels: map[string]string{
+								"app":       "tp-controller-ut-sts",
+								"component": "tp-controller-ut-comp",
+							},
+						},
+					},
+				},
+				TrafficType: v1alpha1.MultiClusterTrafficType,
+				Backend: v1alpha1.BackendRef{
+					Name: "tp-controller-ut-comp-backend",
+				},
+				Routes: []v1alpha1.RouteRef{
+					v1alpha1.RouteRef{
+						Name: "tp-controller-ut-comp-route0",
+					},
+				},
+			},
+		}
+
+		It("cluster1 has workload selected", func() {
+			err := fedClient.Create(clusterinfo.WithCluster(ctx, clusterinfo.Fed), tp1)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() bool {
+				events, err := fedClientSet.CoreV1().Events("default").List(context.TODO(), v1.ListOptions{
+					FieldSelector: "involvedObject.name=tp-controller-ut-tp1",
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "rollout.kusionstack.io/v1alpha1",
+						Kind:       "TrafficTopology",
+					}})
+				if err != nil {
+					return false
+				}
+				for _, evt := range events.Items {
+					if evt.Reason == "ReconcileSucceed" &&
+						evt.Message == "" {
+						return true
+					}
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				tpTmp := &v1alpha1.TrafficTopology{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Name:      tp1.Name,
+					Namespace: tp1.Namespace,
+				}, tpTmp)
+				if err != nil {
+					return false
+				}
+				cleanFlzAdded := false
+				for _, flz := range tpTmp.GetFinalizers() {
+					if flz == "resource-consist.kusionstack.io/clean-tp-controller-ut-tp1" {
+						cleanFlzAdded = true
+					}
+				}
+				if !cleanFlzAdded {
+					return false
+				}
+				for _, condition := range tpTmp.Status.Conditions {
+					if condition.Type == v1alpha1.TrafficTopologyConditionReady && condition.Status == v1.ConditionTrue {
+						return true
+					}
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.BackendRouting{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Namespace: "default",
+					Name:      tp1.Name + "-msc",
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				if brTmp.Spec.TrafficType == v1alpha1.MultiClusterTrafficType && brTmp.Spec.Backend.Cluster == "" &&
+					brTmp.Spec.Backend.Kind == "Service" && brTmp.Spec.Backend.Name == "tp-controller-ut-comp-backend" &&
+					len(brTmp.Spec.Routes) == 1 && brTmp.Spec.Routes[0].Kind == "HTTPRoute" &&
+					brTmp.Spec.Routes[0].Name == "tp-controller-ut-comp-route0" && brTmp.Spec.Routes[0].Cluster == "" {
+					return true
+				}
+				return false
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+		})
 	})
 })
 

@@ -285,10 +285,10 @@ func (t *TPControllerAdapter) DeleteEmployer(ctx context.Context, employer clien
 	succDeleted := make([]rsFrameController.IEmployer, 0)
 	failDeleted := make([]rsFrameController.IEmployer, 0)
 	_, err := utils.SlowStartBatch(len(toDeletes), 1, false, func(i int, _ error) error {
-		toCreate := toDeletes[i]
-		br, ok := toCreate.(TPEmployer)
+		toDelete := toDeletes[i]
+		br, ok := toDelete.(TPEmployer)
 		if !ok {
-			failDeleted = append(failDeleted, toCreate)
+			failDeleted = append(failDeleted, toDelete)
 			return fmt.Errorf("not type of TPEmployer")
 		}
 		brGet := &v1alpha1.BackendRouting{}
@@ -297,15 +297,15 @@ func (t *TPControllerAdapter) DeleteEmployer(ctx context.Context, employer clien
 			Namespace: br.BackendRouting.Namespace,
 		}, brGet)
 		if err != nil && errors.IsNotFound(err) {
-			succDeleted = append(succDeleted, toCreate)
+			succDeleted = append(succDeleted, toDelete)
 			return nil
 		}
 		err = t.Delete(clusterinfo.WithCluster(ctx, clusterinfo.Fed), &br.BackendRouting)
 		if err != nil {
-			failDeleted = append(failDeleted, toCreate)
+			failDeleted = append(failDeleted, toDelete)
 			return fmt.Errorf("failed to create BackendRouting, err: %s", err.Error())
 		}
-		succDeleted = append(succDeleted, toCreate)
+		succDeleted = append(succDeleted, toDelete)
 		return nil
 	})
 	return succDeleted, failDeleted, err

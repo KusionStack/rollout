@@ -18,21 +18,17 @@ package traffictopology
 
 import (
 	"context"
-	"kusionstack.io/kube-utils/multicluster"
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 	"os"
 	"path/filepath"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,14 +37,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"kusionstack.io/kube-utils/multicluster/controller"
+	"kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 )
 
 var (
-	fedEnv    *envtest.Environment
-	fedClient client.Client
+	fedEnv       *envtest.Environment
+	fedClient    client.Client
+	fedClientSet *kubernetes.Clientset
 
 	clusterEnv1    *envtest.Environment
 	clusterClient1 client.Client // cluster 1 client
@@ -87,6 +88,8 @@ var _ = BeforeSuite(func() {
 	fedConfig, err := fedEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fedConfig).NotTo(BeNil())
+
+	fedClientSet, _ = kubernetes.NewForConfig(fedConfig)
 
 	fedClient, err = client.New(fedConfig, client.Options{Scheme: fedScheme})
 	Expect(err).NotTo(HaveOccurred())
