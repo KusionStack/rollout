@@ -1,24 +1,22 @@
-/**
- * Copyright 2023 KusionStack Authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2023 The KusionStack Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-package traffictopology
+package backendrouting
 
 import (
 	"context"
-	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
+
 	"os"
 	"path/filepath"
 	"time"
@@ -27,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
@@ -44,6 +43,8 @@ import (
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"kusionstack.io/kube-utils/multicluster/controller"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/backendregistry"
+	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 )
 
 var (
@@ -78,6 +79,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = v1alpha1.AddToScheme(fedScheme)
 	Expect(err).NotTo(HaveOccurred())
+	err = networkingv1.SchemeBuilder.AddToScheme(fedScheme)
+	Expect(err).NotTo(HaveOccurred())
 
 	fedEnv = &envtest.Environment{
 		Scheme:            fedScheme,
@@ -102,6 +105,8 @@ var _ = BeforeSuite(func() {
 	err = v1alpha1.AddToScheme(clusterScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = appsv1.SchemeBuilder.AddToScheme(clusterScheme) // deployment
+	Expect(err).NotTo(HaveOccurred())
+	err = networkingv1.SchemeBuilder.AddToScheme(clusterScheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	clusterEnv1 = &envtest.Environment{
@@ -196,8 +201,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = v1alpha1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
+	err = networkingv1.SchemeBuilder.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
 
 	_, err = workloadregistry.InitFunc(ctrlMgr)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = backendregistry.InitFunc(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	_, err = InitFunc(ctrlMgr)

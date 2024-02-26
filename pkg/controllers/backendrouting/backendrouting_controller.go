@@ -17,16 +17,16 @@ package backendrouting
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/util/workqueue"
+	"kusionstack.io/kube-utils/multicluster"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"go.uber.org/multierr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"kusionstack.io/kube-utils/controller/mixin"
@@ -54,12 +54,16 @@ func NewReconciler(mgr manager.Manager, backendRegistry backend.Registry, routeR
 	}
 }
 
-func (b *BackendRoutingReconciler) SetupWithManager(mgr manager.Manager) error {
-	mgrBuilder := ctrl.NewControllerManagedBy(mgr).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
-		For(&v1alpha1.BackendRouting{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
-
-	return mgrBuilder.Complete(b)
+func AddToMgr(mgr manager.Manager, backendRegistry backend.Registry, routeRegistry route.Registry) error {
+	c, err := controller.New(ControllerName, mgr, controller.Options{
+		MaxConcurrentReconciles: 5,
+		Reconciler:              NewReconciler(mgr, backendRegistry, routeRegistry),
+		RateLimiter:             workqueue.DefaultControllerRateLimiter(),
+	})
+	if err != nil {
+		return err
+	}
+	return c.Watch(multicluster.FedKind(&source.Kind{Type: &v1alpha1.BackendRouting{}}), &EnqueueBR{})
 }
 
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=backendroutings,verbs=get;list;watch;create;update;patch;delete
@@ -70,11 +74,12 @@ func (b *BackendRoutingReconciler) SetupWithManager(mgr manager.Manager) error {
 
 func (b *BackendRoutingReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	br := &v1alpha1.BackendRouting{}
-	err := b.Client.Get(ctx, types.NamespacedName{
+	err := b.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
 		Name:      request.Name,
 		Namespace: request.Namespace,
 	}, br)
 	if err != nil {
+		fmt.Println("xxxxxx", err)
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
