@@ -19,9 +19,6 @@ const (
 	LabelCreatedBy   = "rollout.kusionstack.io/created-by"
 	LabelWorkload    = "rollout.kusionstack.io/workload"
 	LabelGeneratedBy = "rollout.kusionstack.io/generated-by"
-
-	LabelRevisionCanaryValue = "canary"
-	LabelRevisionStableValue = "base"
 )
 
 // canary labels

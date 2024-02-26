@@ -362,7 +362,7 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 		return fmt.Errorf("not type of TrafficTopology")
 	}
 
-	observedGeneration := trafficTopology.Status.ObservedGeneration
+	observedGeneration := trafficTopology.Generation
 
 	// calculate status and compare status to check if update
 	// succCreate + succUpdate + failUpdate + failDelete + unchanged
