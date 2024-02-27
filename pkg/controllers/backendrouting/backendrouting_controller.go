@@ -80,7 +80,6 @@ func (b *BackendRoutingReconciler) Reconcile(ctx context.Context, request reconc
 		Namespace: request.Namespace,
 	}, br)
 	if err != nil {
-		fmt.Println("xxxxxx", err)
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
@@ -223,6 +222,7 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx conte
 			backendsStatuses.Origin.Name = originBackend.GetBackendObject().GetName()
 		}
 		// todo maybe we should check route -> origin?
+		// but route might have multi backends, and we don't know which one should be origin
 		if phase != v1alpha1.Ready {
 			phase = v1alpha1.Ready
 			needUpdateStatus = true
@@ -248,6 +248,9 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 			needUpdateStatus := false
 			backendsStatuses := br.Status.Backends
 			routesStatuses := br.Status.RouteStatuses
+			if len(routesStatuses) == 0 {
+				routesStatuses = make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
+			}
 			phase := br.Status.Phase
 
 			// if status hasn't canary, check stable ready, check route -> stable
@@ -321,6 +324,9 @@ func (b *BackendRoutingReconciler) ensureCanaryRemove(ctx context.Context, br *v
 	needUpdateStatus := false
 	backendsStatuses := br.Status.Backends
 	routesStatuses := br.Status.RouteStatuses
+	if len(routesStatuses) == 0 {
+		routesStatuses = make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
+	}
 	phase := br.Status.Phase
 
 	if backendsStatuses.Canary.Conditions.Terminating == nil || !*backendsStatuses.Canary.Conditions.Terminating {
@@ -418,6 +424,9 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 	needUpdateStatus := false
 	backendsStatuses := br.Status.Backends
 	routesStatuses := br.Status.RouteStatuses
+	if len(routesStatuses) == 0 {
+		routesStatuses = make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
+	}
 	phase := br.Status.Phase
 
 	// todo: discussion

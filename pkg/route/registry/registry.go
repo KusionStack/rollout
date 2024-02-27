@@ -65,7 +65,7 @@ func (r *routeRegistry) Delete(gvk schema.GroupVersionKind) {
 func (r *routeRegistry) Get(gvk schema.GroupVersionKind) (route.Store, error) {
 	value, ok := r.routes.Load(gvk)
 	if !ok {
-		return nil, fmt.Errorf("unregistered gvk(%s) in backend registry", gvk.String())
+		return nil, fmt.Errorf("unregistered gvk(%s) in route registry", gvk.String())
 	}
 
 	return value.(route.Store), nil

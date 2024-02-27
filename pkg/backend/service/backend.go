@@ -43,6 +43,7 @@ func (s *serviceBackend) ForkCanary(canaryName, controllerName string) client.Ob
 		rollout.LabelControl:   "true",
 		rollout.LabelCreatedBy: controllerName,
 	}
+	canaryBackend.Spec.Ports = s.obj.Spec.Ports
 	canaryBackend.Spec.Selector = s.obj.Spec.Selector
 	if canaryBackend.Spec.Selector == nil {
 		canaryBackend.Spec.Selector = make(map[string]string)
@@ -59,6 +60,7 @@ func (s *serviceBackend) ForkStable(stableName, controllerName string) client.Ob
 		rollout.LabelControl:   "true",
 		rollout.LabelCreatedBy: controllerName,
 	}
+	stableBackend.Spec.Ports = s.obj.Spec.Ports
 	stableBackend.Spec.Selector = s.obj.Spec.Selector
 	if stableBackend.Spec.Selector == nil {
 		stableBackend.Spec.Selector = make(map[string]string)

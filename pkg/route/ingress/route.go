@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 
-	appsv1 "k8s.io/api/apps/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,7 +32,7 @@ import (
 	"kusionstack.io/rollout/pkg/route"
 )
 
-var GVK = appsv1.SchemeGroupVersion.WithKind("Ingress")
+var GVK = networkingv1.SchemeGroupVersion.WithKind("Ingress")
 
 type ingressRoute struct {
 	client  client.Client
