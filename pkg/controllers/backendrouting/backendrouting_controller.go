@@ -17,20 +17,21 @@ package backendrouting
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/util/workqueue"
-	"kusionstack.io/kube-utils/multicluster"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"go.uber.org/multierr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"kusionstack.io/kube-utils/controller/mixin"
+	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/backend"
 	"kusionstack.io/rollout/pkg/route"
@@ -211,7 +212,6 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx conte
 			phase = v1alpha1.Ready
 			needUpdateStatus = true
 		}
-
 	} else {
 		// check backend ready(now just check exist)
 		originBackend, err := b.getBackend(ctx, br, br.Spec.Backend.Name)
@@ -268,7 +268,7 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 				return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
 			}
 
-			if backendsStatuses.Stable.Conditions.Ready == nil || *backendsStatuses.Stable.Conditions.Ready == false {
+			if backendsStatuses.Stable.Conditions.Ready == nil || !*backendsStatuses.Stable.Conditions.Ready {
 				needUpdateStatus = true
 				conditionTrue := true
 				backendsStatuses.Stable.Conditions.Ready = &conditionTrue
@@ -288,14 +288,14 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 					ApiVersion: br.Spec.Backend.APIVersion,
 				})
 				if err != nil {
-					if routesStatuses[idx].Synced != false {
+					if routesStatuses[idx].Synced {
 						routesStatuses[idx].Synced = false
 						needUpdateStatus = true
 					}
 					routeBackendChangeErr = append(routeBackendChangeErr, err)
 					continue
 				}
-				if routesStatuses[idx].Synced != true {
+				if !routesStatuses[idx].Synced {
 					routesStatuses[idx].Synced = true
 					needUpdateStatus = true
 				}
@@ -315,7 +315,6 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 		}
 	}
 	return reconcile.Result{}, nil
-
 }
 
 func (b *BackendRoutingReconciler) ensureCanaryRemove(ctx context.Context, br *v1alpha1.BackendRouting) error {
@@ -334,16 +333,14 @@ func (b *BackendRoutingReconciler) ensureCanaryRemove(ctx context.Context, br *v
 			}
 			err = iRoute.RemoveCanaryRoute(ctx)
 			if err != nil {
-				if routesStatuses[idx].Synced != false {
+				if routesStatuses[idx].Synced {
 					routesStatuses[idx].Synced = false
-					needUpdateStatus = true
 				}
 				routeCanaryRemoveErr = append(routeCanaryRemoveErr, err)
 				continue
 			}
-			if routesStatuses[idx].Synced != true {
+			if !routesStatuses[idx].Synced {
 				routesStatuses[idx].Synced = true
-				needUpdateStatus = true
 			}
 		}
 		if len(routeCanaryRemoveErr) > 0 {
@@ -388,16 +385,14 @@ func (b *BackendRoutingReconciler) ensureCanaryRemove(ctx context.Context, br *v
 			}
 			err = iRoute.RemoveCanaryRoute(ctx)
 			if err != nil {
-				if routesStatuses[idx].Synced != false {
+				if routesStatuses[idx].Synced {
 					routesStatuses[idx].Synced = false
-					needUpdateStatus = true
 				}
 				routeCanaryRemoveErr = append(routeCanaryRemoveErr, err)
 				continue
 			}
-			if routesStatuses[idx].Synced != true {
+			if !routesStatuses[idx].Synced {
 				routesStatuses[idx].Synced = true
-				needUpdateStatus = true
 			}
 		}
 		if len(routeCanaryRemoveErr) > 0 {
@@ -461,14 +456,14 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 		}
 		err = iRoute.AddCanaryRoute(ctx, br.Spec.Forwarding.Canary.TrafficStrategy)
 		if err != nil {
-			if routesStatuses[idx].Synced != false {
+			if routesStatuses[idx].Synced {
 				routesStatuses[idx].Synced = false
 				needUpdateStatus = true
 			}
 			routeCanaryCreateErr = append(routeCanaryCreateErr, err)
 			continue
 		}
-		if routesStatuses[idx].Synced != true {
+		if !routesStatuses[idx].Synced {
 			routesStatuses[idx].Synced = true
 			needUpdateStatus = true
 		}

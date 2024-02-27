@@ -28,6 +28,7 @@ import (
 	v1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/route"
 )
@@ -176,7 +177,7 @@ func (i *ingressRoute) ChangeBackend(ctx context.Context, detail route.BackendCh
 var _ route.IRoute = &ingressRoute{}
 
 func generateMultiHeadersAnno(headers []v1.HTTPHeader) string {
-	if headers == nil || len(headers) == 0 {
+	if len(headers) == 0 {
 		return ""
 	}
 	if len(headers) == 1 {

@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
@@ -104,7 +105,7 @@ var _ = Describe("traffic-topology-controller", func() {
 					Name: "tp-controller-ut-comp-backend",
 				},
 				Routes: []v1alpha1.RouteRef{
-					v1alpha1.RouteRef{
+					{
 						Name: "tp-controller-ut-comp-route0",
 					},
 				},
@@ -245,6 +246,7 @@ var _ = Describe("traffic-topology-controller", func() {
 				Name:      tp0.Name,
 				Namespace: tp0.Namespace,
 			}, tpTmp)
+			Expect(err).Should(BeNil())
 			if tpTmp.Labels == nil {
 				tpTmp.Labels = make(map[string]string)
 			}
@@ -253,7 +255,7 @@ var _ = Describe("traffic-topology-controller", func() {
 			Expect(err).Should(BeNil())
 
 			Eventually(func() bool {
-				tpTmp := &v1alpha1.TrafficTopology{}
+				tpTmp = &v1alpha1.TrafficTopology{}
 				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
 					Name:      tp0.Name,
 					Namespace: tp0.Namespace,
@@ -326,10 +328,7 @@ var _ = Describe("traffic-topology-controller", func() {
 					Namespace: "default",
 					Name:      "tp-ut-sts2",
 				}, stsTmp)
-				if !errors.IsNotFound(err) {
-					return false
-				}
-				return true
+				return errors.IsNotFound(err)
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
 			// trigger traffic topology reconcile
@@ -386,10 +385,7 @@ var _ = Describe("traffic-topology-controller", func() {
 					Namespace: "default",
 					Name:      tp0.Name + "-ics-cluster2",
 				}, brTmp)
-				if !errors.IsNotFound(err) {
-					return false
-				}
-				return true
+				return errors.IsNotFound(err)
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
 
@@ -423,7 +419,7 @@ var _ = Describe("traffic-topology-controller", func() {
 					Name: "tp-controller-ut-comp-backend",
 				},
 				Routes: []v1alpha1.RouteRef{
-					v1alpha1.RouteRef{
+					{
 						Name: "tp-controller-ut-comp-route0",
 					},
 				},

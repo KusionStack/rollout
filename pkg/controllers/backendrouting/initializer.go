@@ -30,7 +30,7 @@ func InitFunc(mgr manager.Manager) (bool, error) {
 }
 
 func initFunc(mgr manager.Manager, backendRegistry backend.Registry, routeRegistry route.Registry) (bool, error) {
-	err := AddToMgr(mgr, backendregistry.DefaultRegistry, routeregistry.DefaultRegistry)
+	err := AddToMgr(mgr, backendRegistry, routeRegistry)
 	if err != nil {
 		return false, err
 	}

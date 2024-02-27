@@ -20,6 +20,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	"kusionstack.io/kube-utils/controller/initializer"
+
 	"kusionstack.io/rollout/pkg/controllers/backendregistry"
 	"kusionstack.io/rollout/pkg/controllers/backendrouting"
 	"kusionstack.io/rollout/pkg/controllers/routeregistry"

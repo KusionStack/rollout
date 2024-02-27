@@ -31,6 +31,7 @@ import (
 
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
+
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
 	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
@@ -175,7 +176,7 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 					BackendRoutingName: brName,
 					BackendRouting:     br,
 					Workloads: []v1alpha1.CrossClusterObjectNameReference{
-						v1alpha1.CrossClusterObjectNameReference{
+						{
 							Cluster: clusterName,
 							Name:    workload.GetInfo().Name,
 						},
@@ -275,7 +276,7 @@ func (t *TPControllerAdapter) CreateEmployer(ctx context.Context, employer clien
 // UpdateEmployer won't do update now, since only BackendRouting's name compared
 // TODO what we should do if BackendRouting's spec different
 func (t *TPControllerAdapter) UpdateEmployer(ctx context.Context, employer client.Object, toUpdates []rsFrameController.IEmployer) ([]rsFrameController.IEmployer, []rsFrameController.IEmployer, error) {
-	if toUpdates != nil && len(toUpdates) > 0 {
+	if len(toUpdates) > 0 {
 		return nil, toUpdates, fmt.Errorf("no BackendRouting need to be updated, but toUpdate exist")
 	}
 	return nil, nil, nil

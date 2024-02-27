@@ -26,28 +26,28 @@ import (
 
 func Test_SliceTopologyInfoEqual(t *testing.T) {
 	a := []v1alpha1.TopologyInfo{
-		v1alpha1.TopologyInfo{
+		{
 			BackendRoutingName: "br1",
 			WorkloadRef: v1alpha1.CrossClusterObjectNameReference{
 				Name:    "workload1",
 				Cluster: "cluster1",
 			},
 		},
-		v1alpha1.TopologyInfo{
+		{
 			BackendRoutingName: "br2",
 			WorkloadRef: v1alpha1.CrossClusterObjectNameReference{
 				Name:    "workload2",
 				Cluster: "cluster2",
 			},
 		},
-		v1alpha1.TopologyInfo{
+		{
 			BackendRoutingName: "br2",
 			WorkloadRef: v1alpha1.CrossClusterObjectNameReference{
 				Name:    "workload3",
 				Cluster: "cluster3",
 			},
 		},
-		v1alpha1.TopologyInfo{
+		{
 			BackendRoutingName: "br2",
 			WorkloadRef: v1alpha1.CrossClusterObjectNameReference{
 				Name:    "workload3",
@@ -57,28 +57,28 @@ func Test_SliceTopologyInfoEqual(t *testing.T) {
 	}
 
 	b := []v1alpha1.TopologyInfo{
-		v1alpha1.TopologyInfo{
+		{
 			BackendRoutingName: "br2",
 			WorkloadRef: v1alpha1.CrossClusterObjectNameReference{
 				Name:    "workload3",
 				Cluster: "cluster4",
 			},
 		},
-		v1alpha1.TopologyInfo{
+		{
 			BackendRoutingName: "br2",
 			WorkloadRef: v1alpha1.CrossClusterObjectNameReference{
 				Name:    "workload2",
 				Cluster: "cluster2",
 			},
 		},
-		v1alpha1.TopologyInfo{
+		{
 			BackendRoutingName: "br2",
 			WorkloadRef: v1alpha1.CrossClusterObjectNameReference{
 				Name:    "workload3",
 				Cluster: "cluster3",
 			},
 		},
-		v1alpha1.TopologyInfo{
+		{
 			BackendRoutingName: "br1",
 			WorkloadRef: v1alpha1.CrossClusterObjectNameReference{
 				Name:    "workload1",
