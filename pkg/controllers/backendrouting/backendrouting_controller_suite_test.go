@@ -20,8 +20,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"kusionstack.io/rollout/pkg/controllers/routeregistry"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -46,6 +44,7 @@ import (
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/backendregistry"
+	"kusionstack.io/rollout/pkg/controllers/routeregistry"
 	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 )
 

@@ -55,7 +55,6 @@ func (r *routeRegistry) SetupWithManger(mgr manager.Manager) {
 }
 
 func (r *routeRegistry) Register(store route.Store) {
-	fmt.Println("xxxx", store.GroupVersionKind())
 	r.routes.Store(store.GroupVersionKind(), store)
 }
 
