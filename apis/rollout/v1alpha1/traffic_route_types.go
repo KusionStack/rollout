@@ -61,7 +61,7 @@ type BackendRef struct {
 	// When unspecified or empty string, core API group is inferred.
 	//
 	// +optional
-	// +kubebuilder:default=""
+	// +kubebuilder:default="v1"
 	APIVersion *string `json:"apiVersion,omitempty"`
 
 	// Kind is the Kubernetes resource kind of the referent. For example

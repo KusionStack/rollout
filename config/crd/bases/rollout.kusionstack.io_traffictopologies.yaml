@@ -36,7 +36,7 @@ spec:
                 description: Backend defines the reference to a kind of backend
                 properties:
                   apiVersion:
-                    default: ""
+                    default: v1
                     description: Group is the group of the referent. For example, "gateway.networking.k8s.io". When unspecified or empty string, core API group is inferred.
                     type: string
                   kind:
