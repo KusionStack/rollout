@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"kusionstack.io/rollout/pkg/controllers/routeregistry"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -72,6 +74,9 @@ var _ = BeforeSuite(func() {
 
 	ctx, cancel = context.WithCancel(context.TODO())
 	By("bootstrapping test environment")
+
+	// SET K8S VERSION
+	os.Setenv("KUBEBUILDER_ASSETS", "../../../bin/k8s/1.24.1-darwin-arm64")
 
 	// fed
 	fedScheme := runtime.NewScheme()
@@ -207,6 +212,8 @@ var _ = BeforeSuite(func() {
 	_, err = workloadregistry.InitFunc(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred())
 	_, err = backendregistry.InitFunc(ctrlMgr)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = routeregistry.InitFunc(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	_, err = InitFunc(ctrlMgr)
