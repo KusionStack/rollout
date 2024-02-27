@@ -52,6 +52,8 @@ type TrafficType string
 const (
 	MultiClusterTrafficType TrafficType = "MultiCluster"
 	InClusterTrafficType    TrafficType = "InCluster"
+
+	TrafficTopologyConditionReady ConditionType = "Ready"
 )
 
 type BackendRef struct {
