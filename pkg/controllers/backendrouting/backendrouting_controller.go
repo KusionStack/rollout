@@ -268,7 +268,7 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 				return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
 			}
 
-			if !*backendsStatuses.Stable.Conditions.Ready {
+			if backendsStatuses.Stable.Conditions.Ready == nil || !*backendsStatuses.Stable.Conditions.Ready {
 				needUpdateStatus = true
 				conditionTrue := true
 				backendsStatuses.Stable.Conditions.Ready = &conditionTrue
