@@ -15,7 +15,6 @@
 package service
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -23,7 +22,7 @@ import (
 	"kusionstack.io/rollout/pkg/backend"
 )
 
-var GVK = appsv1.SchemeGroupVersion.WithKind("Service")
+var GVK = corev1.SchemeGroupVersion.WithKind("Service")
 
 type serviceBackend struct {
 	client client.Client
