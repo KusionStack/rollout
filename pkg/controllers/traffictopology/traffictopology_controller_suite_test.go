@@ -18,10 +18,11 @@ package traffictopology
 
 import (
 	"context"
-	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 	"os"
 	"path/filepath"
 	"time"
+
+	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,6 +44,7 @@ import (
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"kusionstack.io/kube-utils/multicluster/controller"
+
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 

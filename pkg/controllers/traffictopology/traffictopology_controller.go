@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
+
 	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
 )
 

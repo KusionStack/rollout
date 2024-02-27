@@ -15,14 +15,16 @@
 package backendrouting
 
 import (
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+
+	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
 var _ = Describe("backend-routing-controller", func() {

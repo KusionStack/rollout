@@ -16,6 +16,7 @@ package traffictopology
 
 import (
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
+
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 

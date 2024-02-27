@@ -79,17 +79,13 @@ func (e *EnqueueTP) Generic(genericEvent event.GenericEvent, q workqueue.RateLim
 type EnqueueTPByBR struct{}
 
 func (e *EnqueueTPByBR) Create(event.CreateEvent, workqueue.RateLimitingInterface) {
-	return
 }
 
 func (e *EnqueueTPByBR) Update(event.UpdateEvent, workqueue.RateLimitingInterface) {
-	return
 }
 
 func (e *EnqueueTPByBR) Delete(event.DeleteEvent, workqueue.RateLimitingInterface) {
-	return
 }
 
 func (e *EnqueueTPByBR) Generic(event.GenericEvent, workqueue.RateLimitingInterface) {
-	return
 }
