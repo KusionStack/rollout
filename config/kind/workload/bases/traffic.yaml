@@ -1,0 +1,108 @@
+
+apiVersion: rollout.kusionstack.io/v1alpha1
+kind: TrafficTopology
+metadata:
+  name: rollout-demo1
+spec:
+  workloadRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    match:
+      selector:
+        matchLabels:
+          app: rollout-demo
+          cluster: cluster-a
+  trafficType: InCluster
+  backend:
+    kind: Service
+    name: rollout-demo1
+  routes:
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    name: rollout-demo1
+---
+
+apiVersion: rollout.kusionstack.io/v1alpha1
+kind: TrafficTopology
+metadata:
+  name: rollout-demo2
+spec:
+  workloadRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    match:
+      selector:
+        matchLabels:
+          app: rollout-demo
+          cluster: cluster-b
+  trafficType: InCluster
+  backend:
+    kind: Service
+    name: rollout-demo2
+  routes:
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    name: rollout-demo2
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rollout-demo1
+spec:
+  rules:
+  - host: rollout-demo.example.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: rollout-demo1
+            port: 
+              number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rollout-demo2
+spec:
+  rules:
+  - host: rollout-demo.example.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: rollout-demo2
+            port: 
+              number: 80
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollout-demo1
+spec:
+  selector:
+    cluster: cluster-a
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollout-demo2
+spec:
+  selector:
+    cluster: cluster-b
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80

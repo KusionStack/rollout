@@ -10,6 +10,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=ttopo
 
 // TrafficTopologies defines the networking traffic relationships between
 // workloads, backend services, and routes.
@@ -130,6 +131,7 @@ type TopologyInfo struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=bkr
 
 // BackendRouting defines defines the association between frontend routes and
 // backend service, and it allows the user to define forwarding rules for canary scenario.

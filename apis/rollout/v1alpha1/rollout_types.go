@@ -27,6 +27,8 @@ import (
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=ro
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="ID",type="string",JSONPath=".status.rolloutID"
 
 // Rollout is the Schema for the rollouts API
 type Rollout struct {
@@ -62,7 +64,7 @@ type RolloutSpec struct {
 	// WorkloadRef is a reference to a kind of workloads
 	WorkloadRef WorkloadRef `json:"workloadRef,omitempty"`
 
-	// TrafficTopologies defines the networking traffic relationships between
+	// TrafficTopologyRefs defines the networking traffic relationships between
 	// workloads, backend services, and routes.
 	TrafficTopologyRefs []string `json:"trafficTopologyRefs,omitempty"`
 }

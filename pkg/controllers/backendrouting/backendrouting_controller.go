@@ -23,15 +23,15 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
+	"kusionstack.io/kube-utils/controller/mixin"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"kusionstack.io/kube-utils/controller/mixin"
-	"kusionstack.io/kube-utils/multicluster"
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/backend"
@@ -56,16 +56,18 @@ func NewReconciler(mgr manager.Manager, backendRegistry backend.Registry, routeR
 	}
 }
 
-func AddToMgr(mgr manager.Manager, backendRegistry backend.Registry, routeRegistry route.Registry) error {
-	c, err := controller.New(ControllerName, mgr, controller.Options{
-		MaxConcurrentReconciles: 5,
-		Reconciler:              NewReconciler(mgr, backendRegistry, routeRegistry),
-		RateLimiter:             workqueue.DefaultControllerRateLimiter(),
-	})
-	if err != nil {
-		return err
+func (b *BackendRoutingReconciler) SetupWithManager(mgr manager.Manager) error {
+	if b.backendRegistry == nil {
+		return fmt.Errorf("backendRegistry must be set")
 	}
-	return c.Watch(multicluster.FedKind(&source.Kind{Type: &v1alpha1.BackendRouting{}}), &EnqueueBR{})
+	if b.routeRegistry == nil {
+		return fmt.Errorf("routeRegistry must be set")
+	}
+
+	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
+		For(&v1alpha1.BackendRouting{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Complete(b)
 }
 
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=backendroutings,verbs=get;list;watch;create;update;patch;delete
@@ -107,7 +109,7 @@ func (b *BackendRoutingReconciler) Reconcile(ctx context.Context, request reconc
 }
 
 func (b *BackendRoutingReconciler) reconcileTerminatingBackendRouting(ctx context.Context, br *v1alpha1.BackendRouting) (reconcile.Result, error) {
-	//todo
+	// todo
 	return reconcile.Result{}, nil
 }
 
@@ -128,7 +130,7 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx conte
 
 	// clean stable backends and routes
 	if backendsStatuses.Stable.Name != "" {
-		if backendsStatuses.Stable.Conditions.Terminating == nil || !*backendsStatuses.Stable.Conditions.Terminating {
+		if !ptr.Deref[bool](backendsStatuses.Stable.Conditions.Terminating, false) {
 			// not deleting, do backend delete, change route's backend first
 			var routeBackendChangeErr []error
 			for i, currentRoute := range routesStatuses {
@@ -226,7 +228,6 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx conte
 			backendsStatuses.Origin.Name = originBackend.GetBackendObject().GetName()
 		}
 		// todo maybe we should check route -> origin?
-		// but route might have multi backends, and we don't know which one should be origin
 		routesStatusesCur := make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
 		for idx, curRoute := range br.Spec.Routes {
 			routesStatusesCur[idx] = v1alpha1.BackendRouteStatus{
@@ -299,7 +300,7 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 				}
 			}
 
-			if backendsStatuses.Stable.Conditions.Ready == nil || !*backendsStatuses.Stable.Conditions.Ready {
+			if !ptr.Deref[bool](backendsStatuses.Stable.Conditions.Ready, false) {
 				needUpdateStatus = true
 				conditionTrue := true
 				backendsStatuses.Stable.Conditions.Ready = &conditionTrue
@@ -480,8 +481,7 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
 		}
 	}
-	if backendsStatuses.Canary.Name != br.Spec.Forwarding.Canary.Name || backendsStatuses.Canary.Conditions.Ready == nil ||
-		!*backendsStatuses.Canary.Conditions.Ready {
+	if backendsStatuses.Canary.Name != br.Spec.Forwarding.Canary.Name || !ptr.Deref[bool](backendsStatuses.Canary.Conditions.Ready, false) {
 		backendsStatuses.Canary.Name = br.Spec.Forwarding.Canary.Name
 		conditionTrue := true
 		backendsStatuses.Canary.Conditions.Ready = &conditionTrue
@@ -526,7 +526,8 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 }
 
 func (b *BackendRoutingReconciler) handleErr(ctx context.Context, br *v1alpha1.BackendRouting, backendsStatuses v1alpha1.BackendStatuses,
-	routesStatuses []v1alpha1.BackendRouteStatus, phase, desiredPhase v1alpha1.BackendRoutingPhase, err error) error {
+	routesStatuses []v1alpha1.BackendRouteStatus, phase, desiredPhase v1alpha1.BackendRoutingPhase, err error,
+) error {
 	if phase != desiredPhase {
 		phase = desiredPhase
 		_ = b.updateBackendRoutingStatus(ctx, br, backendsStatuses, routesStatuses, phase)
@@ -553,7 +554,8 @@ func (b *BackendRoutingReconciler) getRoute(ctx context.Context, namespace strin
 }
 
 func (b *BackendRoutingReconciler) updateBackendRoutingStatus(ctx context.Context, br *v1alpha1.BackendRouting,
-	backends v1alpha1.BackendStatuses, routes []v1alpha1.BackendRouteStatus, phase v1alpha1.BackendRoutingPhase) error {
+	backends v1alpha1.BackendStatuses, routes []v1alpha1.BackendRouteStatus, phase v1alpha1.BackendRoutingPhase,
+) error {
 	brGet := &v1alpha1.BackendRouting{}
 	err := b.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
 		Name:      br.Name,

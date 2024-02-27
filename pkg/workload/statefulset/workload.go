@@ -34,6 +34,8 @@ type workloadImpl struct {
 	obj *appsv1.StatefulSet
 
 	client client.Client
+
+	visual bool
 }
 
 func newFrom(cluster string, client client.Client, sts *appsv1.StatefulSet) *workloadImpl {

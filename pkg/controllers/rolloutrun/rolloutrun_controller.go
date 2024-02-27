@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/elliotchance/pie/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +31,7 @@ import (
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -39,6 +41,7 @@ import (
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/traffic"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	"kusionstack.io/rollout/pkg/workload"
@@ -180,6 +183,21 @@ func (r *RolloutRunReconciler) handleFinalizer(rolloutRun *rolloutv1alpha1.Rollo
 	return nil
 }
 
+func (r *RolloutRunReconciler) findTrafficTopology(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) ([]rolloutv1alpha1.TrafficTopology, error) {
+	topologies := make([]rolloutv1alpha1.TrafficTopology, 0)
+	for _, name := range obj.Spec.TrafficTopologyRefs {
+		key := client.ObjectKey{Namespace: obj.Namespace, Name: name}
+		var topology rolloutv1alpha1.TrafficTopology
+		err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), key, &topology)
+		if err != nil {
+			return nil, err
+		}
+		topologies = append(topologies, topology)
+	}
+
+	return topologies, nil
+}
+
 func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) (ctrl.Result, error) {
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rolloutRun", key)
@@ -190,17 +208,37 @@ func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv
 		return ctrl.Result{}, err
 	}
 
+	topologies, err := r.findTrafficTopology(ctx, obj)
+	if err != nil {
+		logger.Error(err, "failed to find traffic topology")
+		return ctrl.Result{}, err
+	}
+
+	for _, obj := range topologies {
+		readyCond := condition.GetCondition(obj.Status.Conditions, "Ready")
+		if readyCond == nil || readyCond.Status != metav1.ConditionTrue {
+			logger.Info("still waiting for traffic topology ready, skip reconciling", "topology", obj.Name)
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+	}
+
 	var (
 		done   bool
-		err    error
 		result ctrl.Result
 	)
+
+	trafficManager, err := traffic.NewManager(r.Client, r.Logger, topologies)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	executorCtx := &executor.ExecutorContext{
-		Context:    ctx,
-		Rollout:    rollout,
-		RolloutRun: obj,
-		NewStatus:  newStatus,
-		Workloads:  workloads,
+		Context:        ctx,
+		Rollout:        rollout,
+		RolloutRun:     obj,
+		NewStatus:      newStatus,
+		Workloads:      workloads,
+		TrafficManager: trafficManager,
 	}
 	if done, result, err = r.executor.Do(executorCtx); err != nil {
 		logger.Error(err, "defaultExecutor do err")

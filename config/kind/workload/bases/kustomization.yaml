@@ -13,3 +13,5 @@ resources:
   - demo1.yaml
   - demo2.yaml
   - rollout.yaml
+  - traffic.yaml
+

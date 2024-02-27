@@ -134,6 +134,10 @@ func (o Info) NamespacedName() types.NamespacedName {
 	}
 }
 
+func (o Info) String() string {
+	return rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: o.ClusterName, Name: o.Name}.String()
+}
+
 func (o Info) CheckPartitionReady(partiton int32) bool {
 	if o.Generation != o.Status.ObservedGeneration {
 		return false

@@ -59,6 +59,7 @@ func (w *workloadImpl) canaryWorkload() (*workloadImpl, error) {
 		return nil, err
 	}
 
+	visual := false
 	if errors.IsNotFound(err) {
 		canaryObj = appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{
@@ -72,9 +73,12 @@ func (w *workloadImpl) canaryWorkload() (*workloadImpl, error) {
 			},
 			Spec: *stableObj.Spec.DeepCopy(),
 		}
+		visual = true
 	}
 
-	return newFrom(w.info.ClusterName, w.client, &canaryObj), nil
+	workload := newFrom(w.info.ClusterName, w.client, &canaryObj)
+	workload.visual = visual
+	return workload, nil
 }
 
 var _ workload.CanaryStrategy = &canaryStrategy{}
@@ -143,7 +147,6 @@ func (s *canaryStrategy) CreateOrUpdate(canaryReplicas intstr.IntOrString, podTe
 		// TODO: we also need to change canaryObj.Spec.ServiceName and VolumeClaimTemplates and volumes in podTemplate
 		return nil
 	})
-
 	if err != nil {
 		return op, err
 	}
@@ -158,8 +161,12 @@ func (s *canaryStrategy) CreateOrUpdate(canaryReplicas intstr.IntOrString, podTe
 
 // Delete implements workload.CanaryStrategy.
 func (s *canaryStrategy) Delete() error {
+	if s.canary.visual {
+		return nil
+	}
 	ctx := clusterinfo.WithCluster(context.TODO(), s.canary.GetInfo().ClusterName)
-	return client.IgnoreNotFound(s.canary.client.Delete(ctx, s.canary.obj))
+	err := utils.DeleteWithFinalizer(ctx, s.canary.client, s.canary.obj, rolloutapi.FinalizerCanaryResourceProtection)
+	return client.IgnoreNotFound(err)
 }
 
 func applyPodTemplateMetadataPatch(obj *appsv1.StatefulSet, patch *rolloutv1alpha1.MetadataPatch) {

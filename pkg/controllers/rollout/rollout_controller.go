@@ -289,19 +289,19 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, instance *roll
 	return nil
 }
 
-func (r *RolloutReconciler) handleProgressing(ctx context.Context, instance *rolloutv1alpha1.Rollout, workloads []workload.Interface, newStatus *rolloutv1alpha1.RolloutStatus) error {
-	key := utils.ObjectKeyString(instance)
+func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.Rollout, workloads []workload.Interface, newStatus *rolloutv1alpha1.RolloutStatus) error {
+	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rollout", key)
 
 	// add labels to workloads
 	err := r.ensureWorkloadsLabels(ctx, workloads)
 	if err != nil {
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "FailedUpdateWorkload", "failed to ensure rollout label on workloads, err = %v", err)
+		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedUpdateWorkload", "failed to ensure rollout label on workloads, err = %v", err)
 		logger.Error(err, "failed to add labels into workloads")
 		return err
 	}
 
-	run, err := r.getCurrentRolloutRun(ctx, instance)
+	run, err := r.getCurrentRolloutRun(ctx, obj)
 	if err != nil {
 		logger.Error(err, "failed to get current rolloutRun of rollout")
 		return err
@@ -309,26 +309,26 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, instance *rol
 
 	if run != nil && !run.IsCompleted() {
 		// NOTE: rollout will not sync strategy modification to running rolloutRun
-		return r.syncRun(ctx, instance, run, workloads, newStatus)
+		return r.syncRun(ctx, obj, run, workloads, newStatus)
 	}
 
 	// TODO: filter out-of-control workloads
 	// check trigger satisfied
-	rolloutID, needTrigger := r.needRollout(instance, workloads)
+	rolloutID, needTrigger := r.needTrigger(obj, workloads)
 	if !needTrigger {
 		// sync status with current
-		return r.syncRun(ctx, instance, run, workloads, newStatus)
+		return r.syncRun(ctx, obj, run, workloads, newStatus)
 	}
 
 	// trigger a new rollout progress
-	strategy, err := r.parseUpgradeStrategy(instance)
+	strategy, err := r.parseUpgradeStrategy(obj)
 	if err != nil {
 		return err
 	}
 
 	logger.Info("rollout has been triggered, about to construct rolloutRun", "rolloutRun", rolloutID)
 
-	run = constructRolloutRun(instance, strategy, workloads, rolloutID)
+	run = constructRolloutRun(obj, strategy, workloads, rolloutID)
 
 	// NOTO: we have to set expectation before we create the rolloutRun to avoid
 	//       that the creation event comes so fast that we don't have time to set it
@@ -337,14 +337,14 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, instance *rol
 	if err = r.Client.Create(clusterinfo.ContextFed, run); err != nil {
 		r.expectation.DeleteExpectations(key)
 
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "FailedCreate", "failed to create a new rolloutRun %s: %v", run.Name, err)
+		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to create a new rolloutRun %s: %v", run.Name, err)
 		logger.Error(err, "failed to create rolloutRun", "rolloutRun", run.Name)
 		resetRolloutStatus(newStatus, run.Name, rolloutv1alpha1.RolloutPhaseProgressing)
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s", run.Name))
 		return err
 	}
 
-	r.Recorder.Eventf(instance, corev1.EventTypeNormal, "SucceedCreate", "create a new rolloutRun %s", run.Name)
+	r.Recorder.Eventf(obj, corev1.EventTypeNormal, "SucceedCreate", "create a new rolloutRun %s", run.Name)
 	logger.Info("a new rolloutRun has been created", "rolloutRun", rolloutID)
 	// update status
 	resetRolloutStatus(newStatus, run.Name, rolloutv1alpha1.RolloutPhaseProgressing)
@@ -363,7 +363,6 @@ func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, workloads
 			})
 			return nil
 		})
-
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -373,7 +372,7 @@ func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, workloads
 	return errorsutil.NewAggregate(errs)
 }
 
-func (r *RolloutReconciler) needRollout(instance *rolloutv1alpha1.Rollout, workloads []workload.Interface) (string, bool) {
+func (r *RolloutReconciler) needTrigger(instance *rolloutv1alpha1.Rollout, workloads []workload.Interface) (string, bool) {
 	rolloutID := generateRolloutID(instance.Name)
 
 	triggerName, ok := utils.GetMapValue(instance.Annotations, rollout.AnnoRolloutTrigger)
@@ -396,11 +395,23 @@ func (r *RolloutReconciler) needRollout(instance *rolloutv1alpha1.Rollout, workl
 	}
 
 	waiting := 0
+	pendings := []string{}
+
 	for _, w := range workloads {
 		if w.IsWaitingRollout() {
 			waiting++
+		} else {
+			info := w.GetInfo()
+			pendings = append(pendings, info.String())
 		}
 	}
+
+	r.Logger.Info("check if rollout need to be triggered",
+		"rollout", instance.Name,
+		"count", count,
+		"triggered", waiting,
+		"pendings", strings.Join(pendings, " | "),
+	)
 
 	if count == waiting {
 		return rolloutID, true
@@ -452,7 +463,6 @@ func (r *RolloutReconciler) updateStatusOnly(ctx context.Context, instance *roll
 		instance.Status = *newStatus
 		return nil
 	})
-
 	if err != nil {
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "FailedUpdateStatus", "failed to update rollout %q status: %v", key, err)
 		r.Logger.Error(err, "failed to update rollout status", "rollout", key)
@@ -490,7 +500,6 @@ func (r *RolloutReconciler) getCurrentRolloutRun(ctx context.Context, instance *
 		Name:      instance.Status.RolloutID,
 		Namespace: instance.GetNamespace(),
 	}, run)
-
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// the rolloutRun may be manually deleted
@@ -516,7 +525,7 @@ func (r *RolloutReconciler) syncRun(ctx context.Context, obj *rolloutv1alpha1.Ro
 	if run.IsCompleted() {
 		// wait for next trigger event
 		resetRolloutStatus(newStatus, run.Name, rolloutv1alpha1.RolloutPhaseInitialized)
-		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingCompleted, "rolloutRun is complated")
+		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingCompleted, "rolloutRun is completed")
 	} else {
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, rolloutv1alpha1.RolloutReasonProgressingRunning, "rolloutRun is running")
 	}
@@ -568,7 +577,6 @@ func (r *RolloutReconciler) cleanupAnnotation(ctx context.Context, obj *rolloutv
 		}
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}

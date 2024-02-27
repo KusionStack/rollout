@@ -26,6 +26,11 @@ import (
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=ror
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Canary State",type="string",JSONPath=".status.canaryStatus.state"
+// +kubebuilder:printcolumn:name="Batch Index",type="string",JSONPath=".status.batchStatus.currentBatchIndex"
+// +kubebuilder:printcolumn:name="Batch State",type="string",JSONPath=".status.batchStatus.currentBatchState"
+// +kubebuilder:printcolumn:name="Error",type="string",JSONPath=".status.error.code"
 
 type RolloutRun struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -51,6 +56,10 @@ type RolloutRunSpec struct {
 
 	// Webhooks defines rollout webhook configuration
 	Webhooks []RolloutWebhook `json:"webhooks,omitempty"`
+
+	// TrafficTopologyRefs defines the networking traffic relationships between
+	// workloads, backend services, and routes.
+	TrafficTopologyRefs []string `json:"trafficTopologyRefs,omitempty"`
 
 	// Canary defines the canary strategy
 	// +optional

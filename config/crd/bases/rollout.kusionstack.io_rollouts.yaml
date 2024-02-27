@@ -18,7 +18,14 @@ spec:
     singular: rollout
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.rolloutID
+      name: ID
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Rollout is the Schema for the rollouts API
@@ -41,7 +48,7 @@ spec:
                 description: StrategyRef is the reference to the rollout strategy
                 type: string
               trafficTopologyRefs:
-                description: TrafficTopologies defines the networking traffic relationships between workloads, backend services, and routes.
+                description: TrafficTopologyRefs defines the networking traffic relationships between workloads, backend services, and routes.
                 items:
                   type: string
                 type: array

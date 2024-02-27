@@ -19,7 +19,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -189,6 +191,13 @@ func GetWorkloadList(ctx context.Context, c client.Client, store Store, namespac
 		if !ok {
 			return nil, fmt.Errorf("can not convert element to client.Object")
 		}
+
+		canary := utils.GetMapValueByDefault(obj.GetLabels(), rolloutapi.LabelCanary, "false")
+		if canary == "true" {
+			// ignore canary workload here, you should get canary worload from CanaryStrategy interface
+			continue
+		}
+
 		cluster := workload.GetClusterFromLabel(obj.GetLabels())
 		if !matcher.Matches(cluster, obj.GetName(), obj.GetLabels()) {
 			continue

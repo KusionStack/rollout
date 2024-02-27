@@ -18,7 +18,23 @@ spec:
     singular: rolloutrun
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.canaryStatus.state
+      name: Canary State
+      type: string
+    - jsonPath: .status.batchStatus.currentBatchIndex
+      name: Batch Index
+      type: string
+    - jsonPath: .status.batchStatus.currentBatchState
+      name: Batch State
+      type: string
+    - jsonPath: .status.error.code
+      name: Error
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:
@@ -447,6 +463,11 @@ spec:
                 required:
                 - kind
                 type: object
+              trafficTopologyRefs:
+                description: TrafficTopologyRefs defines the networking traffic relationships between workloads, backend services, and routes.
+                items:
+                  type: string
+                type: array
               webhooks:
                 description: Webhooks defines rollout webhook configuration
                 items:

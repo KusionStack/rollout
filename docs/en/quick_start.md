@@ -83,7 +83,7 @@ status:
     currentBatchIndex: 2
     currentBatchState: Succeeded
 conditions:
-- message: rolloutRun is complated
+- message: rolloutRun is completed
   reason: Completed
   status: "False"
   type: Progressing
