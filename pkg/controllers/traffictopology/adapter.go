@@ -85,7 +85,7 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 		return expected, nil
 	}
 
-	backendApiVersion := ptr.Deref(trafficTopology.Spec.Backend.APIVersion, "")
+	backendApiVersion := ptr.Deref(trafficTopology.Spec.Backend.APIVersion, "v1")
 	backendKind := ptr.Deref(trafficTopology.Spec.Backend.Kind, "Service")
 
 	// caution:
