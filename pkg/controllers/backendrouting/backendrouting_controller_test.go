@@ -23,6 +23,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -383,6 +384,81 @@ var _ = Describe("backend-routing-controller", func() {
 			}
 			err = fedClient.Update(ctx, brTmp)
 			Expect(err).Should(BeNil())
+
+			Eventually(func() bool {
+				igsTmp := &networkingv1.Ingress{}
+				err = clusterClient1.Get(ctx, types.NamespacedName{
+					Name:      "br-controller-ut-igs1-canary",
+					Namespace: "default",
+				}, igsTmp)
+				return errors.IsNotFound(err)
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				svcTmp := &corev1.Service{}
+				err = clusterClient1.Get(ctx, types.NamespacedName{
+					Name:      "br-controller-ut-svc1-canary",
+					Namespace: "default",
+				}, svcTmp)
+				return errors.IsNotFound(err)
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp = &v1alpha1.BackendRouting{}
+				err = fedClient.Get(ctx, types.NamespacedName{
+					Name:      br0.Name,
+					Namespace: br0.Namespace,
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+		})
+
+		It("forwarding deleted", func() {
+			brTmp := &v1alpha1.BackendRouting{}
+			err := fedClient.Get(ctx, types.NamespacedName{
+				Name:      br0.Name,
+				Namespace: br0.Namespace,
+			}, brTmp)
+			Expect(err).Should(BeNil())
+			brTmp.Spec.Forwarding = nil
+			err = fedClient.Update(ctx, brTmp)
+			Expect(err).Should(BeNil())
+
+			Eventually(func() bool {
+				igsTmp := &networkingv1.Ingress{}
+				err = clusterClient1.Get(ctx, types.NamespacedName{
+					Name:      "br-controller-ut-igs1",
+					Namespace: "default",
+				}, igsTmp)
+				if err != nil {
+					return false
+				}
+				return igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1"
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				svcTmp := &corev1.Service{}
+				err = clusterClient1.Get(ctx, types.NamespacedName{
+					Name:      "br-controller-ut-svc1-stable",
+					Namespace: "default",
+				}, svcTmp)
+				return errors.IsNotFound(err)
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp = &v1alpha1.BackendRouting{}
+				err = fedClient.Get(ctx, types.NamespacedName{
+					Name:      br0.Name,
+					Namespace: br0.Namespace,
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
 
 	})
