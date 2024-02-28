@@ -15,7 +15,6 @@
 package backendrouting
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -225,7 +224,6 @@ var _ = Describe("backend-routing-controller", func() {
 				if err != nil {
 					return false
 				}
-				fmt.Println(igsTmp)
 				return igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-stable"
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 

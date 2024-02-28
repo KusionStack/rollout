@@ -17,6 +17,7 @@ package backendrouting
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"go.uber.org/multierr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -223,6 +224,26 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx conte
 		}
 		// todo maybe we should check route -> origin?
 		// but route might have multi backends, and we don't know which one should be origin
+		routesStatusesCur := make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
+		for idx, curRoute := range br.Spec.Routes {
+			routesStatusesCur[idx] = v1alpha1.BackendRouteStatus{
+				CrossClusterObjectReference: v1alpha1.CrossClusterObjectReference{
+					ObjectTypeRef: v1alpha1.ObjectTypeRef{
+						APIVersion: curRoute.APIVersion,
+						Kind:       curRoute.Kind,
+					},
+					CrossClusterObjectNameReference: v1alpha1.CrossClusterObjectNameReference{
+						Cluster: curRoute.Cluster,
+						Name:    curRoute.Name,
+					},
+				},
+				Synced: true,
+			}
+		}
+		if !reflect.DeepEqual(routesStatuses, routesStatusesCur) {
+			routesStatuses = routesStatusesCur
+			needUpdateStatus = true
+		}
 		if phase != v1alpha1.Ready {
 			phase = v1alpha1.Ready
 			needUpdateStatus = true
@@ -432,7 +453,7 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 	// todo: discussion
 	// should we check origin & stable here?
 	// check canary backend and route
-	canaryBackend, err := b.getBackend(ctx, br, br.Spec.Forwarding.Canary.Name)
+	_, err := b.getBackend(ctx, br, br.Spec.Forwarding.Canary.Name)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
@@ -449,9 +470,9 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
 		}
 	}
-	if backendsStatuses.Canary.Name != canaryBackend.GetBackendObject().GetName() || backendsStatuses.Canary.Conditions.Ready == nil ||
+	if backendsStatuses.Canary.Name != br.Spec.Forwarding.Canary.Name || backendsStatuses.Canary.Conditions.Ready == nil ||
 		!*backendsStatuses.Canary.Conditions.Ready {
-		backendsStatuses.Canary.Name = canaryBackend.GetBackendObject().GetName()
+		backendsStatuses.Canary.Name = br.Spec.Forwarding.Canary.Name
 		conditionTrue := true
 		backendsStatuses.Canary.Conditions.Ready = &conditionTrue
 		needUpdateStatus = true

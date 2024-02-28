@@ -74,9 +74,6 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 	By("bootstrapping test environment")
 
-	// SET K8S VERSION
-	os.Setenv("KUBEBUILDER_ASSETS", "../../../bin/k8s/1.24.1-darwin-arm64")
-
 	// fed
 	fedScheme := runtime.NewScheme()
 	err := appsv1.SchemeBuilder.AddToScheme(fedScheme) // deployment
