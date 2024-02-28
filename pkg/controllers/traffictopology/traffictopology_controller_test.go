@@ -389,6 +389,29 @@ var _ = Describe("traffic-topology-controller", func() {
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
 
+		It("traffictopology deleting", func() {
+			err := fedClient.Delete(ctx, tp0)
+			Expect(err).Should(BeNil())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.BackendRouting{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Namespace: "default",
+					Name:      tp0.Name + "-ics-cluster1",
+				}, brTmp)
+				return errors.IsNotFound(err)
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.TrafficTopology{}
+				err = fedClient.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
+					Namespace: tp0.Namespace,
+					Name:      tp0.Name,
+				}, brTmp)
+				return errors.IsNotFound(err)
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+		})
+
 	})
 
 	Context("MultiCluster TrafficTopology", func() {
