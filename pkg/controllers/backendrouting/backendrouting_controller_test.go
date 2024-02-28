@@ -295,7 +295,7 @@ var _ = Describe("backend-routing-controller", func() {
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
 			Eventually(func() bool {
-				brTmp := &v1alpha1.BackendRouting{}
+				brTmp = &v1alpha1.BackendRouting{}
 				err = fedClient.Get(ctx, types.NamespacedName{
 					Name:      br0.Name,
 					Namespace: br0.Namespace,
@@ -346,12 +346,6 @@ var _ = Describe("backend-routing-controller", func() {
 			Expect(err).Should(BeNil())
 
 			Eventually(func() bool {
-				brTmp = &v1alpha1.BackendRouting{}
-				err = fedClient.Get(ctx, types.NamespacedName{
-					Name:      br0.Name,
-					Namespace: br0.Namespace,
-				}, brTmp)
-				Expect(err).Should(BeNil())
 				igsTmp := &networkingv1.Ingress{}
 				err = clusterClient1.Get(ctx, types.NamespacedName{
 					Name:      "br-controller-ut-igs1-canary",
@@ -365,7 +359,7 @@ var _ = Describe("backend-routing-controller", func() {
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
 			Eventually(func() bool {
-				brTmp := &v1alpha1.BackendRouting{}
+				brTmp = &v1alpha1.BackendRouting{}
 				err = fedClient.Get(ctx, types.NamespacedName{
 					Name:      br0.Name,
 					Namespace: br0.Namespace,
@@ -375,6 +369,20 @@ var _ = Describe("backend-routing-controller", func() {
 				}
 				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+		})
+
+		It("End Canary", func() {
+			brTmp := &v1alpha1.BackendRouting{}
+			err := fedClient.Get(ctx, types.NamespacedName{
+				Name:      br0.Name,
+				Namespace: br0.Namespace,
+			}, brTmp)
+			Expect(err).Should(BeNil())
+			brTmp.Spec.Forwarding = &v1alpha1.BackendForwarding{
+				Stable: brTmp.Spec.Forwarding.Stable,
+			}
+			err = fedClient.Update(ctx, brTmp)
+			Expect(err).Should(BeNil())
 		})
 
 	})

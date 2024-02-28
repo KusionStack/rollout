@@ -350,9 +350,6 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 
 func (b *BackendRoutingReconciler) ensureCanaryRemove(ctx context.Context, br *v1alpha1.BackendRouting) error {
 	needUpdateStatus := false
-	if br.Status.ObservedGeneration != br.Generation {
-		needUpdateStatus = true
-	}
 	backendsStatuses := br.Status.Backends
 	routesStatuses := br.Status.RouteStatuses
 	if len(routesStatuses) == 0 {
