@@ -34,7 +34,7 @@ type BackendChangeDetail struct {
 
 type IRoute interface {
 	GetRouteObject() client.Object
-	AddCanaryRoute(ctx context.Context, strategy v1alpha1.TrafficStrategy) error
+	AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.BackendForwarding) error
 	RemoveCanaryRoute(ctx context.Context) error
 	ChangeBackend(ctx context.Context, detail BackendChangeDetail) error
 }

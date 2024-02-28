@@ -44,8 +44,10 @@ func (i *ingressRoute) GetRouteObject() client.Object {
 	return i.obj
 }
 
-func (i *ingressRoute) AddCanaryRoute(ctx context.Context, strategy v1alpha1.TrafficStrategy) error {
+func (i *ingressRoute) AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.BackendForwarding) error {
 	igs := i.obj
+
+	strategy := forwarding.Canary.TrafficStrategy
 
 	annosCanaryNeedCheck := map[string]string{
 		AnnoCanaryWeight:           "",
@@ -95,6 +97,28 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, strategy v1alpha1.Tra
 
 	_, err := controllerutil.CreateOrUpdate(clusterinfo.WithCluster(ctx, i.cluster), i.client, canaryIgs, func() error {
 		canaryIgs.Spec = igs.Spec
+
+		if canaryIgs.Spec.DefaultBackend != nil {
+			if canaryIgs.Spec.DefaultBackend.Service != nil && canaryIgs.Spec.DefaultBackend.Service.Name == forwarding.Stable.Name {
+				canaryIgs.Spec.DefaultBackend.Service.Name = forwarding.Canary.Name
+			}
+			if canaryIgs.Spec.DefaultBackend.Resource != nil && canaryIgs.Spec.DefaultBackend.Resource.Name == forwarding.Stable.Name {
+				canaryIgs.Spec.DefaultBackend.Resource.Name = forwarding.Canary.Name
+			}
+		}
+
+		for idx, rule := range canaryIgs.Spec.Rules {
+			for k, path := range rule.HTTP.Paths {
+				if path.Backend.Service != nil && path.Backend.Service.Name == forwarding.Stable.Name {
+					path.Backend.Service.Name = forwarding.Canary.Name
+				}
+				if path.Backend.Resource != nil && path.Backend.Resource.Name == forwarding.Stable.Name {
+					path.Backend.Resource.Name = forwarding.Canary.Name
+				}
+				canaryIgs.Spec.Rules[idx].HTTP.Paths[k] = path
+			}
+		}
+
 		if canaryIgs.Annotations == nil {
 			canaryIgs.Annotations = make(map[string]string)
 		}

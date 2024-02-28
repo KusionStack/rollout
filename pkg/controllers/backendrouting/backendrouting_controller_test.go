@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 
@@ -237,6 +238,118 @@ var _ = Describe("backend-routing-controller", func() {
 					return false
 				}
 				return brTmp.Status.Phase == v1alpha1.Ready
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+		})
+
+		It("Canary ready", func() {
+			// add canary to backendrouting
+			brTmp := &v1alpha1.BackendRouting{}
+			err := fedClient.Get(ctx, types.NamespacedName{
+				Name:      br0.Name,
+				Namespace: br0.Namespace,
+			}, brTmp)
+			Expect(err).Should(BeNil())
+			canaryWeight := int32(50)
+			brTmp.Spec.Forwarding.Canary = v1alpha1.CanaryBackendRule{
+				Name: "br-controller-ut-svc1-canary",
+				TrafficStrategy: v1alpha1.TrafficStrategy{
+					Weight: &canaryWeight,
+					HTTPRule: &v1alpha1.HTTPRouteRule{
+						Matches: []v1alpha1.HTTPRouteMatch{
+							{
+								Headers: []gatewayapiv1.HTTPHeaderMatch{
+									{
+										Name:  "env",
+										Value: "canary",
+									},
+								},
+							},
+						},
+						Filter: v1alpha1.HTTPRouteFilter{
+							RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+								Set: []gatewayapiv1.HTTPHeader{
+									{
+										Name:  "x-mse-tag",
+										Value: "canary",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err = fedClient.Update(ctx, brTmp)
+			Expect(err).Should(BeNil())
+
+			Eventually(func() bool {
+				igsTmp := &networkingv1.Ingress{}
+				err = clusterClient1.Get(ctx, types.NamespacedName{
+					Name:      "br-controller-ut-igs1-canary",
+					Namespace: "default",
+				}, igsTmp)
+				if err != nil {
+					return false
+				}
+				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "50" &&
+					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			// update weight
+			brTmp = &v1alpha1.BackendRouting{}
+			err = fedClient.Get(ctx, types.NamespacedName{
+				Name:      br0.Name,
+				Namespace: br0.Namespace,
+			}, brTmp)
+			Expect(err).Should(BeNil())
+			canaryWeight = int32(20)
+			brTmp.Spec.Forwarding.Canary = v1alpha1.CanaryBackendRule{
+				Name: "br-controller-ut-svc1-canary",
+				TrafficStrategy: v1alpha1.TrafficStrategy{
+					Weight: &canaryWeight,
+					HTTPRule: &v1alpha1.HTTPRouteRule{
+						Matches: []v1alpha1.HTTPRouteMatch{
+							{
+								Headers: []gatewayapiv1.HTTPHeaderMatch{
+									{
+										Name:  "env",
+										Value: "canary",
+									},
+								},
+							},
+						},
+						Filter: v1alpha1.HTTPRouteFilter{
+							RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+								Set: []gatewayapiv1.HTTPHeader{
+									{
+										Name:  "x-mse-tag",
+										Value: "canary",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err = fedClient.Update(ctx, brTmp)
+			Expect(err).Should(BeNil())
+
+			Eventually(func() bool {
+				brTmp = &v1alpha1.BackendRouting{}
+				err = fedClient.Get(ctx, types.NamespacedName{
+					Name:      br0.Name,
+					Namespace: br0.Namespace,
+				}, brTmp)
+				Expect(err).Should(BeNil())
+				igsTmp := &networkingv1.Ingress{}
+				err = clusterClient1.Get(ctx, types.NamespacedName{
+					Name:      "br-controller-ut-igs1-canary",
+					Namespace: "default",
+				}, igsTmp)
+				if err != nil {
+					return false
+				}
+				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "20" &&
+					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
 	})
