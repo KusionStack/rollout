@@ -288,8 +288,9 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 					if err != nil {
 						return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
 					}
+				} else {
+					return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
 				}
-				return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
 			}
 
 			if backendsStatuses.Stable.Conditions.Ready == nil || !*backendsStatuses.Stable.Conditions.Ready {
@@ -484,7 +485,7 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 		if err != nil {
 			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
 		}
-		err = iRoute.AddCanaryRoute(ctx, br.Spec.Forwarding.Canary.TrafficStrategy)
+		err = iRoute.AddCanaryRoute(ctx, br.Spec.Forwarding)
 		if err != nil {
 			if routesStatuses[idx].Synced {
 				routesStatuses[idx].Synced = false

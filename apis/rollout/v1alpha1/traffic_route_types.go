@@ -175,8 +175,8 @@ type StableBackendRule struct {
 
 type CanaryBackendRule struct {
 	// the temporary canary backend service name, generally it is the {originServiceName}-canary
-	Name            string          `json:"name,omitempty"`
-	TrafficStrategy TrafficStrategy `json:",inline"`
+	Name            string `json:"name,omitempty"`
+	TrafficStrategy `json:",inline"`
 }
 
 type TrafficStrategy struct {
