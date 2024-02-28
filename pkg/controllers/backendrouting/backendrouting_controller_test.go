@@ -162,7 +162,7 @@ var _ = Describe("backend-routing-controller", func() {
 					return false
 				}
 				// status would be ready since we didn't check whether route -> origin
-				return brTmp.Status.Phase == v1alpha1.Ready
+				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
 			// create ingress
@@ -237,7 +237,7 @@ var _ = Describe("backend-routing-controller", func() {
 				if err != nil {
 					return false
 				}
-				return brTmp.Status.Phase == v1alpha1.Ready
+				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
 
@@ -292,6 +292,18 @@ var _ = Describe("backend-routing-controller", func() {
 				}
 				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "50" &&
 					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.BackendRouting{}
+				err = fedClient.Get(ctx, types.NamespacedName{
+					Name:      br0.Name,
+					Namespace: br0.Namespace,
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
 			// update weight
@@ -351,7 +363,20 @@ var _ = Describe("backend-routing-controller", func() {
 				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "20" &&
 					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp := &v1alpha1.BackendRouting{}
+				err = fedClient.Get(ctx, types.NamespacedName{
+					Name:      br0.Name,
+					Namespace: br0.Namespace,
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
+
 	})
 })
 

@@ -122,6 +122,9 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx conte
 	phase := br.Status.Phase
 
 	needUpdateStatus := false
+	if br.Status.ObservedGeneration != br.Generation {
+		needUpdateStatus = true
+	}
 
 	// clean stable backends and routes
 	if backendsStatuses.Stable.Name != "" {
@@ -267,6 +270,9 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 			return reconcile.Result{}, b.ensureCanaryRemove(ctx, br)
 		} else {
 			needUpdateStatus := false
+			if br.Status.ObservedGeneration != br.Generation {
+				needUpdateStatus = true
+			}
 			backendsStatuses := br.Status.Backends
 			routesStatuses := br.Status.RouteStatuses
 			if len(routesStatuses) == 0 {
@@ -344,6 +350,9 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 
 func (b *BackendRoutingReconciler) ensureCanaryRemove(ctx context.Context, br *v1alpha1.BackendRouting) error {
 	needUpdateStatus := false
+	if br.Status.ObservedGeneration != br.Generation {
+		needUpdateStatus = true
+	}
 	backendsStatuses := br.Status.Backends
 	routesStatuses := br.Status.RouteStatuses
 	if len(routesStatuses) == 0 {
@@ -444,6 +453,9 @@ func (b *BackendRoutingReconciler) ensureCanaryRemove(ctx context.Context, br *v
 
 func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1alpha1.BackendRouting) error {
 	needUpdateStatus := false
+	if br.Status.ObservedGeneration != br.Generation {
+		needUpdateStatus = true
+	}
 	backendsStatuses := br.Status.Backends
 	routesStatuses := br.Status.RouteStatuses
 	if len(routesStatuses) == 0 {
