@@ -22,16 +22,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -59,9 +55,6 @@ var (
 	clusterEnv2    *envtest.Environment
 	clusterClient2 client.Client // cluster 2 client
 
-	clusterClient client.Client // multi cluster client
-	clusterCache  cache.Cache   // multi cluster cache
-
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -75,65 +68,44 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 
 	// fed
-	fedScheme := runtime.NewScheme()
-	err := appsv1.SchemeBuilder.AddToScheme(fedScheme) // deployment
-	Expect(err).NotTo(HaveOccurred())
-	err = v1alpha1.AddToScheme(fedScheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = networkingv1.SchemeBuilder.AddToScheme(fedScheme)
+	testscheme := scheme.Scheme
+	err := v1alpha1.AddToScheme(testscheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	fedEnv = &envtest.Environment{
-		Scheme:            fedScheme,
+		Scheme:            testscheme,
 		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
 	}
-	fedEnv.ControlPlane.GetAPIServer().SecureServing.Address = "127.0.0.1"
-	fedEnv.ControlPlane.GetAPIServer().SecureServing.Port = "10001"
 	fedConfig, err := fedEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fedConfig).NotTo(BeNil())
 
 	fedClientSet, _ = kubernetes.NewForConfig(fedConfig)
 
-	fedClient, err = client.New(fedConfig, client.Options{Scheme: fedScheme})
+	fedClient, err = client.New(fedConfig, client.Options{Scheme: testscheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fedClient).NotTo(BeNil())
 
-	// cluster 1
-	clusterScheme := runtime.NewScheme()
-	err = corev1.SchemeBuilder.AddToScheme(clusterScheme) // configmap and service
-	Expect(err).NotTo(HaveOccurred())
-	err = v1alpha1.AddToScheme(clusterScheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = appsv1.SchemeBuilder.AddToScheme(clusterScheme) // deployment
-	Expect(err).NotTo(HaveOccurred())
-	err = networkingv1.SchemeBuilder.AddToScheme(clusterScheme)
-	Expect(err).NotTo(HaveOccurred())
-
 	clusterEnv1 = &envtest.Environment{
-		Scheme: clusterScheme,
+		Scheme: testscheme,
 	}
-	clusterEnv1.ControlPlane.GetAPIServer().SecureServing.Address = "127.0.0.1"
-	clusterEnv1.ControlPlane.GetAPIServer().SecureServing.Port = "10002"
 	clusterConfig1, err := clusterEnv1.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clusterConfig1).NotTo(BeNil())
 
-	clusterClient1, err = client.New(clusterConfig1, client.Options{Scheme: clusterScheme})
+	clusterClient1, err = client.New(clusterConfig1, client.Options{Scheme: testscheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clusterClient1).NotTo(BeNil())
 
 	// cluster 2
 	clusterEnv2 = &envtest.Environment{
-		Scheme: clusterScheme,
+		Scheme: testscheme,
 	}
-	clusterEnv2.ControlPlane.GetAPIServer().SecureServing.Address = "127.0.0.1"
-	clusterEnv2.ControlPlane.GetAPIServer().SecureServing.Port = "10003"
 	clusterConfig2, err := clusterEnv2.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clusterConfig2).NotTo(BeNil())
 
-	clusterClient2, err = client.New(clusterConfig2, client.Options{Scheme: clusterScheme})
+	clusterClient2, err = client.New(clusterConfig2, client.Options{Scheme: testscheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clusterClient2).NotTo(BeNil())
 
@@ -145,7 +117,7 @@ var _ = BeforeSuite(func() {
 	os.Setenv(clusterinfo.EnvClusterAllowList, "cluster1,cluster2")
 	mgr, newCacheFunc, newClientFunc, err = multicluster.NewManager(&multicluster.ManagerConfig{
 		FedConfig:     fedConfig,
-		ClusterScheme: clusterScheme,
+		ClusterScheme: testscheme,
 		ResyncPeriod:  10 * time.Minute,
 
 		RestConfigForCluster: func(clusterName string) *rest.Config {
@@ -170,39 +142,21 @@ var _ = BeforeSuite(func() {
 	Expect(newCacheFunc).NotTo(BeNil())
 	Expect(newClientFunc).NotTo(BeNil())
 
-	// multiClusterCache
-	mapper, err := apiutil.NewDynamicRESTMapper(fedConfig)
-	Expect(err).NotTo(HaveOccurred())
+	go func() {
+		mgr.Run(2, ctx)
+		Expect(err).To(BeNil())
+	}()
 
-	clusterCache, err = newCacheFunc(fedConfig, cache.Options{
-		Scheme: fedScheme,
-		Mapper: mapper,
-	})
-	Expect(err).NotTo(HaveOccurred())
-	go clusterCache.Start(ctx)
+	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
 
-	// multiClusterClient
-	clusterClient, err = newClientFunc(clusterCache, fedConfig, client.Options{
-		Scheme: fedScheme,
-		Mapper: mapper,
-	})
+	scheme := scheme.Scheme
+	err = v1alpha1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(clusterClient).NotTo(BeNil())
-
-	go mgr.Run(2, ctx)
 
 	ctrlMgr, err := manager.New(fedConfig, manager.Options{
 		NewClient: newClientFunc,
 		NewCache:  newCacheFunc,
 	})
-	Expect(err).NotTo(HaveOccurred())
-
-	scheme := ctrlMgr.GetScheme()
-	err = appsv1.SchemeBuilder.AddToScheme(scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = v1alpha1.AddToScheme(scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = networkingv1.SchemeBuilder.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	_, err = workloadregistry.InitFunc(ctrlMgr)
@@ -216,7 +170,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	go ctrlMgr.Start(ctx)
-
 })
 
 var _ = AfterSuite(func() {
