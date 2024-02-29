@@ -70,6 +70,10 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 		return expected, fmt.Errorf("not type of TrafficTopology")
 	}
 
+	if trafficTopology.GetDeletionTimestamp() != nil {
+		return expected, nil
+	}
+
 	workloadStore, err := t.workloadRegistry.Get(schema.FromAPIVersionAndKind(
 		trafficTopology.Spec.WorkloadRef.APIVersion, trafficTopology.Spec.WorkloadRef.Kind))
 	if err != nil {
