@@ -65,25 +65,26 @@ func filterWorkloadsByMatch(workloads []workload.Interface, match *rolloutv1alph
 	return result
 }
 
-func constructRolloutRun(instance *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []workload.Interface, rolloutId string) *rolloutv1alpha1.RolloutRun {
-	owner := metav1.NewControllerRef(instance, rolloutv1alpha1.SchemeGroupVersion.WithKind("Rollout"))
+func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []workload.Interface, rolloutId string) *rolloutv1alpha1.RolloutRun {
+	owner := metav1.NewControllerRef(obj, rolloutv1alpha1.SchemeGroupVersion.WithKind("Rollout"))
 	run := &rolloutv1alpha1.RolloutRun{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: instance.Namespace,
+			Namespace: obj.Namespace,
 			Name:      rolloutId,
 			Labels: map[string]string{
 				rolloutapi.LabelControl:     "true",
-				rolloutapi.LabelGeneratedBy: instance.Name,
+				rolloutapi.LabelGeneratedBy: obj.Name,
 			},
 			Annotations:     map[string]string{},
 			OwnerReferences: []metav1.OwnerReference{*owner},
 		},
 		Spec: rolloutv1alpha1.RolloutRunSpec{
 			TargetType: rolloutv1alpha1.ObjectTypeRef{
-				APIVersion: instance.Spec.WorkloadRef.APIVersion,
-				Kind:       instance.Spec.WorkloadRef.Kind,
+				APIVersion: obj.Spec.WorkloadRef.APIVersion,
+				Kind:       obj.Spec.WorkloadRef.Kind,
 			},
-			Canary: constructRolloutRunCanary(strategy.Canary, workloadWrappers),
+			TrafficTopologyRefs: obj.Spec.TrafficTopologyRefs,
+			Canary:              constructRolloutRunCanary(strategy.Canary, workloadWrappers),
 			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
 				Toleration: strategy.Batch.Toleration,
 				Batches:    constructRolloutRunBatches(strategy.Batch, workloadWrappers),

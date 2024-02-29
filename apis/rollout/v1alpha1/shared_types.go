@@ -69,10 +69,10 @@ func (r CrossClusterObjectNameReference) Matches(cluster, name string) bool {
 
 func (r CrossClusterObjectNameReference) String() string {
 	if len(r.Cluster) == 0 {
-		return fmt.Sprintf("name=%q", r.Name)
+		return fmt.Sprintf("name=%s", r.Name)
 	}
 
-	return fmt.Sprintf("cluster=%q, name=%q", r.Cluster, r.Name)
+	return fmt.Sprintf("cluster=%s,name=%s", r.Cluster, r.Name)
 }
 
 type CodeReasonMessage struct {
@@ -110,8 +110,7 @@ type ProgressingInfo struct {
 	Batch       *BatchProgressingInfo  `json:"batch,omitempty"`
 }
 
-type CanaryProgressingInfo struct {
-}
+type CanaryProgressingInfo struct{}
 
 type BatchProgressingInfo struct {
 	CurrentBatchIndex int32 `json:"currentBatchIndex"`

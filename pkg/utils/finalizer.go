@@ -42,3 +42,11 @@ func RemoveAndUpdateFinalizer(client client.Client, obj client.Object, finalizer
 	})
 	return err
 }
+
+func DeleteWithFinalizer(ctx context.Context, client client.Client, obj client.Object, finalizer string) error {
+	err := RemoveAndUpdateFinalizer(client, obj, finalizer)
+	if err != nil {
+		return err
+	}
+	return client.Delete(ctx, obj)
+}

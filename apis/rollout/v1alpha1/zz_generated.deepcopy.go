@@ -836,6 +836,11 @@ func (in *RolloutRunSpec) DeepCopyInto(out *RolloutRunSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.TrafficTopologyRefs != nil {
+		in, out := &in.TrafficTopologyRefs, &out.TrafficTopologyRefs
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Canary != nil {
 		in, out := &in.Canary, &out.Canary
 		*out = new(RolloutRunCanaryStrategy)

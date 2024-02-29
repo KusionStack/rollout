@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: rollout-demo2
+  labels:
+    cluster: cluster-b
 spec:
   podManagementPolicy: Parallel
   serviceName: rollout-demo2
@@ -13,9 +15,13 @@ spec:
     metadata:
       labels:
         cluster: cluster-b
+        pod.rollout.kusionstack.io/revision: base
     spec:
       containers:
-      - name: demo
-        image: alpine:3.14
+      - name: nginxdemo
+        image: nginxdemos/hello:latest
         imagePullPolicy: IfNotPresent
-        args: ["tail", "-f", "/etc/hosts"]
+        ports:
+        - name: "tcp-80"
+          containerPort: 80
+          protocol: TCP

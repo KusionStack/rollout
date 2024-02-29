@@ -13,6 +13,8 @@ spec:
     kind: BackendRouting
     listKind: BackendRoutingList
     plural: backendroutings
+    shortNames:
+    - bkr
     singular: backendrouting
   scope: Namespaced
   versions:

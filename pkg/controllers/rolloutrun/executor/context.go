@@ -26,6 +26,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/traffic"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -34,10 +35,11 @@ type ExecutorContext struct {
 	context.Context
 	once sync.Once
 
-	Rollout    *rolloutv1alpha1.Rollout
-	RolloutRun *rolloutv1alpha1.RolloutRun
-	NewStatus  *rolloutv1alpha1.RolloutRunStatus
-	Workloads  *workload.Set
+	Rollout        *rolloutv1alpha1.Rollout
+	RolloutRun     *rolloutv1alpha1.RolloutRun
+	NewStatus      *rolloutv1alpha1.RolloutRunStatus
+	Workloads      *workload.Set
+	TrafficManager *traffic.Manager
 }
 
 func (c *ExecutorContext) Initialize() {

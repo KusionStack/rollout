@@ -13,6 +13,8 @@ spec:
     kind: TrafficTopology
     listKind: TrafficTopologyList
     plural: traffictopologies
+    shortNames:
+    - ttopo
     singular: traffictopology
   scope: Namespaced
   versions:

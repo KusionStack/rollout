@@ -30,7 +30,7 @@ func InitFunc(mgr manager.Manager) (bool, error) {
 }
 
 func initFunc(mgr manager.Manager, backendRegistry backend.Registry, routeRegistry route.Registry) (bool, error) {
-	err := AddToMgr(mgr, backendRegistry, routeRegistry)
+	err := NewReconciler(mgr, backendRegistry, routeRegistry).SetupWithManager(mgr)
 	if err != nil {
 		return false, err
 	}

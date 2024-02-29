@@ -54,7 +54,7 @@ func newCanaryExecutor(logger logr.Logger, webhook webhookExecutor) *canaryExecu
 	e.stateMachine.add(StepPreCanaryStepHook, StepRunning, e.doPreStepHook)
 	e.stateMachine.add(StepRunning, StepPostCanaryStepHook, e.doCanary)
 	e.stateMachine.add(StepPostCanaryStepHook, StepResourceRecycling, e.doPostStepHook)
-	e.stateMachine.add(StepResourceRecycling, StepSucceeded, skipStep)
+	e.stateMachine.add(StepResourceRecycling, StepSucceeded, e.doRecycle)
 	e.stateMachine.add(StepSucceeded, "", skipStep)
 
 	return e
@@ -69,9 +69,10 @@ func (e *canaryExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result
 		return true, ctrl.Result{Requeue: true}, nil
 	}
 
-	currentState := ctx.NewStatus.CanaryStatus.State
+	logger := e.loggerWithContext(ctx)
+	ctx.TrafficManager.With(logger, ctx.RolloutRun.Spec.Canary.Targets, ctx.RolloutRun.Spec.Canary.Traffic)
 
-	return e.stateMachine.do(ctx, currentState)
+	return e.stateMachine.do(ctx, ctx.NewStatus.CanaryStatus.State)
 }
 
 func (e *canaryExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, error) {
@@ -118,16 +119,58 @@ func (e *canaryExecutor) doPostStepHook(ctx *ExecutorContext) (bool, time.Durati
 	return done, retry, err
 }
 
-func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, error) {
+func (e *canaryExecutor) modifyTraffic(ctx *ExecutorContext, op string) (bool, time.Duration) {
+	logger := e.loggerWithContext(ctx)
 	rolloutRun := ctx.RolloutRun
+	opResult := controllerutil.OperationResultNone
+
 	// 1.a. do traffic initialization
+	if rolloutRun.Spec.Canary.Traffic != nil {
+		var err error
+		switch op {
+		case "forkStable":
+			opResult, err = ctx.TrafficManager.ForkStable()
+		case "forkCanary":
+			opResult, err = ctx.TrafficManager.ForkCanary()
+		case "revertStable":
+			opResult, err = ctx.TrafficManager.RevertStable()
+		case "revertCanary":
+			opResult, err = ctx.TrafficManager.RevertCanary()
+		}
+		if err != nil {
+			logger.Error(err, "failed to modify traffic", "operation", op)
+			return false, retryDefault
+		}
+		logger.Info("modify traffic routing", "operation", op, "result", opResult)
+	}
+	if opResult != controllerutil.OperationResultNone {
+		return false, retryDefault
+	}
 
 	// 1.b. waiting for traffic
+	if rolloutRun.Spec.Canary.Traffic != nil {
+		ready := ctx.TrafficManager.CheckReady()
+		if !ready {
+			logger.Info("waiting for BackendRouting ready")
+			return false, retryDefault
+		}
+	}
+
+	return true, retryImmediately
+}
+
+func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, error) {
+	logger := e.loggerWithContext(ctx)
+	rolloutRun := ctx.RolloutRun
+
+	// 1. do traffic initialization
+	prepareDone, retry := e.modifyTraffic(ctx, "forkStable")
+	if !prepareDone {
+		return false, retry, nil
+	}
 
 	// 2.a. do create canary resources
-	logger := e.loggerWithContext(ctx)
 	logger.Info("about to create canary resources and check")
-
 	canaryWorkloads := make([]workload.CanaryStrategy, 0)
 
 	patch := appendBuiltinPodTemplateMetadataPatch(rolloutRun.Spec.Canary.PodTemplateMetadataPatch)
@@ -185,12 +228,12 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 		}
 	}
 
-	// 3.a. do canary traffic routing
+	// 3 do canary traffic routing
+	trafficCanaryDone, retry := e.modifyTraffic(ctx, "forkCanary")
+	if !trafficCanaryDone {
+		return false, retry, nil
+	}
 
-	// 3.b. waiting for traffic ready
-
-	// 4. move to next state
-	// ctx.MoveToNextState(StepPostCanaryStepHook)
 	return true, retryImmediately, nil
 }
 
@@ -206,4 +249,45 @@ func appendBuiltinPodTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch)
 	patch.Labels[rolloutapi.LabelCanary] = "true"
 	patch.Labels[rolloutapi.LabelPodRevision] = "canary"
 	return patch
+}
+
+func (e *canaryExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, error) {
+	done, retry := e.modifyTraffic(ctx, "revertCanary")
+	if !done {
+		return false, retry, nil
+	}
+
+	rolloutRun := ctx.RolloutRun
+	for _, item := range rolloutRun.Spec.Canary.Targets {
+		wi := ctx.Workloads.Get(item.Cluster, item.Name)
+		if wi == nil {
+			return false, retryStop, newDoCanaryError(
+				ReasonWorkloadInterfaceNotExist,
+				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
+			)
+		}
+
+		canaryStrategy, err := wi.CanaryStrategy()
+		if err != nil {
+			return false, retryStop, newDoCanaryError(
+				"InternalError",
+				fmt.Sprintf("failed to get canary strategy, err: %v", err),
+			)
+		}
+
+		err = canaryStrategy.Delete()
+		if err != nil {
+			return false, retryStop, newDoCanaryError(
+				"DeleteFailed",
+				fmt.Sprintf("failed to delete canary resource for workload(%s), err: %v", item.CrossClusterObjectNameReference, err),
+			)
+		}
+	}
+
+	done, retry = e.modifyTraffic(ctx, "revertStable")
+	if !done {
+		return false, retry, nil
+	}
+
+	return true, retryDefault, nil
 }

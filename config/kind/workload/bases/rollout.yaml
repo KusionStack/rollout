@@ -12,6 +12,9 @@ spec:
       selector:
         matchLabels:
           app: rollout-demo
+  trafficTopologyRefs:
+  - rollout-demo1
+  - rollout-demo2
 
 ---
 
@@ -24,6 +27,18 @@ canary:
   podTemplateMetadataPatch:
     labels:
       service.tag: "canary"
+  traffic:
+    http:
+      filter:
+        requestHeaderModifier:
+          set:
+          - name: x-mse-tag
+            value: canary
+      matches:
+      - headers:
+        - type: Exact 
+          name: env
+          value: canary
 batch:
   batches:
   - replicas: 1
