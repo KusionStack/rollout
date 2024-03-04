@@ -226,6 +226,8 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx conte
 		if backendsStatuses.Origin.Name != originBackend.GetBackendObject().GetName() {
 			needUpdateStatus = true
 			backendsStatuses.Origin.Name = originBackend.GetBackendObject().GetName()
+			conditionTrue := true
+			backendsStatuses.Origin.Conditions.Ready = &conditionTrue
 		}
 		// todo maybe we should check route -> origin?
 		routesStatusesCur := make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))

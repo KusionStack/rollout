@@ -63,18 +63,20 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.
 		annosCanaryNeedCheck[AnnoCanaryWeight] = strconv.Itoa(int(*strategy.Weight))
 	}
 
+	isMseIngress := igs.Spec.IngressClassName != nil && *igs.Spec.IngressClassName == MseIngressClass
+
 	if strategy.HTTPRule != nil {
 		if len(strategy.HTTPRule.Matches) > 0 {
 			if len(strategy.HTTPRule.Matches[0].Headers) > 0 {
 				annosCanaryNeedCheck[AnnoCanaryHeader] = string(strategy.HTTPRule.Matches[0].Headers[0].Name)
 				annosCanaryNeedCheck[AnnoCanaryHeaderValue] = strategy.HTTPRule.Matches[0].Headers[0].Value
 			}
-			if len(strategy.HTTPRule.Matches[0].QueryParams) > 0 {
+			if isMseIngress && len(strategy.HTTPRule.Matches[0].QueryParams) > 0 {
 				annosCanaryNeedCheck[AnnoMseCanaryQuery] = string(strategy.HTTPRule.Matches[0].QueryParams[0].Name)
 				annosCanaryNeedCheck[AnnoMseCanaryQueryValue] = strategy.HTTPRule.Matches[0].QueryParams[0].Value
 			}
 		}
-		if strategy.HTTPRule.Filter.RequestHeaderModifier != nil {
+		if isMseIngress && strategy.HTTPRule.Filter.RequestHeaderModifier != nil {
 			annoSet := generateMultiHeadersAnno(strategy.HTTPRule.Filter.RequestHeaderModifier.Set)
 			if annoSet != "" {
 				annosCanaryNeedCheck[AnnoMseReqHeaderCtrlUpdate] = annoSet

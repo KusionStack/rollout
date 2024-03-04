@@ -163,7 +163,8 @@ var _ = Describe("backend-routing-controller", func() {
 					return false
 				}
 				// status would be ready since we didn't check whether route -> origin
-				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
+				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration &&
+					*brTmp.Status.Backends.Origin.Conditions.Ready
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
 			// create ingress
@@ -292,6 +293,8 @@ var _ = Describe("backend-routing-controller", func() {
 					return false
 				}
 				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "50" &&
+					igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-by-header-value"] == "canary" &&
+					igsTmp.Annotations["mse.ingress.kubernetes.io/request-header-control-update"] == "" &&
 					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
