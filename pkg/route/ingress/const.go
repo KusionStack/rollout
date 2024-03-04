@@ -25,4 +25,6 @@ const (
 	AnnoMseReqHeaderCtrlUpdate = "mse.ingress.kubernetes.io/request-header-control-update"
 	AnnoMseReqHeaderCtrlAdd    = "mse.ingress.kubernetes.io/request-header-control-add"
 	AnnoMseReqHeaderCtrlRemove = "mse.ingress.kubernetes.io/request-header-control-remove"
+
+	MseIngressClass = "mse"
 )
