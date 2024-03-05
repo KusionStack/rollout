@@ -50,6 +50,7 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.
 	strategy := forwarding.Canary.TrafficStrategy
 
 	annosCanaryNeedCheck := map[string]string{
+		AnnoCanary:                 "true",
 		AnnoCanaryWeight:           "",
 		AnnoCanaryHeader:           "",
 		AnnoCanaryHeaderValue:      "",

@@ -292,7 +292,8 @@ var _ = Describe("backend-routing-controller", func() {
 				if err != nil {
 					return false
 				}
-				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "50" &&
+				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary"] == "true" &&
+					igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "50" &&
 					igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-by-header-value"] == "canary" &&
 					igsTmp.Annotations["mse.ingress.kubernetes.io/request-header-control-update"] == "" &&
 					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"

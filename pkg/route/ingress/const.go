@@ -15,6 +15,7 @@
 package ingress
 
 const (
+	AnnoCanary            = "nginx.ingress.kubernetes.io/canary"
 	AnnoCanaryWeight      = "nginx.ingress.kubernetes.io/canary-weight"
 	AnnoCanaryHeader      = "nginx.ingress.kubernetes.io/canary-by-header"
 	AnnoCanaryHeaderValue = "nginx.ingress.kubernetes.io/canary-by-header-value"
