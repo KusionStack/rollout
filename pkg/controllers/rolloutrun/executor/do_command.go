@@ -45,8 +45,5 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		}
 	}
 
-	// Regardless of the value, we need to delete the key.
-	delete(rolloutRun.Annotations, rolloutapis.AnnoManualCommandKey)
-
 	return ctrl.Result{Requeue: true}
 }

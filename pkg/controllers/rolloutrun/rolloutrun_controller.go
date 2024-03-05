@@ -129,21 +129,16 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	var result ctrl.Result
-	cmd := obj.Annotations[rollout.AnnoManualCommandKey]
 	result, err = r.syncRolloutRun(ctx, obj, newStatus, workloads)
+
+	if tempErr := r.cleanupAnnotation(ctx, obj); tempErr != nil {
+		logger.Error(tempErr, "failed to clean up annotation")
+	}
 
 	updateStatus := r.updateStatusOnly(ctx, obj, newStatus, workloads)
 	if updateStatus != nil {
-		logger.Error(err, "failed to update status")
+		logger.Error(updateStatus, "failed to update status")
 		return reconcile.Result{}, updateStatus
-	}
-
-	if _, exist := obj.Annotations[rollout.AnnoManualCommandKey]; !exist && len(cmd) > 0 {
-		patch := utils.DeleteAnnotation(types.JSONPatchType, rollout.AnnoManualCommandKey)
-		if patchError := r.Client.Patch(clusterinfo.ContextFed, obj, patch); patchError != nil {
-			logger.Error(err, "failed to patch status")
-			return reconcile.Result{}, patchError
-		}
 	}
 
 	if err != nil {
@@ -180,6 +175,20 @@ func (r *RolloutRunReconciler) handleFinalizer(rolloutRun *rolloutv1alpha1.Rollo
 		return nil
 	}
 
+	return nil
+}
+
+func (r *RolloutRunReconciler) cleanupAnnotation(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) error {
+	// delete manual command annotations from rollout
+	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func() error {
+		delete(obj.Annotations, rollout.AnnoManualCommandKey)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	key := utils.ObjectKeyString(obj)
+	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
 	return nil
 }
 
@@ -335,29 +344,29 @@ func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.Rol
 	newStatus.TargetStatuses = workloadStatuses
 }
 
-func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, instance *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) error {
+func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) error {
 	// generate workload status
 	r.syncWorkloadStatus(newStatus, workloads)
 
-	if equality.Semantic.DeepEqual(instance.Status, *newStatus) {
+	if equality.Semantic.DeepEqual(obj.Status, *newStatus) {
 		// no change
 		return nil
 	}
-	key := utils.ObjectKeyString(instance)
+	key := utils.ObjectKeyString(obj)
 	now := metav1.Now()
 	newStatus.LastUpdateTime = &now
-	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), instance, func() error {
-		instance.Status = *newStatus
-		instance.Status.ObservedGeneration = instance.Generation
+	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), obj, func() error {
+		obj.Status = *newStatus
+		obj.Status.ObservedGeneration = obj.Generation
 		return nil
 	})
 	if err != nil {
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "FailedUpdateStatus", "failed to update rolloutRun %q status: %v", key, err)
+		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedUpdateStatus", "failed to update rolloutRun %q status: %v", key, err)
 		r.Logger.Error(err, "failed to update rolloutRun status", "rolloutRun", key)
 		return err
 	}
 
 	r.Logger.V(2).Info("succeed to update rolloutRun status", "rolloutRun", key)
-	r.rvExpectation.ExpectUpdate(key, instance.ResourceVersion) // nolint
+	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
 	return nil
 }
