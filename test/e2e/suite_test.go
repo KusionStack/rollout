@@ -38,7 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/controllers"
+	"kusionstack.io/rollout/pkg/controllers/initializers"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/test/e2e/controller"
 	//+kubebuilder:scaffold:imports
@@ -119,7 +119,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	if os.Getenv("TEST_USE_EXISTING_CLUSTER") != "true" {
-		err = controllers.Initializer.Add(controller.FakeStsControllerName, controller.InitFakeStsControllerFunc)
+		err = initializers.Controllers.Add(controller.FakeStsControllerName, controller.InitFakeStsControllerFunc)
 		Expect(err).ToNot(HaveOccurred())
 	}
 
@@ -128,7 +128,9 @@ var _ = BeforeSuite(func() {
 		features.DefaultMutableFeatureGate.Set(featureGates)
 	}
 
-	err = controllers.Initializer.SetupWithManager(k8sManager)
+	err = initializers.Background.SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+	err = initializers.Controllers.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	go func() {

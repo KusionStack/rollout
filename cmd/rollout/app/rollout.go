@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"kusionstack.io/rollout/cmd/rollout/app/options"
-	"kusionstack.io/rollout/pkg/controllers"
+	"kusionstack.io/rollout/pkg/controllers/initializers"
 	"kusionstack.io/rollout/pkg/utils/cli"
 	"kusionstack.io/rollout/pkg/webhook"
 )
@@ -58,7 +58,7 @@ func NewRolloutCommand(opt *options.Options) *cobra.Command {
 		},
 	}
 
-	cli.AddFlagsAndUsage(cmd, opt.Flags(controllers.Initializer, webhook.Initializer))
+	cli.AddFlagsAndUsage(cmd, opt.Flags(initializers.Controllers, webhook.Initializer))
 
 	return cmd
 }
@@ -93,11 +93,11 @@ func Run(opt *options.Options) error {
 		setupLog.Info("federated mode enabled")
 		// multiClusterManager manages syncing clusters
 		multiClusterCfg := &multicluster.ManagerConfig{
-			FedConfig:            restConfig,
-			ClusterManagementGVR: opt.ClusterManagementGVR,
-			ClusterScheme:        scheme.Scheme,
-			ResyncPeriod:         0 * time.Second,
-			Log:                  ctrl.Log.WithName("multicluster"),
+			ClusterProvider: opt.ClusterProvider,
+			FedConfig:       restConfig,
+			ClusterScheme:   scheme.Scheme,
+			ResyncPeriod:    0 * time.Second,
+			Log:             ctrl.Log.WithName("multicluster"),
 		}
 		multiClusterManager, newMultiClusterCache, newMultiClusterClient, err := multicluster.NewManager(multiClusterCfg, multicluster.Options{})
 		if err != nil {
@@ -123,34 +123,42 @@ func Run(opt *options.Options) error {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return err
 	}
 
-	err = controllers.Initializer.SetupWithManager(mgr)
+	err = initializers.Background.SetupWithManager(mgr)
 	if err != nil {
-		setupLog.Error(err, "failed to initialize controllers")
+		setupLog.Error(err, "failed to setup background initializers")
+		return err
+	}
+
+	err = initializers.Controllers.SetupWithManager(mgr)
+	if err != nil {
+		setupLog.Error(err, "failed to setup controller initializers")
+		return err
 	}
 
 	err = webhook.Initializer.SetupWithManager(mgr)
 	if err != nil {
-		setupLog.Error(err, "failed to initialize webhooks")
+		setupLog.Error(err, "failed to setup webhooks initializers")
+		return err
 	}
 
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
+		setupLog.Error(err, "failed to setup health check")
+		return err
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
+		setupLog.Error(err, "failed to setup ready check")
+		return err
 	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+		setupLog.Error(err, "failed to start controller manager")
+		return err
 	}
 	return nil
 }

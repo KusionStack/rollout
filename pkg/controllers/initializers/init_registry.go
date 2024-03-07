@@ -1,5 +1,5 @@
 /**
- * Copyright 2023 The KusionStack Authors
+ * Copyright 2024 The KusionStack Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-package controllers
+package initializers
 
 import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"kusionstack.io/kube-utils/controller/initializer"
-
-	"kusionstack.io/rollout/pkg/controllers/backendregistry"
-	"kusionstack.io/rollout/pkg/controllers/backendrouting"
-	"kusionstack.io/rollout/pkg/controllers/routeregistry"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 )
 
 func init() {
-	utilruntime.Must(Initializer.Add(backendregistry.InitializerName, backendregistry.InitFunc, initializer.WithHidden()))
-	utilruntime.Must(Initializer.Add(routeregistry.InitializerName, routeregistry.InitFunc, initializer.WithHidden()))
+	// init backend registry
+	utilruntime.Must(Background.Add(registry.BackendRegistryName, registry.InitBackendRegistry))
 
-	utilruntime.Must(Initializer.Add(backendrouting.ControllerName, backendrouting.InitFunc))
+	// init route registry
+	utilruntime.Must(Background.Add(registry.RouteRegistryName, registry.InitRouteRegistry))
+
+	// init workload registry
+	utilruntime.Must(Background.Add(registry.WorkloadRegistryName, registry.InitWorkloadRegistry))
 }

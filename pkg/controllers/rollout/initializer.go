@@ -18,12 +18,12 @@ import (
 	"kusionstack.io/kube-utils/controller/initializer"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
+	registires "kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/workload/registry"
 )
 
 func InitFunc(mgr manager.Manager) (bool, error) {
-	return initFunc(mgr, workloadregistry.DefaultRegistry)
+	return initFunc(mgr, registires.Workloads)
 }
 
 func InitFuncWith(registry registry.Registry) initializer.InitFunc {

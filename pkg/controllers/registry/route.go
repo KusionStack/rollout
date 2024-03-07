@@ -1,5 +1,5 @@
 /**
- * Copyright 2023 The KusionStack Authors
+ * Copyright 2024 The KusionStack Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
-package backendrouting
+package registry
 
 import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/backend"
-	"kusionstack.io/rollout/pkg/controllers/registry"
-	"kusionstack.io/rollout/pkg/route"
+	"kusionstack.io/rollout/pkg/route/ingress"
+	"kusionstack.io/rollout/pkg/route/registry"
 )
 
-func InitFunc(mgr manager.Manager) (bool, error) {
-	return initFunc(mgr, registry.Backends, registry.Routes)
-}
+const (
+	RouteRegistryName = "route-registry"
+)
 
-func initFunc(mgr manager.Manager, backendRegistry backend.Registry, routeRegistry route.Registry) (bool, error) {
-	err := NewReconciler(mgr, backendRegistry, routeRegistry).SetupWithManager(mgr)
-	if err != nil {
-		return false, err
-	}
+var Routes = registry.NewRegistry()
+
+func InitRouteRegistry(mgr manager.Manager) (bool, error) {
+	Routes.Register(ingress.NewStorage(mgr))
+	Routes.SetupWithManger(mgr)
 	return true, nil
 }
