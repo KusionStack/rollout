@@ -39,9 +39,7 @@ import (
 	"kusionstack.io/kube-utils/multicluster/controller"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/controllers/backendregistry"
-	"kusionstack.io/rollout/pkg/controllers/routeregistry"
-	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 )
 
 var (
@@ -116,26 +114,21 @@ var _ = BeforeSuite(func() {
 	)
 	os.Setenv(clusterinfo.EnvClusterAllowList, "cluster1,cluster2")
 	mgr, newCacheFunc, newClientFunc, err = multicluster.NewManager(&multicluster.ManagerConfig{
+		ClusterProvider: &controller.TestClusterProvider{
+			GroupVersionResource: schema.GroupVersionResource{
+				Group:    "apps",
+				Version:  "v1",
+				Resource: "deployments",
+			},
+			ClusterNameToConfig: map[string]*rest.Config{
+				"cluster1": clusterConfig1,
+				"cluster2": clusterConfig2,
+				"fed":      fedConfig,
+			},
+		},
 		FedConfig:     fedConfig,
 		ClusterScheme: testscheme,
 		ResyncPeriod:  10 * time.Minute,
-
-		RestConfigForCluster: func(clusterName string) *rest.Config {
-			switch clusterName {
-			case "cluster1":
-				return clusterConfig1
-			case "cluster2":
-				return clusterConfig2
-			default:
-				return fedConfig
-			}
-		},
-		ClusterManagementGVR: &schema.GroupVersionResource{
-			Group:    "apps",
-			Version:  "v1",
-			Resource: "deployments",
-		},
-		ClusterManagementType: controller.TestCluterManagement,
 	}, multicluster.Options{})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mgr).NotTo(BeNil())
@@ -154,16 +147,18 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	ctrlMgr, err := manager.New(fedConfig, manager.Options{
-		NewClient: newClientFunc,
-		NewCache:  newCacheFunc,
+		NewClient:              newClientFunc,
+		NewCache:               newCacheFunc,
+		MetricsBindAddress:     "0",
+		HealthProbeBindAddress: "0",
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	_, err = workloadregistry.InitFunc(ctrlMgr)
+	_, err = registry.InitWorkloadRegistry(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred())
-	_, err = backendregistry.InitFunc(ctrlMgr)
+	_, err = registry.InitBackendRegistry(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred())
-	_, err = routeregistry.InitFunc(ctrlMgr)
+	_, err = registry.InitRouteRegistry(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	_, err = InitFunc(ctrlMgr)

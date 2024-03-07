@@ -1,5 +1,5 @@
 /**
- * Copyright 2023 The KusionStack Authors
+ * Copyright 2024 The KusionStack Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,25 @@
  * limitations under the License.
  */
 
-package backendrouting
+package registry
 
 import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/backend"
-	"kusionstack.io/rollout/pkg/controllers/registry"
-	"kusionstack.io/rollout/pkg/route"
+	"kusionstack.io/rollout/pkg/workload/collaset"
+	"kusionstack.io/rollout/pkg/workload/registry"
+	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
 
-func InitFunc(mgr manager.Manager) (bool, error) {
-	return initFunc(mgr, registry.Backends, registry.Routes)
-}
+const (
+	WorkloadRegistryName = "workload-registry"
+)
 
-func initFunc(mgr manager.Manager, backendRegistry backend.Registry, routeRegistry route.Registry) (bool, error) {
-	err := NewReconciler(mgr, backendRegistry, routeRegistry).SetupWithManager(mgr)
-	if err != nil {
-		return false, err
-	}
+var Workloads = registry.New()
+
+func InitWorkloadRegistry(mgr manager.Manager) (bool, error) {
+	Workloads.Register(collaset.NewStorage(mgr))
+	Workloads.Register(statefulset.NewStorage(mgr))
+	Workloads.SetupWithManger(mgr)
 	return true, nil
 }

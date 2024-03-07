@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package controllers
+package initializers
 
 import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -24,6 +24,9 @@ import (
 )
 
 func init() {
-	utilruntime.Must(Initializer.Add(rollout.ControllerName, rollout.InitFunc))
-	utilruntime.Must(Initializer.Add(rolloutrun.ControllerName, rolloutrun.InitFunc))
+	// init rollout controller
+	utilruntime.Must(Controllers.Add(rollout.ControllerName, rollout.InitFunc))
+
+	// init rolloutRun controller
+	utilruntime.Must(Controllers.Add(rolloutrun.ControllerName, rolloutrun.InitFunc))
 }

@@ -108,7 +108,7 @@ func (b *BackendRoutingReconciler) Reconcile(ctx context.Context, request reconc
 	return b.reconcileInClusterWithoutForwarding(ctx, br)
 }
 
-func (b *BackendRoutingReconciler) reconcileTerminatingBackendRouting(ctx context.Context, br *v1alpha1.BackendRouting) (reconcile.Result, error) {
+func (b *BackendRoutingReconciler) reconcileTerminatingBackendRouting(_ context.Context, _ *v1alpha1.BackendRouting) (reconcile.Result, error) {
 	// todo
 	return reconcile.Result{}, nil
 }
@@ -130,7 +130,7 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx conte
 
 	// clean stable backends and routes
 	if backendsStatuses.Stable.Name != "" {
-		if !ptr.Deref[bool](backendsStatuses.Stable.Conditions.Terminating, false) {
+		if !ptr.Deref(backendsStatuses.Stable.Conditions.Terminating, false) {
 			// not deleting, do backend delete, change route's backend first
 			var routeBackendChangeErr []error
 			for i, currentRoute := range routesStatuses {
@@ -302,7 +302,7 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 				}
 			}
 
-			if !ptr.Deref[bool](backendsStatuses.Stable.Conditions.Ready, false) {
+			if !ptr.Deref(backendsStatuses.Stable.Conditions.Ready, false) {
 				needUpdateStatus = true
 				conditionTrue := true
 				backendsStatuses.Stable.Conditions.Ready = &conditionTrue
@@ -483,7 +483,7 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
 		}
 	}
-	if backendsStatuses.Canary.Name != br.Spec.Forwarding.Canary.Name || !ptr.Deref[bool](backendsStatuses.Canary.Conditions.Ready, false) {
+	if backendsStatuses.Canary.Name != br.Spec.Forwarding.Canary.Name || !ptr.Deref(backendsStatuses.Canary.Conditions.Ready, false) {
 		backendsStatuses.Canary.Name = br.Spec.Forwarding.Canary.Name
 		conditionTrue := true
 		backendsStatuses.Canary.Conditions.Ready = &conditionTrue
@@ -573,7 +573,7 @@ func (b *BackendRoutingReconciler) updateBackendRoutingStatus(ctx context.Contex
 	return b.Client.Status().Update(clusterinfo.WithCluster(ctx, clusterinfo.Fed), brGet)
 }
 
-func (b *BackendRoutingReconciler) reconcileMultiClusterType(ctx context.Context, br *v1alpha1.BackendRouting) (reconcile.Result, error) {
+func (b *BackendRoutingReconciler) reconcileMultiClusterType(_ context.Context, _ *v1alpha1.BackendRouting) (reconcile.Result, error) {
 	// todo
 	return reconcile.Result{}, nil
 }

@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2/klogr"
 	"kusionstack.io/kube-utils/controller/initializer"
+	mcctrl "kusionstack.io/kube-utils/multicluster/controller"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -34,7 +34,7 @@ type Options struct {
 	HealthProbeBindAddress      string
 	LeaderElect                 bool
 	FederatedMode               bool
-	ClusterManagementGVR        *schema.GroupVersionResource
+	ClusterProvider             mcctrl.ClusterProvider
 	Logger                      string
 	CertDir                     string
 	ZapOptions                  *zap.Options
@@ -47,7 +47,6 @@ func NewOptions() *Options {
 		HealthProbeBindAddress: ":8081",
 		LeaderElect:            false,
 		FederatedMode:          true,
-		ClusterManagementGVR:   &schema.GroupVersionResource{Group: "cluster.karbour.com", Version: "v1beta1", Resource: "clusters"},
 		Logger:                 "zap",
 		ZapOptions: &zap.Options{
 			Development: true,
@@ -104,6 +103,12 @@ func (o *Options) Complete() error {
 		ctrl.SetLogger(zap.New(zap.UseFlagOptions(o.ZapOptions)))
 	default:
 		ctrl.SetLogger(klogr.New())
+	}
+
+	if o.FederatedMode {
+		if o.ClusterProvider == nil {
+			return fmt.Errorf("cluster provider must be set when federated mode is on")
+		}
 	}
 	return nil
 }

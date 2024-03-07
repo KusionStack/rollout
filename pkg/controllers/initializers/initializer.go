@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package controllers
+package initializers
 
 import (
 	"kusionstack.io/kube-utils/controller/initializer"
 )
 
 var (
-	Initializer = initializer.New()
+	// background initializers
+	Background = initializer.NewNamed("background")
+
+	// controller initializers
+	Controllers = initializer.NewNamed("controllers")
 )

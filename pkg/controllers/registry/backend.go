@@ -1,5 +1,5 @@
 /**
- * Copyright 2023 The KusionStack Authors
+ * Copyright 2024 The KusionStack Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,23 @@
  * limitations under the License.
  */
 
-package controllers
+package registry
 
 import (
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/controllers/traffictopology"
+	"kusionstack.io/rollout/pkg/backend/registry"
+	"kusionstack.io/rollout/pkg/backend/service"
 )
 
-func init() {
-	utilruntime.Must(Initializer.Add(traffictopology.ControllerName, traffictopology.InitFunc))
+const (
+	BackendRegistryName = "backend-registry"
+)
+
+var Backends = registry.NewRegistry()
+
+func InitBackendRegistry(mgr manager.Manager) (bool, error) {
+	Backends.Register(service.NewStorage(mgr))
+	Backends.SetupWithManger(mgr)
+	return true, nil
 }

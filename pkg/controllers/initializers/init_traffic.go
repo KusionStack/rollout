@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
-package controllers
+package initializers
 
 import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"kusionstack.io/kube-utils/controller/initializer"
 
-	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
+	"kusionstack.io/rollout/pkg/controllers/backendrouting"
+	"kusionstack.io/rollout/pkg/controllers/traffictopology"
 )
 
 func init() {
-	utilruntime.Must(Initializer.Add(workloadregistry.InitializerName, workloadregistry.InitFunc, initializer.WithHidden()))
+	// init traffic topology
+	utilruntime.Must(Controllers.Add(traffictopology.ControllerName, traffictopology.InitFunc))
+
+	// init backend routing
+	utilruntime.Must(Controllers.Add(backendrouting.ControllerName, backendrouting.InitFunc))
 }

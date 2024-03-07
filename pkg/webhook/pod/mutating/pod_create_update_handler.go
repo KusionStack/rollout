@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"kusionstack.io/rollout/apis/rollout"
-	"kusionstack.io/rollout/pkg/controllers/workloadregistry"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils"
 )
 
@@ -157,7 +157,7 @@ func gvkOfOwner(ownerRef *metav1.OwnerReference) (schema.GroupVersionKind, error
 }
 
 func getObjByGVK(ctx context.Context, cli client.Client, gvk schema.GroupVersionKind, namespace, name string) (client.Object, error) {
-	store, err := workloadregistry.DefaultRegistry.Get(gvk)
+	store, err := registry.Workloads.Get(gvk)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func getObjByGVK(ctx context.Context, cli client.Client, gvk schema.GroupVersion
 }
 
 func controlledByRollout(gvk schema.GroupVersionKind) bool {
-	_, err := workloadregistry.DefaultRegistry.Get(gvk)
+	_, err := registry.Workloads.Get(gvk)
 	return err == nil
 }
 
