@@ -27,7 +27,9 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
@@ -39,20 +41,40 @@ import (
 
 type TPControllerAdapter struct {
 	client.Client
-	workloadRegistry workloadregistry.Registry
+	workloadRegistry        workloadregistry.Registry
+	maxConcurrentReconciles int
 }
 
-func NewTPControllerAdapter(c client.Client, workloadRegistry workloadregistry.Registry) *TPControllerAdapter {
-	return &TPControllerAdapter{
-		c,
-		workloadRegistry,
+func NewTPControllerAdapter(mgr manager.Manager, workloadRegistry workloadregistry.Registry) *TPControllerAdapter {
+	opts := mgr.GetControllerOptions()
+	groupKind := v1alpha1.SchemeGroupVersion.WithKind("TrafficTopology").GroupKind().String()
+	c := &TPControllerAdapter{
+		Client:           mgr.GetClient(),
+		workloadRegistry: workloadRegistry,
 	}
+	if concurrency, ok := opts.GroupKindConcurrency[groupKind]; ok && concurrency > 0 {
+		c.maxConcurrentReconciles = concurrency
+	}
+	return c
 }
 
-var _ rsFrameController.ReconcileAdapter = &TPControllerAdapter{}
-var _ rsFrameController.ReconcileWatchOptions = &TPControllerAdapter{}
-var _ rsFrameController.StatusRecordOptions = &TPControllerAdapter{}
-var _ rsFrameController.MultiClusterOptions = &TPControllerAdapter{}
+var (
+	_ rsFrameController.ReconcileAdapter      = &TPControllerAdapter{}
+	_ rsFrameController.ReconcileWatchOptions = &TPControllerAdapter{}
+	_ rsFrameController.StatusRecordOptions   = &TPControllerAdapter{}
+	_ rsFrameController.MultiClusterOptions   = &TPControllerAdapter{}
+	_ rsFrameController.ReconcileOptions      = &TPControllerAdapter{}
+)
+
+// GetMaxConcurrent implements controller.ReconcileOptions.
+func (t *TPControllerAdapter) GetMaxConcurrent() int {
+	return t.maxConcurrentReconciles
+}
+
+// GetRateLimiter implements controller.ReconcileOptions.
+func (t *TPControllerAdapter) GetRateLimiter() ratelimiter.RateLimiter {
+	return nil
+}
 
 func (t *TPControllerAdapter) GetControllerName() string {
 	return ControllerName

@@ -22,9 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-
 	"kusionstack.io/kube-utils/multicluster"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"kusionstack.io/rollout/pkg/backend"
 )
@@ -37,7 +36,7 @@ type backendRegistry struct {
 }
 
 func (b *backendRegistry) SetupWithManger(mgr manager.Manager) {
-	b.logger = mgr.GetLogger().WithName("backendRegistry")
+	b.logger = mgr.GetLogger().WithName("registry").WithName("backend")
 	var fedDiscovery discovery.DiscoveryInterface
 	var membersDiscovery multicluster.PartialCachedDiscoveryInterface
 	c := mgr.GetClient()

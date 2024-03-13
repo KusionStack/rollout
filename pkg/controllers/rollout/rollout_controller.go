@@ -35,7 +35,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -54,7 +53,7 @@ import (
 )
 
 const (
-	ControllerName = "rollout-controller"
+	ControllerName = "rollout"
 )
 
 // RolloutReconciler reconciles a Rollout object
@@ -86,7 +85,6 @@ func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	b := ctrl.NewControllerManagedBy(mgr).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		For(&rolloutv1alpha1.Rollout{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		Watches(
 			multicluster.FedKind(&source.Kind{Type: &rolloutv1alpha1.RolloutRun{}}),
@@ -631,7 +629,6 @@ func (r *RolloutReconciler) applyOneTimeStrategy(obj *rolloutv1alpha1.Rollout, r
 		run.Spec.Batch = &batch
 		return nil
 	})
-
 	if err != nil {
 		logger.Error(err, "failed to apply one time strategy to rolloutRun")
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedUpdate", fmt.Sprintf("failed to apply one time stratey to RolloutRun: %v", err))

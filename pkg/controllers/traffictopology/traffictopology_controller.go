@@ -21,7 +21,7 @@ import (
 	registires "kusionstack.io/rollout/pkg/controllers/registry"
 )
 
-const ControllerName = "traffic-topology-controller"
+const ControllerName = "traffictopology"
 
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=traffictopologies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=traffictopologies/status,verbs=get;update;patch
@@ -29,7 +29,7 @@ const ControllerName = "traffic-topology-controller"
 //+kubebuilder:rbac:groups=rollout.kusionstack.io,resources=backendroutings,verbs=get;list;watch;create;update;patch;delete
 
 func InitFunc(mgr manager.Manager) (bool, error) {
-	err := rcframecontroller.AddToMgr(mgr, NewTPControllerAdapter(mgr.GetClient(), registires.Workloads))
+	err := rcframecontroller.AddToMgr(mgr, NewTPControllerAdapter(mgr, registires.Workloads))
 	if err != nil {
 		return false, err
 	}

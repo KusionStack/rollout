@@ -32,7 +32,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -49,7 +48,7 @@ import (
 )
 
 const (
-	ControllerName = "rolloutrun-controller"
+	ControllerName = "rolloutrun"
 )
 
 // RolloutRunReconciler reconciles a Rollout object
@@ -81,7 +80,6 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	b := ctrl.NewControllerManagedBy(mgr).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		For(&rolloutv1alpha1.RolloutRun{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
 	_, err := b.Build(r)
