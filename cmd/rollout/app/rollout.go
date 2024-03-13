@@ -22,11 +22,13 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/component-base/version/verflag"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	configv1alpha1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"kusionstack.io/rollout/cmd/rollout/app/options"
@@ -67,13 +69,19 @@ func Run(opt *options.Options) error {
 	ctx := ctrl.SetupSignalHandler()
 
 	options := ctrl.Options{
-		Scheme:                 scheme.Scheme,
-		MetricsBindAddress:     opt.MetricsBindAddress,
-		Port:                   9443,
-		CertDir:                opt.CertDir,
-		HealthProbeBindAddress: opt.HealthProbeBindAddress,
-		LeaderElection:         opt.LeaderElect,
-		LeaderElectionID:       "rollout.kusionstack.io",
+		Scheme:                     scheme.Scheme,
+		MetricsBindAddress:         opt.Serving.MetricsBindAddress,
+		Port:                       opt.Serving.WebhookPort,
+		CertDir:                    opt.Serving.WebhookCertDir,
+		HealthProbeBindAddress:     opt.Serving.HealthProbeBindAddress,
+		LeaderElection:             opt.Controller.LeaderElect,
+		LeaderElectionNamespace:    opt.Controller.LeaderElectionNamespace,
+		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
+		LeaderElectionID:           opt.Controller.LeaderElectionID,
+		Controller: configv1alpha1.ControllerConfigurationSpec{
+			CacheSyncTimeout:     &opt.Controller.CacheSyncTimeout,
+			GroupKindConcurrency: options.GroupKindConcurrency,
+		},
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -89,7 +97,7 @@ func Run(opt *options.Options) error {
 
 	restConfig := GetRESTConfigOrDie()
 
-	if opt.FederatedMode {
+	if opt.Controller.FederatedMode {
 		setupLog.Info("federated mode enabled")
 		// multiClusterManager manages syncing clusters
 		multiClusterCfg := &multicluster.ManagerConfig{
@@ -108,7 +116,7 @@ func Run(opt *options.Options) error {
 		options.NewCache = newMultiClusterCache
 
 		go func() {
-			if err := multiClusterManager.Run(opt.ControllerConcurrentWorkers, ctx); err != nil {
+			if err := multiClusterManager.Run(opt.Controller.MaxConcurrentWorkers, ctx); err != nil {
 				setupLog.Error(err, "unable to run multiClusterManager")
 				os.Exit(1)
 			}

@@ -29,18 +29,16 @@ import (
 	_ "sigs.k8s.io/controller-runtime/pkg/client/config" // init kubeconfig flag
 )
 
-func AddFlagsAndUsage(cmd *cobra.Command, namedFlagSets cliflag.NamedFlagSets) {
-	fs := cmd.Flags()
-
+func AddFlagsAndUsage(cmd *cobra.Command, namedFlagSets *cliflag.NamedFlagSets) {
 	// add version flag
-	verflag.AddFlags(namedFlagSets.FlagSet("global"))
+	global := namedFlagSets.FlagSet("global")
+	verflag.AddFlags(global)
 	// add go flags, e.g kubeconfig
-	AddKubeconfigFlag(namedFlagSets.FlagSet("global"))
-	// add klog
-	AddKlogFlags(namedFlagSets.FlagSet("klog"))
+	AddKubeconfigFlag(global)
 	// add help
-	fs.BoolP("help", "h", false, fmt.Sprintf("help for %s", cmd.Name()))
+	global.BoolP("help", "h", false, fmt.Sprintf("help for %s", cmd.Name()))
 
+	fs := cmd.Flags()
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
 	}
@@ -50,12 +48,12 @@ func AddFlagsAndUsage(cmd *cobra.Command, namedFlagSets cliflag.NamedFlagSets) {
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
-		cliflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
+		cliflag.PrintSections(cmd.OutOrStderr(), *namedFlagSets, cols)
 		return nil
 	})
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
-		cliflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
+		cliflag.PrintSections(cmd.OutOrStdout(), *namedFlagSets, cols)
 	})
 }
 
@@ -73,7 +71,7 @@ func AddKlogFlags(fs *pflag.FlagSet) {
 // PrintFlags logs the flags in the flagset
 func PrintFlags(logger logr.Logger, flags *pflag.FlagSet) {
 	flags.VisitAll(func(flag *pflag.Flag) {
-		logger.V(1).Info(fmt.Sprintf("FLAG: --%s=%q", flag.Name, flag.Value))
+		logger.V(1).Info(fmt.Sprintf("FLAG: --%s=%s", flag.Name, flag.Value))
 	})
 }
 

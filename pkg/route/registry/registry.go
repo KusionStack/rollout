@@ -22,9 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-
 	"kusionstack.io/kube-utils/multicluster"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"kusionstack.io/rollout/pkg/route"
 )
@@ -37,7 +36,7 @@ type routeRegistry struct {
 }
 
 func (r *routeRegistry) SetupWithManger(mgr manager.Manager) {
-	r.logger = mgr.GetLogger().WithName("routeRegistry")
+	r.logger = mgr.GetLogger().WithName("registry").WithName("route")
 	var fedDiscovery discovery.DiscoveryInterface
 	var membersDiscovery multicluster.PartialCachedDiscoveryInterface
 	c := mgr.GetClient()

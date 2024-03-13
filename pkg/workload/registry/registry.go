@@ -73,7 +73,7 @@ func New() Registry {
 
 // SetupWithManger implements Registry.
 func (r *workloadRegistry) SetupWithManger(mgr manager.Manager) {
-	r.logger = mgr.GetLogger().WithName("workloadRegistry")
+	r.logger = mgr.GetLogger().WithName("registry").WithName("workload")
 	var fedDiscovery discovery.DiscoveryInterface
 	var membersDiscovery multicluster.PartialCachedDiscoveryInterface
 	c := mgr.GetClient()
