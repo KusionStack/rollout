@@ -20,16 +20,16 @@ import (
 	"github.com/spf13/pflag"
 	cliflag "k8s.io/component-base/cli/flag"
 	"kusionstack.io/kube-utils/controller/initializer"
-	mcctrl "kusionstack.io/kube-utils/multicluster/controller"
+	"kusionstack.io/kube-utils/multicluster/clusterprovider"
 
 	"kusionstack.io/rollout/pkg/features"
 )
 
 type Options struct {
-	ClusterProvider mcctrl.ClusterProvider
-	Controller      *ControllerOptions
-	Log             *LogOptions
-	Serving         *ServingOptions
+	ClusterConfigProvider clusterprovider.ClusterConfigProvider
+	Controller            *ControllerOptions
+	Log                   *LogOptions
+	Serving               *ServingOptions
 }
 
 func NewOptions() *Options {
@@ -82,7 +82,7 @@ func (o *Options) Complete() error {
 		return err
 	}
 
-	if o.Controller.FederatedMode && o.ClusterProvider == nil {
+	if o.Controller.FederatedMode && o.ClusterConfigProvider == nil {
 		return fmt.Errorf("cluster provider must be set when federated mode is on")
 	}
 	return nil

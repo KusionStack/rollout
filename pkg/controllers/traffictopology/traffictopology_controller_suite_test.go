@@ -27,12 +27,11 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
-	"kusionstack.io/kube-utils/multicluster/controller"
+	"kusionstack.io/kube-utils/multicluster/clusterprovider"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -137,19 +136,13 @@ var _ = BeforeSuite(func() {
 		newClientFunc cluster.NewClientFunc
 	)
 	os.Setenv(clusterinfo.EnvClusterAllowList, "cluster1,cluster2")
+
 	mgr, newCacheFunc, newClientFunc, err = multicluster.NewManager(&multicluster.ManagerConfig{
-		ClusterProvider: &controller.TestClusterProvider{
-			GroupVersionResource: schema.GroupVersionResource{
-				Group:    "apps",
-				Version:  "v1",
-				Resource: "deployments",
-			},
-			ClusterNameToConfig: map[string]*rest.Config{
-				"cluster1": clusterConfig1,
-				"cluster2": clusterConfig2,
-				"fed":      fedConfig,
-			},
-		},
+		ClusterProvider: clusterprovider.NewSimpleClusterProvider(map[string]*rest.Config{
+			"cluster1": clusterConfig1,
+			"cluster2": clusterConfig2,
+			"fed":      fedConfig,
+		}),
 		FedConfig:     fedConfig,
 		ClusterScheme: clusterScheme,
 		ResyncPeriod:  10 * time.Minute,
@@ -178,7 +171,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clusterClient).NotTo(BeNil())
 
-	go mgr.Run(2, ctx)
+	go mgr.Run(ctx)
 
 	ctrlMgr, err := manager.New(fedConfig, manager.Options{
 		NewClient:              newClientFunc,
