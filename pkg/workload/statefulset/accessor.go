@@ -27,6 +27,8 @@ import (
 
 var GVK = appsv1.SchemeGroupVersion.WithKind("StatefulSet")
 
+var ObjectTypeError = fmt.Errorf("object must be %s", GVK.GroupKind().String())
+
 type accesorImpl struct{}
 
 func New() workload.Accessor {
@@ -52,7 +54,7 @@ func (s *accesorImpl) NewObjectList() client.ObjectList {
 func (s *accesorImpl) GetInfo(cluster string, obj client.Object) (*workload.Info, error) {
 	_, ok := obj.(*appsv1.StatefulSet)
 	if !ok {
-		return nil, fmt.Errorf("obj must be statefulset")
+		return nil, ObjectTypeError
 	}
 
 	return workload.NewInfo(cluster, GVK, obj, s.getStatus(obj)), nil

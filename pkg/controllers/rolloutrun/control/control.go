@@ -173,9 +173,16 @@ func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workl
 	cluster := stable.ClusterName
 	ctx = clusterinfo.WithCluster(ctx, cluster)
 
+	canaryReplicas, err := workload.CalculatePartitionReplicas(&stable.Status.Replicas, replicas)
+	if err != nil {
+		return controllerutil.OperationResultNone, nil, err
+	}
+
 	if !found {
 		// create
 		c.applyCanaryDefaults(canaryObj)
+		c.control.Scale(canaryObj, canaryReplicas)              // nolint
+		c.control.ApplyCanaryPatch(canaryObj, podTemplatePatch) // nolint
 		err := c.client.Create(ctx, canaryObj)
 		if err != nil {
 			return controllerutil.OperationResultNone, nil, err
@@ -190,14 +197,18 @@ func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workl
 	// update
 	updated, err := utils.UpdateOnConflict(ctx, c.client, c.client, canaryObj, func() error {
 		c.applyCanaryDefaults(canaryObj)
-		return c.control.ApplyCanaryPatch(canaryObj, stable.Status.Replicas, replicas, podTemplatePatch)
+		c.control.Scale(canaryObj, canaryReplicas) // nolint
+		return nil
 	})
-	if err != nil || !updated {
+	if err != nil {
 		return controllerutil.OperationResultNone, nil, err
 	}
 	canaryInfo, err := c.workload.GetInfo(cluster, canaryObj)
 	if err != nil {
 		return controllerutil.OperationResultNone, nil, err
+	}
+	if !updated {
+		return controllerutil.OperationResultNone, canaryInfo, nil
 	}
 	return controllerutil.OperationResultUpdated, canaryInfo, nil
 }
