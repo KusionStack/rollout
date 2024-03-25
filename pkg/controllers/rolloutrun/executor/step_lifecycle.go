@@ -17,13 +17,16 @@
 package executor
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/elliotchance/pie/v2"
+	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/control"
 )
 
 const (
@@ -84,8 +87,13 @@ func (e *stepStateMachine) do(ctx *ExecutorContext, currentState rolloutv1alpha1
 
 	stateDone, retry, err := lifecycle.do(ctx)
 	if err != nil {
-		ctx.Fail(err)
-		return false, ctrl.Result{}, nil
+		ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeWarning, "FailedRunStep", "step failed, currentState %s, err: %v", currentState, err)
+		if errors.Is(err, control.TerminalError(nil)) {
+			// we will stop retry if err is CodeReasonMessage
+			// TODO: change err to reconcile.TerminalError when controller-runtime supports it
+			ctx.Fail(err)
+		}
+		return false, ctrl.Result{}, err
 	}
 
 	if stateDone {

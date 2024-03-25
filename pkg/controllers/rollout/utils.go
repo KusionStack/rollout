@@ -48,24 +48,23 @@ func setStatusCondition(newStatus *rolloutv1alpha1.RolloutStatus, ctype rolloutv
 	newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *cond)
 }
 
-func filterWorkloadsByMatch(workloads []workload.Interface, match *rolloutv1alpha1.ResourceMatch) []workload.Interface {
+func filterWorkloadsByMatch(workloads []*workload.Info, match *rolloutv1alpha1.ResourceMatch) []*workload.Info {
 	if match == nil || (match.Selector == nil && len(match.Names) == 0) {
 		// match all
 		return workloads
 	}
-	result := make([]workload.Interface, 0)
+	result := make([]*workload.Info, 0)
 	macher := workload.MatchAsMatcher(*match)
 	for i := range workloads {
-		w := workloads[i]
-		info := w.GetInfo()
+		info := workloads[i]
 		if macher.Matches(info.ClusterName, info.Name, info.Labels) {
-			result = append(result, w)
+			result = append(result, info)
 		}
 	}
 	return result
 }
 
-func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []workload.Interface, rolloutId string) *rolloutv1alpha1.RolloutRun {
+func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []*workload.Info, rolloutId string) *rolloutv1alpha1.RolloutRun {
 	owner := metav1.NewControllerRef(obj, rolloutv1alpha1.SchemeGroupVersion.WithKind("Rollout"))
 	run := &rolloutv1alpha1.RolloutRun{
 		ObjectMeta: metav1.ObjectMeta{
@@ -101,14 +100,13 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 	return run
 }
 
-func constructRolloutRunCanary(strategy *rolloutv1alpha1.CanaryStrategy, workloadWrappers []workload.Interface) *rolloutv1alpha1.RolloutRunCanaryStrategy {
+func constructRolloutRunCanary(strategy *rolloutv1alpha1.CanaryStrategy, workloadWrappers []*workload.Info) *rolloutv1alpha1.RolloutRunCanaryStrategy {
 	if strategy == nil {
 		return nil
 	}
 	targets := make([]rolloutv1alpha1.RolloutRunStepTarget, 0)
 	filteredWorkloads := filterWorkloadsByMatch(workloadWrappers, strategy.Match)
-	for _, w := range filteredWorkloads {
-		info := w.GetInfo()
+	for _, info := range filteredWorkloads {
 		target := rolloutv1alpha1.RolloutRunStepTarget{
 			CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
 				Cluster: info.ClusterName,
@@ -128,7 +126,7 @@ func constructRolloutRunCanary(strategy *rolloutv1alpha1.CanaryStrategy, workloa
 	return step
 }
 
-func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloadWrappers []workload.Interface) []rolloutv1alpha1.RolloutRunStep {
+func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloadWrappers []*workload.Info) []rolloutv1alpha1.RolloutRunStep {
 	if strategy == nil {
 		return nil
 	}
@@ -143,8 +141,7 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 		step := rolloutv1alpha1.RolloutRunStep{}
 		targets := make([]rolloutv1alpha1.RolloutRunStepTarget, 0)
 		filteredWorkloads := filterWorkloadsByMatch(workloadWrappers, b.Match)
-		for _, w := range filteredWorkloads {
-			info := w.GetInfo()
+		for _, info := range filteredWorkloads {
 			target := rolloutv1alpha1.RolloutRunStepTarget{
 				CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
 					Cluster: info.ClusterName,

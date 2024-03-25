@@ -41,9 +41,9 @@ var _ = Describe("StatefulSet", func() {
 	ctx := context.Background()
 
 	var ts *httptest.Server
-	var sts = &v1.StatefulSet{}
-	var rollout = &rolloutv1alpha1.Rollout{}
-	var rolloutRun = &rolloutv1alpha1.RolloutRun{}
+	sts := &v1.StatefulSet{}
+	rollout := &rolloutv1alpha1.Rollout{}
+	rolloutRun := &rolloutv1alpha1.RolloutRun{}
 	var strategy *rolloutv1alpha1.RolloutStrategy
 
 	BeforeEach(func() {
@@ -363,7 +363,7 @@ var _ = Describe("StatefulSet", func() {
 					return false
 				}
 
-				if *sts.Spec.UpdateStrategy.RollingUpdate.Partition != 0 {
+				if sts.Spec.UpdateStrategy.RollingUpdate != nil && *sts.Spec.UpdateStrategy.RollingUpdate.Partition != 0 {
 					By(fmt.Sprintf("HappyPath: third batch sts %s/%s Partition %d  not match", sts.Namespace, sts.Name, *sts.Spec.UpdateStrategy.RollingUpdate.Partition))
 					return false
 				}

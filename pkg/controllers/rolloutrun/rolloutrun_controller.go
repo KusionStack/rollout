@@ -44,7 +44,6 @@ import (
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	"kusionstack.io/rollout/pkg/workload"
-	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
 )
 
 const (
@@ -55,14 +54,14 @@ const (
 type RolloutRunReconciler struct {
 	*mixin.ReconcilerMixin
 
-	workloadRegistry workloadregistry.Registry
+	workloadRegistry workload.Registry
 
 	rvExpectation expectations.ResourceVersionExpectationInterface
 
 	executor *executor.Executor
 }
 
-func NewReconciler(mgr manager.Manager, workloadRegistry workloadregistry.Registry) *RolloutRunReconciler {
+func NewReconciler(mgr manager.Manager, workloadRegistry workload.Registry) *RolloutRunReconciler {
 	r := &RolloutRunReconciler{
 		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
 		workloadRegistry: workloadRegistry,
@@ -121,13 +120,13 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	newStatus := obj.Status.DeepCopy()
 
-	workloads, err := r.findWorkloadsCrossCluster(ctx, obj)
+	accessor, workloads, err := r.findWorkloadsCrossCluster(ctx, obj)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
 	var result ctrl.Result
-	result, err = r.syncRolloutRun(ctx, obj, newStatus, workloads)
+	result, err = r.syncRolloutRun(ctx, obj, newStatus, accessor, workloads)
 
 	if tempErr := r.cleanupAnnotation(ctx, obj); tempErr != nil {
 		logger.Error(tempErr, "failed to clean up annotation")
@@ -205,7 +204,13 @@ func (r *RolloutRunReconciler) findTrafficTopology(ctx context.Context, obj *rol
 	return topologies, nil
 }
 
-func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) (ctrl.Result, error) {
+func (r *RolloutRunReconciler) syncRolloutRun(
+	ctx context.Context,
+	obj *rolloutv1alpha1.RolloutRun,
+	newStatus *rolloutv1alpha1.RolloutRunStatus,
+	accesor workload.Accessor,
+	workloads *workload.Set,
+) (ctrl.Result, error) {
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rolloutRun", key)
 
@@ -241,6 +246,9 @@ func (r *RolloutRunReconciler) syncRolloutRun(ctx context.Context, obj *rolloutv
 
 	executorCtx := &executor.ExecutorContext{
 		Context:        ctx,
+		Client:         r.Client,
+		Recorder:       r.Recorder,
+		Accessor:       accesor,
 		Rollout:        rollout,
 		RolloutRun:     obj,
 		NewStatus:      newStatus,
@@ -298,7 +306,7 @@ func (r *RolloutRunReconciler) findRollout(ctx context.Context, rolloutRun *roll
 	return nil
 }
 
-func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) (*workload.Set, error) {
+func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) (workload.Accessor, *workload.Set, error) {
 	all := make([]rolloutv1alpha1.CrossClusterObjectNameReference, 0)
 
 	for _, b := range obj.Spec.Batch.Batches {
@@ -311,22 +319,23 @@ func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, ob
 	}
 
 	gvk := schema.FromAPIVersionAndKind(obj.Spec.TargetType.APIVersion, obj.Spec.TargetType.Kind)
-	store, err := r.workloadRegistry.Get(gvk)
+	accesor, err := r.workloadRegistry.Get(gvk)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	list, err := store.List(ctx, obj.GetNamespace(), match)
+
+	list, err := workload.List(ctx, r.Client, accesor, obj.Namespace, match)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return workload.NewWorkloadSet(list...), nil
+	return accesor, workload.NewSet(list...), nil
 }
 
 func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.RolloutRunStatus, workloads *workload.Set) {
 	allWorkloads := workloads.ToSlice()
 	sort.Slice(allWorkloads, func(i, j int) bool {
-		iInfo := allWorkloads[i].GetInfo()
-		jInfo := allWorkloads[j].GetInfo()
+		iInfo := allWorkloads[i]
+		jInfo := allWorkloads[j]
 
 		if iInfo.ClusterName == jInfo.ClusterName {
 			return iInfo.Name < jInfo.Name
@@ -335,8 +344,8 @@ func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.Rol
 		return iInfo.ClusterName < jInfo.ClusterName
 	})
 	workloadStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, len(allWorkloads))
-	for i, w := range allWorkloads {
-		info := w.GetInfo()
+	for i := range allWorkloads {
+		info := allWorkloads[i]
 		workloadStatuses[i] = info.APIStatus()
 	}
 	newStatus.TargetStatuses = workloadStatuses

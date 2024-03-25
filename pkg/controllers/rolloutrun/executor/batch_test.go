@@ -23,11 +23,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/workload"
-	"kusionstack.io/rollout/pkg/workload/fake"
 )
 
 var (
@@ -35,10 +34,10 @@ var (
 		newRunStepTarget("cluster-a", "test-0", intstr.FromInt(1)),
 	}
 
-	unimportantWorkloads = func() *workload.Set {
-		return workload.NewWorkloadSet(
-			fake.New("cluster-a", "default", "test-0").ChangeStatus(1, 1, 1),
-		)
+	unimportantWorkloads = func() []client.Object {
+		return []client.Object{
+			newFakeObject("cluster-a", "default", "test-0", 1, 1, 1),
+		}
 	}
 )
 
@@ -50,7 +49,7 @@ func Test_BatchExecutor_Do(t *testing.T) {
 	tests := []struct {
 		name         string
 		getObjects   func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun)
-		getWorkloads func() *workload.Set
+		getWorkloads func() []client.Object
 		assertResult func(assert *assert.Assertions, done bool, result reconcile.Result, err error)
 		assertStatus func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus)
 	}{
@@ -207,10 +206,10 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			getWorkloads: func() *workload.Set {
-				return workload.NewWorkloadSet(
-					fake.New("cluster-a", "default", "test-0").ChangeStatus(100, 100, 100),
-				)
+			getWorkloads: func() []client.Object {
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-0", 100, 100, 100),
+				}
 			},
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
 				assert.False(done)
@@ -330,11 +329,11 @@ func Test_BatchExecutor_Do(t *testing.T) {
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			rollout, rolloutRun := tt.getObjects()
-			var workloads *workload.Set
+			var objs []client.Object
 			if tt.getWorkloads != nil {
-				workloads = tt.getWorkloads()
+				objs = tt.getWorkloads()
 			}
-			ctx := createTestExecutorContext(rollout, rolloutRun, workloads)
+			ctx := createTestExecutorContext(rollout, rolloutRun, objs...)
 			done, got, err := executor.Do(ctx)
 			assert := assert.New(t)
 			tt.assertResult(assert, done, got, err)
@@ -357,7 +356,7 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 	tests := []struct {
 		name         string
 		getObjects   func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun)
-		getWorkloads func() *workload.Set
+		getWorkloads func() []client.Object
 		assertResult func(assert *assert.Assertions, done bool, result reconcile.Result, err error)
 		assertStatus func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus)
 	}{
@@ -453,8 +452,10 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			getWorkloads: func() *workload.Set {
-				return workload.NewWorkloadSet(fake.New("cluster-a", "default", "test-0"))
+			getWorkloads: func() []client.Object {
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-0", 100, 0, 0),
+				}
 			},
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
 				assert.Nil(err)
@@ -494,8 +495,10 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			getWorkloads: func() *workload.Set {
-				return workload.NewWorkloadSet(fake.New("cluster-a", "default", "test-0").ChangeStatus(100, 10, 1))
+			getWorkloads: func() []client.Object {
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-0", 100, 10, 1),
+				}
 			},
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
 				assert.Nil(err)
@@ -518,8 +521,8 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 				// setup rolloutRun
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						newRunStepTarget("cluster-a", "test-0", intstr.FromInt(10)),
-						newRunStepTarget("cluster-b", "test-0", intstr.FromInt(10)),
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(10)),
+						newRunStepTarget("cluster-b", "test-b", intstr.FromInt(10)),
 					},
 				}}
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
@@ -539,11 +542,11 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 
 				return rollout, rolloutRun
 			},
-			getWorkloads: func() *workload.Set {
-				return workload.NewWorkloadSet(
-					fake.New("cluster-a", "default", "test-0").ChangeStatus(100, 10, 10),
-					fake.New("cluster-b", "default", "test-0").ChangeStatus(100, 10, 10),
-				)
+			getWorkloads: func() []client.Object {
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-a", 100, 10, 10),
+					newFakeObject("cluster-b", "default", "test-b", 100, 10, 10),
+				}
 			},
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
 				assert.Nil(err)
@@ -569,11 +572,11 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			rollout, rolloutRun := tt.getObjects()
-			var workloads *workload.Set
+			var objs []client.Object
 			if tt.getWorkloads != nil {
-				workloads = tt.getWorkloads()
+				objs = tt.getWorkloads()
 			}
-			ctx := createTestExecutorContext(rollout, rolloutRun, workloads)
+			ctx := createTestExecutorContext(rollout, rolloutRun, objs...)
 			done, got, err := executor.Do(ctx)
 			assert := assert.New(t)
 			tt.assertResult(assert, done, got, err)

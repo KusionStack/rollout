@@ -31,33 +31,31 @@ type UpdateWriter interface {
 	// given obj. obj must be a struct pointer so that obj can be updated
 	// with the content returned by the Server.
 	Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error
-
-	// Patch patches the given object's subresource. obj must be a struct
-	// pointer so that obj can be updated with the content returned by the
-	// Server.
-	Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error
 }
 
-// reader is used to get freshest object
-// writer can be client.Writer or client.StatusWriter
-func UpdateOnConflict(ctx context.Context, reader client.Reader, writer UpdateWriter, obj client.Object, mutateFn controllerutil.MutateFn) (controllerutil.OperationResult, error) {
+// UpdateOnConflict attempts to update a resource while avoiding conflicts that may arise from concurrent modifications.
+// It utilizes the mutateFn function to apply changes to the original obj and then attempts an update using the writer,
+// which can be either client.Writer or client.StatusWriter.
+// In case of an update failure due to a conflict, UpdateOnConflict will retrieve the latest version of the object using
+// the reader and attempt the update again.
+// The retry mechanism adheres to the retry.DefaultBackoff policy.
+func UpdateOnConflict(ctx context.Context, reader client.Reader, writer UpdateWriter, obj client.Object, mutateFn controllerutil.MutateFn) (updated bool, err error) {
 	key := client.ObjectKeyFromObject(obj)
-	result := controllerutil.OperationResultNone
 	first := true
 
-	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		if !first {
 			// refresh object
-			if err := reader.Get(ctx, key, obj); err != nil {
-				return err
+			if innerErr := reader.Get(ctx, key, obj); err != nil {
+				return innerErr
 			}
 		} else {
 			first = false
 		}
 
 		existing := obj.DeepCopyObject()
-		if err := mutate(mutateFn, key, obj); err != nil {
-			return err
+		if innerErr := mutate(mutateFn, key, obj); innerErr != nil {
+			return innerErr
 		}
 
 		if equality.Semantic.DeepEqual(existing, obj) {
@@ -65,15 +63,15 @@ func UpdateOnConflict(ctx context.Context, reader client.Reader, writer UpdateWr
 			return nil
 		}
 
-		if err := writer.Update(ctx, obj); err != nil {
-			return err
+		if innerErr := writer.Update(ctx, obj); innerErr != nil {
+			return innerErr
 		}
 
-		result = controllerutil.OperationResultUpdated
+		updated = true
 		return nil
 	})
 
-	return result, err
+	return updated, err
 }
 
 // mutate wraps a MutateFn and applies validation to its result.

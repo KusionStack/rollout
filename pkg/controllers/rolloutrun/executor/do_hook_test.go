@@ -108,7 +108,7 @@ func runWebhookTestCases(t *testing.T, hookType rolloutv1alpha1.HookType, tests 
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			rollout, rolloutRun := tt.getObjects()
-			ctx := createTestExecutorContext(rollout, rolloutRun, nil)
+			ctx := createTestExecutorContext(rollout, rolloutRun)
 			done, got, err := exe.Do(ctx, hookType)
 			assert := assert.New(t)
 			tt.assertResult(assert, done, got, err)
@@ -134,7 +134,7 @@ func Test_webhook_Retry(t *testing.T) {
 		State: StepPreCanaryStepHook,
 	}
 
-	ctx := createTestExecutorContext(rollout, rolloutRun, nil)
+	ctx := createTestExecutorContext(rollout, rolloutRun)
 	_, _, err := exe.Do(ctx, hookType)
 	assert.Nil(t, err)
 	assert.NotNil(t, ctx.NewStatus.Error)
@@ -152,7 +152,7 @@ func Test_webhook_Retry(t *testing.T) {
 	rolloutRun.Status = *ctx.NewStatus
 	// delete error to retry
 	rolloutRun.Status.Error = nil
-	ctx = createTestExecutorContext(rollout, rolloutRun, nil)
+	ctx = createTestExecutorContext(rollout, rolloutRun)
 	// do it again
 	_, _, err = exe.Do(ctx, hookType)
 	assert.Nil(t, err)
@@ -172,7 +172,7 @@ func Test_webhook_Retry(t *testing.T) {
 
 	// set new status
 	rolloutRun.Status = *ctx.NewStatus
-	ctx = createTestExecutorContext(rollout, rolloutRun, nil)
+	ctx = createTestExecutorContext(rollout, rolloutRun)
 	// get result again
 	_, _, err = exe.Do(ctx, hookType)
 	assert.Nil(t, err)

@@ -49,7 +49,6 @@ import (
 	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	"kusionstack.io/rollout/pkg/workload"
-	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
 )
 
 const (
@@ -60,7 +59,7 @@ const (
 type RolloutReconciler struct {
 	*mixin.ReconcilerMixin
 
-	workloadRegistry workloadregistry.Registry
+	workloadRegistry workload.Registry
 
 	expectation   expectations.ControllerExpectationsInterface
 	rvExpectation expectations.ResourceVersionExpectationInterface
@@ -68,7 +67,7 @@ type RolloutReconciler struct {
 	supportedGVK sets.String
 }
 
-func NewReconciler(mgr manager.Manager, workloadRegistry workloadregistry.Registry) *RolloutReconciler {
+func NewReconciler(mgr manager.Manager, workloadRegistry workload.Registry) *RolloutReconciler {
 	return &RolloutReconciler{
 		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
 		expectation:      expectations.NewControllerExpectations(),
@@ -95,12 +94,12 @@ func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			enqueueRolloutForStrategyHandler(r.Client, r.Logger),
 		)
 
-	allworkloads := r.workloadRegistry.WatchableStores()
-	for _, store := range allworkloads {
-		gvk := store.GroupVersionKind()
+	allworkloads := r.workloadRegistry.Watchables()
+	for _, accessor := range allworkloads {
+		gvk := accessor.GroupVersionKind()
 		r.Logger.Info("add watcher for workload", "gvk", gvk.String())
 		b.Watches(
-			multicluster.ClustersKind(&source.Kind{Type: store.NewObject()}),
+			multicluster.ClustersKind(&source.Kind{Type: accessor.NewObject()}),
 			enqueueRolloutForWorkloadHandler(r.Client, r.Scheme, r.Logger),
 		)
 	}
@@ -147,7 +146,7 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	newStatus := r.calculateStatus(instance)
 
 	// get all workloads references
-	workloads, err := r.findWorkloadsCrossCluster(ctx, instance)
+	_, workloads, err := r.findWorkloadsCrossCluster(ctx, instance)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -249,7 +248,7 @@ func (r *RolloutReconciler) calculateStatus(instance *rolloutv1alpha1.Rollout) *
 	return newStatus
 }
 
-func (r *RolloutReconciler) handleFinalizing(ctx context.Context, instance *rolloutv1alpha1.Rollout, workloads []workload.Interface, newStatus *rolloutv1alpha1.RolloutStatus) error {
+func (r *RolloutReconciler) handleFinalizing(ctx context.Context, instance *rolloutv1alpha1.Rollout, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
 	if instance.DeletionTimestamp == nil {
 		return nil
 	}
@@ -265,8 +264,8 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, instance *roll
 
 	// delete workloads label
 	errs := []error{}
-	for _, w := range workloads {
-		err := w.UpdateOnConflict(ctx, func(obj client.Object) error {
+	for _, info := range workloads {
+		_, err := info.UpdateOnConflict(ctx, r.Client, func(obj client.Object) error {
 			utils.MutateLabels(obj, func(labels map[string]string) {
 				delete(labels, rollout.LabelWorkload)
 			})
@@ -287,7 +286,7 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, instance *roll
 	return nil
 }
 
-func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.Rollout, workloads []workload.Interface, newStatus *rolloutv1alpha1.RolloutStatus) error {
+func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.Rollout, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rollout", key)
 
@@ -350,12 +349,11 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 	return nil
 }
 
-func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, workloads []workload.Interface) error {
+func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, workloads []*workload.Info) error {
 	errs := []error{}
-	for _, w := range workloads {
-		info := w.GetInfo()
+	for _, info := range workloads {
 		kind := strings.ToLower(info.Kind)
-		err := w.UpdateOnConflict(ctx, func(obj client.Object) error {
+		_, err := info.UpdateOnConflict(ctx, r.Client, func(obj client.Object) error {
 			utils.MutateLabels(obj, func(labels map[string]string) {
 				labels[rollout.LabelWorkload] = kind
 			})
@@ -370,7 +368,7 @@ func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, workloads
 	return errorsutil.NewAggregate(errs)
 }
 
-func (r *RolloutReconciler) needTrigger(instance *rolloutv1alpha1.Rollout, workloads []workload.Interface) (string, bool) {
+func (r *RolloutReconciler) needTrigger(instance *rolloutv1alpha1.Rollout, workloads []*workload.Info) (string, bool) {
 	rolloutID := generateRolloutID(instance.Name)
 
 	triggerName, ok := utils.GetMapValue(instance.Annotations, rollout.AnnoRolloutTrigger)
@@ -395,11 +393,10 @@ func (r *RolloutReconciler) needTrigger(instance *rolloutv1alpha1.Rollout, workl
 	waiting := 0
 	pendings := []string{}
 
-	for _, w := range workloads {
-		if w.IsWaitingRollout() {
+	for _, info := range workloads {
+		if workload.IsWaitingRollout(*info) {
 			waiting++
 		} else {
-			info := w.GetInfo()
 			pendings = append(pendings, info.String())
 		}
 	}
@@ -440,13 +437,18 @@ func (r *RolloutReconciler) parseUpgradeStrategy(instance *rolloutv1alpha1.Rollo
 	return strategy, nil
 }
 
-func (r *RolloutReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.Rollout) ([]workload.Interface, error) {
+func (r *RolloutReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.Rollout) (workload.Accessor, []*workload.Info, error) {
 	gvk := schema.FromAPIVersionAndKind(obj.Spec.WorkloadRef.APIVersion, obj.Spec.WorkloadRef.Kind)
 	rest, err := r.workloadRegistry.Get(gvk)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return rest.List(ctx, obj.GetNamespace(), obj.Spec.WorkloadRef.Match)
+
+	workloads, err := workload.List(ctx, r.Client, rest, obj.GetNamespace(), obj.Spec.WorkloadRef.Match)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rest, workloads, nil
 }
 
 func (r *RolloutReconciler) updateStatusOnly(ctx context.Context, instance *rolloutv1alpha1.Rollout, newStatus *rolloutv1alpha1.RolloutStatus) error {
@@ -509,7 +511,7 @@ func (r *RolloutReconciler) getCurrentRolloutRun(ctx context.Context, instance *
 	return run, nil
 }
 
-func (r *RolloutReconciler) syncRun(ctx context.Context, obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []workload.Interface, newStatus *rolloutv1alpha1.RolloutStatus) error {
+func (r *RolloutReconciler) syncRun(ctx context.Context, obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
 	if run == nil {
 		resetRolloutStatus(newStatus, "", rolloutv1alpha1.RolloutPhaseInitialized)
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingUnTriggered, "rollout is not triggered")
@@ -583,7 +585,7 @@ func (r *RolloutReconciler) cleanupAnnotation(ctx context.Context, obj *rolloutv
 	return nil
 }
 
-func (r *RolloutReconciler) applyOneTimeStrategy(obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []workload.Interface, newStatus *rolloutv1alpha1.RolloutStatus) error {
+func (r *RolloutReconciler) applyOneTimeStrategy(obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
 	if run == nil || run.IsCompleted() {
 		return nil
 	}
