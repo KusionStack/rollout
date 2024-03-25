@@ -256,7 +256,6 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 		TrafficManager: trafficManager,
 	}
 	if done, result, err = r.executor.Do(executorCtx); err != nil {
-		logger.Error(err, "defaultExecutor do err")
 		return ctrl.Result{}, err
 	}
 	if done {

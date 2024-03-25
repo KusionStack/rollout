@@ -35,12 +35,13 @@ kind::setup_rollout_cluster() {
     # ensure cluster
     kind::ensure_cluster "${_kind_cluster_name}"
     # apply crds
+    kubectl config use-context "${_context_name}"
     log::status "applying crds..."
-    kubectl --context "${_context_name}" apply -k "${ROLLOUT_CONFIG_CRD}"
+    kubectl apply -k "${ROLLOUT_CONFIG_CRD}"
     # create namespace clusterrolebinding
     log::status "apply namespace clusterrolebinding"
-    kubectl --context "${_context_name}" apply -k "${ROLLOUT_CONFIG_PREREQUISITE}"
+    kubectl apply -k "${ROLLOUT_CONFIG_PREREQUISITE}"
     # create rollout and workloads
     log::status "apply rollout and workloads v1"
-    kubectl --context "${_context_name}" apply -k "${ROLLOUT_CONFIG_WORKLOADS_V1}"
+    kubectl apply -k "${ROLLOUT_CONFIG_WORKLOADS_V1}"
 }

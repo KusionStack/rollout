@@ -26,6 +26,7 @@ import (
 	"k8s.io/component-base/version/verflag"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	"kusionstack.io/kube-utils/multicluster/clusterprovider"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	configv1alpha1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
@@ -99,31 +100,41 @@ func Run(opt *options.Options) error {
 
 	if opt.Controller.FederatedMode {
 		setupLog.Info("federated mode enabled")
+
+		provider, err := clusterprovider.NewController(&clusterprovider.ControllerConfig{
+			Config:                restConfig,
+			ClusterConfigProvider: opt.ClusterConfigProvider,
+			Log:                   ctrl.Log.WithName("multicluster"),
+		})
+		if err != nil {
+			return err
+		}
+
 		// multiClusterManager manages syncing clusters
-		multiClusterCfg := &multicluster.ManagerConfig{
-			ClusterProvider: opt.ClusterProvider,
+		clusterCfg := &multicluster.ManagerConfig{
+			ClusterProvider: provider,
 			FedConfig:       restConfig,
 			ClusterScheme:   scheme.Scheme,
 			ResyncPeriod:    0 * time.Second,
 			Log:             ctrl.Log.WithName("multicluster"),
 		}
-		multiClusterManager, newMultiClusterCache, newMultiClusterClient, err := multicluster.NewManager(multiClusterCfg, multicluster.Options{})
+		clusterMgr, newCache, newClient, err := multicluster.NewManager(clusterCfg, multicluster.Options{})
 		if err != nil {
 			setupLog.Error(err, "unable to start multiClusterManager")
 			os.Exit(1)
 		}
-		options.NewClient = newMultiClusterClient
-		options.NewCache = newMultiClusterCache
+		options.NewClient = newClient
+		options.NewCache = newCache
 
 		go func() {
-			if err := multiClusterManager.Run(opt.Controller.MaxConcurrentWorkers, ctx); err != nil {
+			if err := clusterMgr.Run(ctx); err != nil {
 				setupLog.Error(err, "unable to run multiClusterManager")
 				os.Exit(1)
 			}
 		}()
-		multiClusterManager.WaitForSynced(ctx)
+		clusterMgr.WaitForSynced(ctx)
 		ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
-		setupLog.Info("multiClusterManager synced", "clusters", multiClusterManager.SyncedClusters())
+		setupLog.Info("multiClusterManager synced", "clusters", clusterMgr.SyncedClusters())
 	} else {
 		setupLog.Info("federated mode disabled")
 	}

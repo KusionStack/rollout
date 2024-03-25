@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -36,7 +35,7 @@ import (
 
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
-	"kusionstack.io/kube-utils/multicluster/controller"
+	"kusionstack.io/kube-utils/multicluster/clusterprovider"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/registry"
@@ -113,19 +112,13 @@ var _ = BeforeSuite(func() {
 		newClientFunc cluster.NewClientFunc
 	)
 	os.Setenv(clusterinfo.EnvClusterAllowList, "cluster1,cluster2")
+
 	mgr, newCacheFunc, newClientFunc, err = multicluster.NewManager(&multicluster.ManagerConfig{
-		ClusterProvider: &controller.TestClusterProvider{
-			GroupVersionResource: schema.GroupVersionResource{
-				Group:    "apps",
-				Version:  "v1",
-				Resource: "deployments",
-			},
-			ClusterNameToConfig: map[string]*rest.Config{
-				"cluster1": clusterConfig1,
-				"cluster2": clusterConfig2,
-				"fed":      fedConfig,
-			},
-		},
+		ClusterProvider: clusterprovider.NewSimpleClusterProvider(map[string]*rest.Config{
+			"cluster1": clusterConfig1,
+			"cluster2": clusterConfig2,
+			"fed":      fedConfig,
+		}),
 		FedConfig:     fedConfig,
 		ClusterScheme: testscheme,
 		ResyncPeriod:  10 * time.Minute,
@@ -136,7 +129,7 @@ var _ = BeforeSuite(func() {
 	Expect(newClientFunc).NotTo(BeNil())
 
 	go func() {
-		mgr.Run(2, ctx)
+		mgr.Run(ctx)
 		Expect(err).To(BeNil())
 	}()
 
