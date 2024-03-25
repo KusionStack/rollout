@@ -45,6 +45,8 @@ type ReleaseControl interface {
 	ApplyPartition(obj client.Object, partition intstr.IntOrString) error
 	// CanaryPreCheck checks object before canary release.
 	CanaryPreCheck(obj client.Object) error
+	// Scale scales the workload replicas.
+	Scale(obj client.Object, replicas int32) error
 	// ApplyCanaryPatch applies canary to the workload.
-	ApplyCanaryPatch(canary client.Object, stableReplicas int32, canaryReplicas intstr.IntOrString, podTemplatePatch *v1alpha1.MetadataPatch) error
+	ApplyCanaryPatch(canary client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error
 }

@@ -29,13 +29,15 @@ import (
 
 type releaseControl struct{}
 
-func (b *releaseControl) BatchPreCheck(object client.Object) error {
+func (c *releaseControl) BatchPreCheck(object client.Object) error {
 	return nil
 }
 
-func (b *releaseControl) ApplyPartition(object client.Object, partition intstr.IntOrString) error {
-	obj := object.(*operatingv1alpha1.CollaSet)
-
+func (c *releaseControl) ApplyPartition(object client.Object, partition intstr.IntOrString) error {
+	obj, err := c.checkObj(object)
+	if err != nil {
+		return err
+	}
 	expectedPartition, err := workload.CalculatePartitionReplicas(obj.Spec.Replicas, partition)
 	if err != nil {
 		return err
@@ -60,19 +62,34 @@ func (b *releaseControl) ApplyPartition(object client.Object, partition intstr.I
 	return nil
 }
 
-func (b *releaseControl) CanaryPreCheck(object client.Object) error {
+func (c *releaseControl) CanaryPreCheck(object client.Object) error {
 	return nil
 }
 
-func (b *releaseControl) ApplyCanaryPatch(canary client.Object, stableReplicas int32, canaryReplicas intstr.IntOrString, podTemplatePatch *v1alpha1.MetadataPatch) error {
-	canaryObj := canary.(*operatingv1alpha1.CollaSet)
-	expectedReplicas, err := workload.CalculatePartitionReplicas(&stableReplicas, canaryReplicas)
+func (c *releaseControl) Scale(object client.Object, replicas int32) error {
+	obj, err := c.checkObj(object)
 	if err != nil {
 		return err
 	}
-	canaryObj.Spec.Replicas = &expectedReplicas
-	applyPodTemplateMetadataPatch(canaryObj, podTemplatePatch)
+	obj.Spec.Replicas = &replicas
 	return nil
+}
+
+func (c *releaseControl) ApplyCanaryPatch(object client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error {
+	obj, err := c.checkObj(object)
+	if err != nil {
+		return err
+	}
+	applyPodTemplateMetadataPatch(obj, podTemplatePatch)
+	return nil
+}
+
+func (c *releaseControl) checkObj(object client.Object) (*operatingv1alpha1.CollaSet, error) {
+	obj, ok := object.(*operatingv1alpha1.CollaSet)
+	if !ok {
+		return nil, ObjectTypeError
+	}
+	return obj, nil
 }
 
 func applyPodTemplateMetadataPatch(obj *operatingv1alpha1.CollaSet, patch *rolloutv1alpha1.MetadataPatch) {

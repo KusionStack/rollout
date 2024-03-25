@@ -18,6 +18,8 @@ var GVK = schema.GroupVersionKind{
 	Kind:    "CollaSet",
 }
 
+var ObjectTypeError = fmt.Errorf("object must be %s", GVK.GroupKind().String())
+
 type accessorImpl struct{}
 
 func New() workload.Accessor {
@@ -43,7 +45,7 @@ func (w *accessorImpl) NewObjectList() client.ObjectList {
 func (w *accessorImpl) GetInfo(cluster string, obj client.Object) (*workload.Info, error) {
 	_, ok := obj.(*operatingv1alpha1.CollaSet)
 	if !ok {
-		return nil, fmt.Errorf("obj must be collaset")
+		return nil, ObjectTypeError
 	}
 	return workload.NewInfo(cluster, GVK, obj, w.getStatus(obj)), nil
 }
