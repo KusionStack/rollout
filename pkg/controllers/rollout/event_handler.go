@@ -45,7 +45,7 @@ func enqueueRolloutForWorkloadHandler(reader client.Reader, scheme *runtime.Sche
 		gvk := kinds[0]
 
 		cluster := workload.GetClusterFromLabel(obj.GetLabels())
-		info := workload.NewInfoFrom(cluster, gvk, obj, workload.Status{})
+		info := workload.NewInfo(cluster, gvk, obj, workload.InfoStatus{})
 		rollout, err := getRolloutForWorkload(reader, logger, info)
 		if err != nil {
 			logger.Error(err, "failed to get rollout for workload", "key", key.String(), "gvk", gvk.String())
@@ -69,7 +69,7 @@ func enqueueRolloutForWorkloadHandler(reader client.Reader, scheme *runtime.Sche
 func getRolloutForWorkload(
 	reader client.Reader,
 	logger logr.Logger,
-	workloadInfo workload.Info,
+	workloadInfo *workload.Info,
 ) (*rolloutv1alpha1.Rollout, error) {
 	rList := &rolloutv1alpha1.RolloutList{}
 	ctx := clusterinfo.WithCluster(context.TODO(), clusterinfo.Fed)

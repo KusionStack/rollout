@@ -26,6 +26,7 @@ import (
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/control"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -78,29 +79,16 @@ func (e *canaryExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result
 func (e *canaryExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, error) {
 	rollout := ctx.Rollout
 	rolloutRun := ctx.RolloutRun
+	releaseControl := control.NewCanaryReleaseControl(ctx.Accessor, ctx.Client)
 	for _, item := range rolloutRun.Spec.Canary.Targets {
 		wi := ctx.Workloads.Get(item.Cluster, item.Name)
 		if wi == nil {
-			return false, retryStop, newDoCanaryError(
-				ReasonWorkloadInterfaceNotExist,
-				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
-			)
+			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		canaryStrategy, err := wi.CanaryStrategy()
+		err := releaseControl.Initialize(wi, rollout.Name, rolloutRun.Name)
 		if err != nil {
-			return false, retryStop, newDoCanaryError(
-				"InternalError",
-				fmt.Sprintf("failed to get canary strategy, err: %v", err),
-			)
-		}
-
-		err = canaryStrategy.Initialize(rollout.Name, rolloutRun.Name)
-		if err != nil {
-			return false, retryStop, newDoCanaryError(
-				"InitializeFailed",
-				fmt.Sprintf("failed to initialize canary strategy, err: %v", err),
-			)
+			return false, retryStop, err
 		}
 	}
 
@@ -171,42 +159,29 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 
 	// 2.a. do create canary resources
 	logger.Info("about to create canary resources and check")
-	canaryWorkloads := make([]workload.CanaryStrategy, 0)
+	canaryWorkloads := make([]*workload.Info, 0)
 
 	patch := appendBuiltinPodTemplateMetadataPatch(rolloutRun.Spec.Canary.PodTemplateMetadataPatch)
 
 	changed := false
+	releaseControl := control.NewCanaryReleaseControl(ctx.Accessor, ctx.Client)
 
 	for _, item := range rolloutRun.Spec.Canary.Targets {
 		wi := ctx.Workloads.Get(item.Cluster, item.Name)
 		if wi == nil {
-			return false, retryStop, newDoCanaryError(
-				ReasonWorkloadInterfaceNotExist,
-				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
-			)
+			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		canaryStrategy, err := wi.CanaryStrategy()
+		result, canaryInfo, err := releaseControl.CreateOrUpdate(ctx.Context, wi, item.Replicas, patch)
 		if err != nil {
-			return false, retryStop, newDoCanaryError(
-				"InternalError",
-				fmt.Sprintf("failed to get canary strategy, err: %v", err),
-			)
-		}
-
-		result, err := canaryStrategy.CreateOrUpdate(item.Replicas, patch)
-		if err != nil {
-			return false, retryStop, newDoCanaryError(
-				"CreateOrUpdateFailed",
-				fmt.Sprintf("failed to ensure canary resource for workload(%s), err: %v", item.CrossClusterObjectNameReference, err),
-			)
+			return false, retryStop, err
 		}
 
 		if result != controllerutil.OperationResultNone {
 			changed = true
 		}
 
-		canaryWorkloads = append(canaryWorkloads, canaryStrategy)
+		canaryWorkloads = append(canaryWorkloads, canaryInfo)
 	}
 
 	if changed {
@@ -214,9 +189,8 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 	}
 
 	// 2.b. waiting canary workload ready
-	for _, cw := range canaryWorkloads {
-		info := cw.GetCanaryInfo()
-		if !info.CheckPartitionReady(info.Status.Replicas) {
+	for _, info := range canaryWorkloads {
+		if !info.CheckUpdatedReady(info.Status.Replicas) {
 			// ready
 			logger.Info("still waiting for canary target ready",
 				"cluster", info.ClusterName,
@@ -258,27 +232,17 @@ func (e *canaryExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, e
 	}
 
 	rolloutRun := ctx.RolloutRun
+	releaseControl := control.NewCanaryReleaseControl(ctx.Accessor, ctx.Client)
+
 	for _, item := range rolloutRun.Spec.Canary.Targets {
 		wi := ctx.Workloads.Get(item.Cluster, item.Name)
 		if wi == nil {
-			return false, retryStop, newDoCanaryError(
-				ReasonWorkloadInterfaceNotExist,
-				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
-			)
+			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		canaryStrategy, err := wi.CanaryStrategy()
-		if err != nil {
+		if err := releaseControl.Finalize(wi); err != nil {
 			return false, retryStop, newDoCanaryError(
-				"InternalError",
-				fmt.Sprintf("failed to get canary strategy, err: %v", err),
-			)
-		}
-
-		err = canaryStrategy.Delete()
-		if err != nil {
-			return false, retryStop, newDoCanaryError(
-				"DeleteFailed",
+				"FailedFinalize",
 				fmt.Sprintf("failed to delete canary resource for workload(%s), err: %v", item.CrossClusterObjectNameReference, err),
 			)
 		}

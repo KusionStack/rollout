@@ -133,13 +133,13 @@ func (m *Manager) mutateRouting(mutateFn func(routing *rolloutv1alpha1.BackendRo
 		}
 		for i := range topo.routings {
 			routing := topo.routings[i]
-			result, err := utils.UpdateOnConflict(ctx, m.client, m.client, routing, func() error {
+			updated, err := utils.UpdateOnConflict(ctx, m.client, m.client, routing, func() error {
 				return mutateFn(routing)
 			})
 			if err != nil {
-				return result, err
+				return controllerutil.OperationResultNone, err
 			}
-			if result == controllerutil.OperationResultUpdated {
+			if updated {
 				topo.routings[i] = routing
 				operation = controllerutil.OperationResultUpdated
 			}

@@ -3,21 +3,25 @@ package executor
 import (
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	fakeclientset "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
-	fakev1alpha1 "kusionstack.io/rollout/pkg/workload/fake"
+	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
 
 var (
-	apiVersion = schema.GroupVersion{
-		Group: fakev1alpha1.GVK.Group, Version: fakev1alpha1.GVK.Version,
-	}
-
 	testRollout = rolloutv1alpha1.Rollout{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        "test-rollout",
@@ -39,7 +43,8 @@ var (
 		},
 		Spec: rolloutv1alpha1.RolloutRunSpec{
 			TargetType: rolloutv1alpha1.ObjectTypeRef{
-				APIVersion: apiVersion.String(), Kind: fakev1alpha1.GVK.Kind,
+				APIVersion: statefulset.GVK.GroupVersion().String(),
+				Kind:       statefulset.GVK.Kind,
 			},
 			Webhooks: []rolloutv1alpha1.RolloutWebhook{},
 			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
@@ -57,11 +62,30 @@ func newTestLogger() logr.Logger {
 	return zap.New(zap.UseDevMode(true), zap.ConsoleEncoder())
 }
 
-func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun, workloads *workload.Set) *ExecutorContext {
-	if workloads == nil {
-		workloads = workload.NewWorkloadSet()
+func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun, objs ...client.Object) *ExecutorContext {
+	infos := []*workload.Info{}
+	inter := newTestWorkloadInterface()
+	clientbuilder := fake.NewClientBuilder().WithScheme(scheme.Scheme)
+	for i := range objs {
+		obj := objs[i]
+		clientbuilder.WithObjects(obj)
+		w, _ := inter.GetInfo(obj.GetClusterName(), obj)
+		infos = append(infos, w)
 	}
+
+	kubeClient := fakeclientset.NewSimpleClientset()
+	broadcaster := record.NewBroadcaster()
+	broadcaster.StartStructuredLogging(0)
+	broadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
+	recorder := broadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "test"})
+
+	// record.NewBroadcasterForTests()
+	workloads := workload.NewSet(infos...)
+	client := clientbuilder.Build()
 	ctx := &ExecutorContext{
+		Client:     client,
+		Recorder:   recorder,
+		Accessor:   inter,
 		Rollout:    rollout,
 		RolloutRun: rolloutRun,
 		Workloads:  workloads,
@@ -69,4 +93,32 @@ func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rol
 	}
 	ctx.Initialize()
 	return ctx
+}
+
+func newTestWorkloadInterface() workload.Accessor {
+	return statefulset.New()
+}
+
+func newFakeObject(cluster, namespace, name string, replicas, partition, updated int32) *appsv1.StatefulSet {
+	realPartition := replicas - partition
+	return &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			ClusterName: cluster,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
+					Partition: &realPartition,
+				},
+			},
+		},
+		Status: appsv1.StatefulSetStatus{
+			Replicas:        replicas,
+			UpdatedReplicas: updated,
+		},
+	}
 }

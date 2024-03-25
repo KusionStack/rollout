@@ -31,7 +31,7 @@ func GetClusterFromLabel(labels map[string]string) string {
 }
 
 func CalculatePartitionReplicas(totalReplicas *int32, partition intstr.IntOrString) (int32, error) {
-	replicas := ptr.Deref[int32](totalReplicas, 0)
+	replicas := ptr.Deref(totalReplicas, 0)
 	if replicas == 0 {
 		return 0, nil
 	}

@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/kubernetes/pkg/controller/history"
+	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/controller/mixin"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -101,11 +102,9 @@ func (r *FakeStatefulSetController) Reconcile(ctx context.Context, req ctrl.Requ
 	newStatus.AvailableReplicas = newStatus.Replicas
 
 	if newStatus.CurrentRevision != newStatus.UpdateRevision {
-		if obj.Spec.UpdateStrategy.RollingUpdate.Partition != nil {
-			partition := *obj.Spec.UpdateStrategy.RollingUpdate.Partition
-			if partition <= newStatus.Replicas && partition >= 0 {
-				newStatus.UpdatedReplicas = newStatus.Replicas - partition
-			}
+		if obj.Spec.UpdateStrategy.RollingUpdate != nil {
+			partition := ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.Partition, newStatus.Replicas)
+			newStatus.UpdatedReplicas = newStatus.Replicas - partition
 		} else {
 			newStatus.UpdatedReplicas = newStatus.Replicas
 		}
@@ -125,7 +124,6 @@ func (r *FakeStatefulSetController) Reconcile(ctx context.Context, req ctrl.Requ
 		obj.Status = *newStatus
 		return nil
 	})
-
 	if err != nil {
 		logger.Error(err, "failed to update statefulset status")
 		return ctrl.Result{}, err

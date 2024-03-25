@@ -36,16 +36,16 @@ import (
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
-	workloadregistry "kusionstack.io/rollout/pkg/workload/registry"
+	"kusionstack.io/rollout/pkg/workload"
 )
 
 type TPControllerAdapter struct {
 	client.Client
-	workloadRegistry        workloadregistry.Registry
+	workloadRegistry        workload.Registry
 	maxConcurrentReconciles int
 }
 
-func NewTPControllerAdapter(mgr manager.Manager, workloadRegistry workloadregistry.Registry) *TPControllerAdapter {
+func NewTPControllerAdapter(mgr manager.Manager, workloadRegistry workload.Registry) *TPControllerAdapter {
 	opts := mgr.GetControllerOptions()
 	groupKind := v1alpha1.SchemeGroupVersion.WithKind("TrafficTopology").GroupKind().String()
 	c := &TPControllerAdapter{
@@ -96,13 +96,13 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 		return expected, nil
 	}
 
-	workloadStore, err := t.workloadRegistry.Get(schema.FromAPIVersionAndKind(
+	inter, err := t.workloadRegistry.Get(schema.FromAPIVersionAndKind(
 		trafficTopology.Spec.WorkloadRef.APIVersion, trafficTopology.Spec.WorkloadRef.Kind))
 	if err != nil {
 		return expected, err
 	}
 
-	workloads, err := workloadStore.List(ctx, trafficTopology.Namespace, trafficTopology.Spec.WorkloadRef.Match)
+	workloads, err := workload.List(ctx, t.Client, inter, trafficTopology.Namespace, trafficTopology.Spec.WorkloadRef.Match)
 	if err != nil {
 		return expected, err
 	}
@@ -161,10 +161,10 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 		}
 
 		workloadInfos := make([]v1alpha1.CrossClusterObjectNameReference, len(workloads))
-		for idx, workload := range workloads {
+		for idx, info := range workloads {
 			workloadInfos[idx] = v1alpha1.CrossClusterObjectNameReference{
-				Name:    workload.GetInfo().Name,
-				Cluster: workload.GetInfo().ClusterName,
+				Name:    info.Name,
+				Cluster: info.ClusterName,
 			}
 		}
 
@@ -173,8 +173,8 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 
 	case v1alpha1.InClusterTrafficType:
 		brNameTPEmployerMap := make(map[string]TPEmployer)
-		for _, workload := range workloads {
-			clusterName := workload.GetInfo().ClusterName
+		for _, info := range workloads {
+			clusterName := info.ClusterName
 			brName := employer.GetName() + "-ics"
 			if clusterName != "" {
 				brName = brName + "-" + clusterName
@@ -204,14 +204,14 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 					Workloads: []v1alpha1.CrossClusterObjectNameReference{
 						{
 							Cluster: clusterName,
-							Name:    workload.GetInfo().Name,
+							Name:    info.Name,
 						},
 					},
 				}
 			} else {
 				trEmployer.Workloads = append(trEmployer.Workloads, v1alpha1.CrossClusterObjectNameReference{
 					Cluster: clusterName,
-					Name:    workload.GetInfo().Name,
+					Name:    info.Name,
 				})
 				brNameTPEmployerMap[brName] = trEmployer
 			}

@@ -24,6 +24,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/rolloutrun/control"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -85,21 +86,16 @@ func (e *batchExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, error
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	currentBatch := ctx.RolloutRun.Spec.Batch.Batches[currentBatchIndex]
 
+	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
+
 	for _, item := range currentBatch.Targets {
 		wi := ctx.Workloads.Get(item.Cluster, item.Name)
 		if wi == nil {
-			return false, retryStop, newUpgradingError(
-				ReasonWorkloadInterfaceNotExist,
-				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
-			)
+			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
-
-		err := wi.BatchStrategy().Initialize(rolloutName, rolloutRunName, currentBatchIndex)
+		err := batchControl.Initialize(wi, rolloutName, rolloutRunName, currentBatchIndex)
 		if err != nil {
-			return false, retryStop, newUpgradingError(
-				ReasonUpgradePartitionError,
-				fmt.Sprintf("failed to upgrade workload(%s) partition: %v", item.CrossClusterObjectNameReference, err),
-			)
+			return false, retryStop, err
 		}
 	}
 
@@ -117,17 +113,12 @@ func (e *batchExecutor) doPostStepHook(ctx *ExecutorContext) (bool, time.Duratio
 	return e.webhook.Do(ctx, rolloutv1alpha1.PostBatchStepHook)
 }
 
-const (
-	CodeUpgradingError = "UpgradingError"
-
-	ReasonUpgradePartitionError     = "UpgradePartitionError"
-	ReasonWorkloadStoreNotExist     = "WorkloadStoreNotExist"
-	ReasonWorkloadInterfaceNotExist = "WorkloadInterfaceNotExist"
-)
-
-// newUpgradingError construct CodeReasonMessage
-func newUpgradingError(reason string, msg string) *rolloutv1alpha1.CodeReasonMessage {
-	return &rolloutv1alpha1.CodeReasonMessage{Code: CodeUpgradingError, Reason: reason, Message: msg}
+func newWorkloadNotFoundError(ref rolloutv1alpha1.CrossClusterObjectNameReference) error {
+	return control.TerminalError(&rolloutv1alpha1.CodeReasonMessage{
+		Code:    "WorkloadNotFound",
+		Reason:  "WorkloadNotFound",
+		Message: fmt.Sprintf("workload (%s) not found ", ref.String()),
+	})
 }
 
 // doBatchUpgrading process upgrading state
@@ -140,30 +131,24 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	logger := e.loggerWithContext(ctx)
 	logger.Info("do batch upgrading and check")
 
+	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
+
 	// upgrade partition
 	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
 	workloadChanged := false
 	for _, item := range currentBatch.Targets {
 		wi := ctx.Workloads.Get(item.Cluster, item.Name)
 		if wi == nil {
-			processErr := newUpgradingError(
-				ReasonWorkloadInterfaceNotExist,
-				fmt.Sprintf("the workload (%s) does not exists", item.CrossClusterObjectNameReference),
-			)
-			return false, retryStop, processErr
+			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
 		// upgradePartition is an idempotent function
-		changed, err := wi.BatchStrategy().UpgradePartition(item.Replicas)
+		changed, err := batchControl.UpdatePartition(wi, item.Replicas)
 		if err != nil {
-			processErr := newUpgradingError(
-				ReasonUpgradePartitionError,
-				fmt.Sprintf("failed to upgrade workload(%s) partition: %v", item.CrossClusterObjectNameReference, err),
-			)
-			return false, retryStop, processErr
+			return false, retryStop, err
 		}
 
-		batchTargetStatuses = append(batchTargetStatuses, wi.GetInfo().APIStatus())
+		batchTargetStatuses = append(batchTargetStatuses, wi.APIStatus())
 
 		if changed {
 			workloadChanged = true
@@ -181,13 +166,11 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	// all workloads are updated now, then check if they are ready
 	for _, item := range currentBatch.Targets {
 		// target will not be nil here
-		target := ctx.Workloads.Get(item.Cluster, item.Name)
-
-		info := target.GetInfo()
+		info := ctx.Workloads.Get(item.Cluster, item.Name)
 		status := info.APIStatus()
 		partition, _ := workload.CalculatePartitionReplicas(&status.Replicas, item.Replicas)
 
-		if !info.CheckPartitionReady(partition) {
+		if !info.CheckUpdatedReady(partition) {
 			// ready
 			logger.Info("still waiting for target ready", "target", item.CrossClusterObjectNameReference)
 			return false, retryDefault, nil

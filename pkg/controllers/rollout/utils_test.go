@@ -19,18 +19,28 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
-	"kusionstack.io/rollout/pkg/workload/fake"
 )
+
+func newTestInfo(cluster, namespace, name string) *workload.Info {
+	return &workload.Info{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			ClusterName: cluster,
+		},
+	}
+}
 
 func Test_constructRolloutRunBatches(t *testing.T) {
 	tests := []struct {
 		name             string
 		strategy         *rolloutv1alpha1.RolloutStrategy
-		workloadWrappers []workload.Interface
+		workloadWrappers []*workload.Info
 		want             []rolloutv1alpha1.RolloutRunStep
 	}{
 		{
@@ -91,9 +101,9 @@ func Test_constructRolloutRunBatches(t *testing.T) {
 					},
 				},
 			},
-			workloadWrappers: []workload.Interface{
-				fake.New("cluster-a", "test", "test-1"),
-				fake.New("cluster-b", "test", "test-1"),
+			workloadWrappers: []*workload.Info{
+				newTestInfo("cluster-a", "test", "test-1"),
+				newTestInfo("cluster-b", "test", "test-1"),
 			},
 			want: []rolloutv1alpha1.RolloutRunStep{
 				{

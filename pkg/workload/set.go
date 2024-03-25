@@ -16,13 +16,13 @@ package workload
 
 type Set struct {
 	set  map[string]map[string]int
-	list []Interface
+	list []*Info
 }
 
-func NewWorkloadSet(workloads ...Interface) *Set {
+func NewSet(workloads ...*Info) *Set {
 	s := &Set{
 		set:  make(map[string]map[string]int),
-		list: make([]Interface, 0),
+		list: make([]*Info, 0),
 	}
 	for _, w := range workloads {
 		s.add(w)
@@ -30,41 +30,21 @@ func NewWorkloadSet(workloads ...Interface) *Set {
 	return s
 }
 
-func (s *Set) ToSlice() []Interface {
+func (s *Set) ToSlice() []*Info {
 	return s.list
 }
 
-// func (s *Set) Matches(match *rolloutv1alpha1.ResourceMatch) []Interface {
-// 	if match == nil || (match.Selector == nil && len(match.Names) == 0) {
-// 		// match all
-// 		return s.list
-// 	}
-
-// 	matcher := MatchAsMatcher(*match)
-// 	result := make([]Interface, 0)
-// 	for i := range s.list {
-// 		w := s.list[i]
-// 		info := w.GetInfo()
-// 		if matcher.Matches(info.ClusterName, info.Name, info.Labels) {
-// 			result = append(result, w)
-// 		}
-// 	}
-// 	return result
-// }
-
-func (s *Set) add(in Interface) {
-	info := in.GetInfo()
-
+func (s *Set) add(info *Info) {
 	_, ok := s.set[info.ClusterName]
 	if !ok {
 		s.set[info.ClusterName] = map[string]int{}
 	}
 
-	s.list = append(s.list, in)
+	s.list = append(s.list, info)
 	s.set[info.ClusterName][info.Name] = len(s.list) - 1
 }
 
-func (s *Set) Get(cluster, name string) Interface {
+func (s *Set) Get(cluster, name string) *Info {
 	clusterSet, ok := s.set[cluster]
 	if !ok {
 		return nil
