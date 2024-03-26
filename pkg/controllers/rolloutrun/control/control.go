@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -213,11 +214,19 @@ func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workl
 	return controllerutil.OperationResultUpdated, canaryInfo, nil
 }
 
+func (c *CanaryReleaseControl) getCanaryName(stableName string) string {
+	return stableName + "-canary"
+}
+
 func (c *CanaryReleaseControl) getCanaryObject(cluster, namespace, name string) (client.Object, error) {
+	if strings.HasSuffix(name, "-canary") {
+		return nil, fmt.Errorf("input name should not end with -canary, got=%s", name)
+	}
+	canaryName := c.getCanaryName(name)
 	canaryObj := c.workload.NewObject()
 	err := c.client.Get(
 		clusterinfo.WithCluster(context.TODO(), cluster),
-		client.ObjectKey{Namespace: namespace, Name: name},
+		client.ObjectKey{Namespace: namespace, Name: canaryName},
 		canaryObj,
 	)
 	return canaryObj, err
@@ -225,8 +234,7 @@ func (c *CanaryReleaseControl) getCanaryObject(cluster, namespace, name string) 
 
 func (c *CanaryReleaseControl) canaryObject(stable *workload.Info) (client.Object, bool, error) {
 	// retrieve canary object
-	canaryName := stable.Name + "-canary"
-	canaryObj, err := c.getCanaryObject(stable.ClusterName, stable.Namespace, canaryName)
+	canaryObj, err := c.getCanaryObject(stable.ClusterName, stable.Namespace, stable.Name)
 	if client.IgnoreNotFound(err) != nil {
 		return nil, false, err
 	}
@@ -252,7 +260,7 @@ func (c *CanaryReleaseControl) canaryObject(stable *workload.Info) (client.Objec
 		canaryObj.SetFinalizers(nil)
 		canaryObj.SetManagedFields(nil)
 		// set canary metadata
-		canaryObj.SetName(canaryName)
+		canaryObj.SetName(c.getCanaryName(stable.Name))
 	}
 
 	return canaryObj, found, nil
