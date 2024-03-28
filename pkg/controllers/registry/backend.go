@@ -17,20 +17,25 @@
 package registry
 
 import (
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/backend/registry"
+	"kusionstack.io/rollout/pkg/backend"
 	"kusionstack.io/rollout/pkg/backend/service"
+	"kusionstack.io/rollout/pkg/registry"
 )
 
 const (
 	BackendRegistryName = "backend-registry"
 )
 
-var Backends = registry.NewRegistry()
+func NewBackendRegistry() backend.Registry {
+	return registry.New[schema.GroupVersionKind, backend.Store]()
+}
+
+var Backends = NewBackendRegistry()
 
 func InitBackendRegistry(mgr manager.Manager) (bool, error) {
-	Backends.Register(service.NewStorage(mgr))
-	Backends.SetupWithManger(mgr)
+	Backends.Register(service.GVK, service.NewStorage(mgr))
 	return true, nil
 }

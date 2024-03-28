@@ -15,10 +15,15 @@
 package rollout
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/elliotchance/pie/v2"
+	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/names"
+	"kusionstack.io/kube-utils/multicluster"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -159,4 +164,55 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 		result = append(result, step)
 	}
 	return result
+}
+
+func getWatchableWorkloads(registry workload.Registry, logger logr.Logger, discoveryClient multicluster.PartialCachedDiscoveryInterface) []workload.Accessor {
+	result := make([]workload.Accessor, 0)
+
+	registry.Range(func(gvk schema.GroupVersionKind, item workload.Accessor) bool {
+		if !item.Watchable() {
+			// skip it
+			logger.Info("workload interface does not support watch, skip it", "gvk", gvk.String())
+			return true
+		}
+
+		supported, err := isGVKSupportedInMembers(discoveryClient, gvk)
+		if err != nil {
+			logger.Error(err, "failed to get discovery result from member clusters, skip it", "gvk", gvk.String())
+			return true
+		}
+		if !supported {
+			logger.Info("gvk is not supported in all members clusters, skip it", "gvk", gvk.String())
+			return true
+		}
+
+		result = append(result, item)
+
+		return true
+	})
+	return result
+}
+
+func isGVKSupportedInMembers(discoveryClient multicluster.PartialCachedDiscoveryInterface, gvk schema.GroupVersionKind) (bool, error) {
+	if discoveryClient == nil {
+		return false, fmt.Errorf("member clusters discovery interface is not set, please use SetupWithManager() firstly")
+	}
+
+	_, resources, err := discoveryClient.ServerGroupsAndResources()
+	if err != nil {
+		return false, err
+	}
+
+	for _, resourceList := range resources {
+		if resourceList.GroupVersion != gvk.GroupVersion().String() {
+			continue
+		}
+		found := pie.Any(resourceList.APIResources, func(value metav1.APIResource) bool {
+			return value.Kind == gvk.Kind
+		})
+		if found {
+			return true, nil
+		}
+	}
+	return false, nil
 }

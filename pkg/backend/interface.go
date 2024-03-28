@@ -19,7 +19,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"kusionstack.io/rollout/pkg/registry"
 )
 
 type IBackend interface {
@@ -39,13 +40,15 @@ type Store interface {
 	Get(ctx context.Context, cluster, namespace, name string) (IBackend, error)
 }
 
-type Registry interface {
-	// SetupWithManger initialize registry with manager.
-	SetupWithManger(mgr manager.Manager)
-	// Register add a new backend store for given gvk
-	Register(store Store)
-	// Delete delete a backend store for given gvk
-	Delete(gvk schema.GroupVersionKind)
-	// If the gvk is registered and supported by all member clusters, Get returns the backend rest store.
-	Get(gvk schema.GroupVersionKind) (Store, error)
-}
+type Registry = registry.Registry[schema.GroupVersionKind, Store]
+
+// type Registry interface {
+// 	// SetupWithManger initialize registry with manager.
+// 	SetupWithManger(mgr manager.Manager)
+// 	// Register add a new backend store for given gvk
+// 	Register(store Store)
+// 	// Delete delete a backend store for given gvk
+// 	Delete(gvk schema.GroupVersionKind)
+// 	// If the gvk is registered and supported by all member clusters, Get returns the backend rest store.
+// 	Get(gvk schema.GroupVersionKind) (Store, error)
+// }

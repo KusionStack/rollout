@@ -17,8 +17,10 @@
 package registry
 
 import (
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"kusionstack.io/rollout/pkg/registry"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/collaset"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
@@ -28,11 +30,14 @@ const (
 	WorkloadRegistryName = "workload-registry"
 )
 
-var Workloads = workload.NewRegistry()
+func NewWorkloadRegistry() workload.Registry {
+	return registry.New[schema.GroupVersionKind, workload.Accessor]()
+}
+
+var Workloads = NewWorkloadRegistry()
 
 func InitWorkloadRegistry(mgr manager.Manager) (bool, error) {
-	Workloads.Register(collaset.New())
-	Workloads.Register(statefulset.New())
-	Workloads.SetupWithManger(mgr)
+	Workloads.Register(collaset.GVK, collaset.New())
+	Workloads.Register(statefulset.GVK, statefulset.New())
 	return true, nil
 }

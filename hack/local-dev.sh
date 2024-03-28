@@ -20,13 +20,13 @@ ROOT_DIR="${BASE_SOURCE_ROOT}"
 # shellcheck source=/dev/null
 source "${ROOT_DIR}/hack/lib/init.sh"
 
+log::status "compiling rollout binary"
+# build binary and container
+make build
+
 kind_cluster_name="rollout-dev"
 
 kind::setup_rollout_cluster "${kind_cluster_name}"
-
-log::status "building binary"
-# build binary and container
-make build
 
 log::status "starting manager"
 bin/manager --federated-mode=false \
