@@ -32,6 +32,6 @@ log::status "starting manager"
 bin/manager --federated-mode=false \
     --health-probe-bind-address=:18081 \
     --feature-gates=OneTimeStrategy=true \
-    --webhooks="" \
+    --webhook-cert-dir=bin/certs \
     --v=1 \
     "$*"
