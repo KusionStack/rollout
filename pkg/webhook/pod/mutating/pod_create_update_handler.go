@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -48,8 +47,8 @@ func NewMutatingHandler() admission.Handler {
 }
 
 // RegisterHandler registers a handler to the webhook.
-func RegisterHandler(mgr manager.Manager) {
-	mgr.GetWebhookServer().Register(webhookPathPodMutating, &webhook.Admission{Handler: NewMutatingHandler()})
+func RegisterHandler(server *webhook.Server) {
+	server.Register(webhookPathPodMutating, &webhook.Admission{Handler: NewMutatingHandler()})
 }
 
 // Handle handles admission requests.
@@ -178,7 +177,7 @@ func controlledByRollout(gvk schema.GroupVersionKind) bool {
 }
 
 func isMiddleResource(gvk schema.GroupVersionKind) bool {
-	return pie.Any[schema.GroupVersionKind](MiddleResources, func(value schema.GroupVersionKind) bool {
+	return pie.Any(MiddleResources, func(value schema.GroupVersionKind) bool {
 		return value == gvk
 	})
 }

@@ -2,26 +2,20 @@ package webhook
 
 import (
 	"context"
-	"crypto"
-	"crypto/rsa"
-	"crypto/x509"
-	"net"
 	"os"
-	"path/filepath"
 	"sync"
 
-	"github.com/pkg/errors"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/cert"
-	"k8s.io/client-go/util/keyutil"
-	"k8s.io/kubernetes/test/utils"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	rolloututils "kusionstack.io/rollout/pkg/utils"
+	certutil "kusionstack.io/rollout/pkg/utils/cert"
 )
 
 const (
@@ -32,14 +26,15 @@ const (
 
 var webhookInitializerOnce sync.Once
 
-type RegisterHandlerFunc func(manager ctrl.Manager)
+type RegisterHandlerFunc func(manager *webhook.Server)
 
 // SetupWithManager sets up the webhook with a manager.
 func SetupWithManager(mgr ctrl.Manager, f RegisterHandlerFunc) (bool, error) {
-	f(mgr)
+	// NOTE: we must register the webhook before initializing cert and configuration.
+	f(mgr.GetWebhookServer())
 
 	webhookInitializerOnce.Do(func() {
-		err := initialize(context.Background(), mgr)
+		err := initializeCertKeyAndConfiguration(context.Background(), mgr)
 		if err != nil {
 			panic("unable to initialize webhook: " + err.Error())
 		}
@@ -48,169 +43,82 @@ func SetupWithManager(mgr ctrl.Manager, f RegisterHandlerFunc) (bool, error) {
 	return true, nil
 }
 
-func initialize(ctx context.Context, mgr ctrl.Manager) error {
+func initializeCertKeyAndConfiguration(ctx context.Context, mgr ctrl.Manager) error {
 	logger := mgr.GetLogger().WithName("webhook")
 
-	secret, err := ensureWebhookSecret(ctx, mgr.GetAPIReader(), mgr.GetClient(), getWebhookHost())
-	if err != nil {
-		return err
-	}
-	logger.Info("webhook secret ensured", "namespace", secret.Namespace, "name", secret.Name)
-
-	mutatingCfg := &admv1.MutatingWebhookConfiguration{}
-	err = mgr.GetAPIReader().Get(ctx, client.ObjectKey{Name: mutatingWebhookConfigurationName}, mutatingCfg)
+	dir := mgr.GetWebhookServer().CertDir
+	logger.Info("load or generate webhook serving key and cert", "certDir", dir)
+	// 1. read key, cert, ca.cert from files or generate new ones if not exist
+	keyBytes, certBytes, caCertBytes, err := certutil.GenerateSelfSignedCertKeyWithFixtures(getWebhookHost(), nil, nil, dir)
 	if err != nil {
 		return err
 	}
 
-	_, err = rolloututils.UpdateOnConflict(ctx, mgr.GetAPIReader(), mgr.GetClient(), mutatingCfg, func() error {
-		for i := range mutatingCfg.Webhooks {
-			mutatingCfg.Webhooks[i].ClientConfig.CABundle = secret.Data["ca.crt"]
-		}
-		return nil
-	})
+	// 2. create secret
+	secret, result, err := ensureWebhookSecret(ctx, mgr.GetAPIReader(), mgr.GetClient(), keyBytes, certBytes, caCertBytes)
+	if err != nil {
+		return err
+	}
+	logger.Info("ensure webhook secret", "namespace", secret.Namespace, "name", secret.Name, "opResult", result)
+
+	// 3. update caBundle in webhook configurations
+	err = ensureWebhookConfiguration(ctx, mgr.GetAPIReader(), mgr.GetClient(), caCertBytes)
 	if err != nil {
 		return err
 	}
 
-	validatingCfg := &admv1.ValidatingWebhookConfiguration{}
-	err = mgr.GetAPIReader().Get(ctx, client.ObjectKey{Name: validatingWebhookConfigurationName}, validatingCfg)
-	if err != nil {
-		return err
-	}
-
-	_, err = rolloututils.UpdateOnConflict(ctx, mgr.GetAPIReader(), mgr.GetClient(), validatingCfg, func() error {
-		for i := range validatingCfg.Webhooks {
-			if validatingCfg.Webhooks[i].ClientConfig.CABundle == nil {
-				validatingCfg.Webhooks[i].ClientConfig.CABundle = secret.Data["ca.crt"]
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	logger.Info("webhook ca bundle ensured", "mutatingwebhookconfiguration", mutatingWebhookConfigurationName, "validatingwebhookconfiguration", validatingWebhookConfigurationName)
-
-	var tlsKey, tlsCert []byte
-	tlsKey, ok := secret.Data["tls.key"]
-	if !ok {
-		return errors.New("tls.key not found in secret")
-	}
-	tlsCert, ok = secret.Data["tls.crt"]
-	if !ok {
-		return errors.New("tls.crt not found in secret")
-	}
-
-	err = ensureWebhookCert(mgr.GetWebhookServer().CertDir, tlsKey, tlsCert)
-	if err != nil {
-		return err
-	}
-	logger.Info("webhook ensured")
+	logger.Info("ensure webhook configurations")
 	return nil
 }
 
-func ensureWebhookSecret(ctx context.Context, reader client.Reader, writer client.Writer, commonName string) (*corev1.Secret, error) {
-	secret := &corev1.Secret{}
-	err := reader.Get(ctx, client.ObjectKey{Namespace: getNamespace(), Name: webhookCertsSecretName}, secret)
-	if err == nil {
-		return secret, nil
-	}
-	if !apierrors.IsNotFound(err) {
-		return nil, err
-	}
-
-	// create secret if not found
-	caKey, caCert, err := generateSelfSignedCACert()
-	if err != nil {
-		return nil, err
-	}
-	caKeyPEM, err := keyutil.MarshalPrivateKeyToPEM(caKey)
-	if err != nil {
-		return nil, err
-	}
-	caCertPEM := utils.EncodeCertPEM(caCert)
-
-	privateKey, signedCert, err := generateSelfSignedCert(caCert, caKey, commonName)
-	if err != nil {
-		return nil, err
-	}
-	privateKeyPEM, err := keyutil.MarshalPrivateKeyToPEM(privateKey)
-	if err != nil {
-		return nil, err
-	}
-	signedCertPEM := utils.EncodeCertPEM(signedCert)
-
-	data := map[string][]byte{
-		"ca.key": caKeyPEM, "ca.crt": caCertPEM,
-		"tls.key": privateKeyPEM, "tls.crt": signedCertPEM,
-	}
-	secret = &corev1.Secret{
+func ensureWebhookSecret(ctx context.Context, reader client.Reader, writer client.Writer, keyBytes, certBytes, caCertBytes []byte) (*corev1.Secret, controllerutil.OperationResult, error) {
+	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      webhookCertsSecretName,
 			Namespace: getNamespace(),
+			Name:      webhookCertsSecretName,
 		},
-		Data: data,
 	}
-
-	err = writer.Create(ctx, secret)
-	return secret, err
-}
-
-func generateSelfSignedCACert() (caKey *rsa.PrivateKey, caCert *x509.Certificate, err error) {
-	caKey, err = utils.NewPrivateKey()
-	if err != nil {
-		return
-	}
-
-	caCert, err = cert.NewSelfSignedCACert(cert.Config{CommonName: "self-signed-k8s-cert"}, caKey)
-
-	return
-}
-
-func generateSelfSignedCert(caCert *x509.Certificate, caKey crypto.Signer, commonName string) (privateKey *rsa.PrivateKey, signedCert *x509.Certificate, err error) {
-	privateKey, err = utils.NewPrivateKey()
-	if err != nil {
-		return
-	}
-
-	hostIP := net.ParseIP(commonName)
-	var altIPs []net.IP
-	DNSNames := []string{"localhost"}
-	if hostIP.To4() != nil {
-		altIPs = append(altIPs, hostIP.To4())
-	} else {
-		DNSNames = append(DNSNames, commonName)
-	}
-
-	signedCert, err = utils.NewSignedCert(
-		&cert.Config{
-			CommonName: commonName,
-			AltNames:   cert.AltNames{DNSNames: DNSNames, IPs: altIPs},
-			Usages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		},
-		privateKey, caCert, caKey,
-	)
-
-	return
-}
-
-func ensureWebhookCert(certDir string, tlsKey, tlsCert []byte) error {
-	if _, err := os.Stat(certDir); os.IsNotExist(err) {
-		err := os.MkdirAll(certDir, 0777)
-		if err != nil {
-			return err
+	result, err := rolloututils.CreateOrUpdateOnConflict(ctx, reader, writer, secret, func() error {
+		secret.Data = map[string][]byte{
+			"tls.key": keyBytes,
+			"tls.crt": certBytes,
+			"ca.crt":  caCertBytes,
 		}
-	}
+		return nil
+	})
+	return secret, result, err
+}
 
-	keyFile := filepath.Join(certDir, "tls.key")
-	certFile := filepath.Join(certDir, "tls.crt")
-
-	if err := os.WriteFile(keyFile, tlsKey, 0644); err != nil {
+func ensureWebhookConfiguration(ctx context.Context, reader client.Reader, writer client.Writer, caBundle []byte) error {
+	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
+	mutatingCfg := &admv1.MutatingWebhookConfiguration{}
+	err := reader.Get(ctx, client.ObjectKey{Name: mutatingWebhookConfigurationName}, mutatingCfg)
+	if client.IgnoreNotFound(err) != nil {
 		return err
 	}
-	if err := os.WriteFile(certFile, tlsCert, 0644); err != nil {
+	if err == nil {
+		// nolint
+		rolloututils.UpdateOnConflict(ctx, reader, writer, mutatingCfg, func() error {
+			for i := range mutatingCfg.Webhooks {
+				mutatingCfg.Webhooks[i].ClientConfig.CABundle = caBundle
+			}
+			return nil
+		})
+	}
+	validatingCfg := &admv1.ValidatingWebhookConfiguration{}
+	err = reader.Get(ctx, client.ObjectKey{Name: validatingWebhookConfigurationName}, validatingCfg)
+	if client.IgnoreNotFound(err) != nil {
 		return err
+	}
+	if err == nil {
+		// nolint
+		rolloututils.UpdateOnConflict(ctx, reader, writer, validatingCfg, func() error {
+			for i := range validatingCfg.Webhooks {
+				validatingCfg.Webhooks[i].ClientConfig.CABundle = caBundle
+			}
+			return nil
+		})
 	}
 	return nil
 }
