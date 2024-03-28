@@ -29,6 +29,8 @@ import (
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/discovery"
+	memory "k8s.io/client-go/discovery/cached"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -94,7 +96,15 @@ func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			enqueueRolloutForStrategyHandler(r.Client, r.Logger),
 		)
 
-	allworkloads := r.workloadRegistry.Watchables()
+	var discoveryClient multicluster.PartialCachedDiscoveryInterface
+	client, ok := r.Client.(multicluster.MultiClusterDiscovery)
+	if ok {
+		discoveryClient = client.MembersCachedDiscoveryInterface()
+	} else {
+		discoveryClient = memory.NewMemCacheClient(discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()))
+	}
+
+	allworkloads := getWatchableWorkloads(r.workloadRegistry, r.Logger, discoveryClient)
 	for _, accessor := range allworkloads {
 		gvk := accessor.GroupVersionKind()
 		r.Logger.Info("add watcher for workload", "gvk", gvk.String())
