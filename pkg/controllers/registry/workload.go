@@ -41,3 +41,8 @@ func InitWorkloadRegistry(mgr manager.Manager) (bool, error) {
 	Workloads.Register(statefulset.GVK, statefulset.New())
 	return true, nil
 }
+
+func IsSupportedWorkload(gvk schema.GroupVersionKind) bool {
+	_, err := Workloads.Get(gvk)
+	return err == nil
+}

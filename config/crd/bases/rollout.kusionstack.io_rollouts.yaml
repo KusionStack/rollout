@@ -53,6 +53,7 @@ spec:
                   type: string
                 type: array
               triggerPolicy:
+                default: Auto
                 description: TriggerPolicy defines when rollout will be triggered
                 type: string
               workloadRef:

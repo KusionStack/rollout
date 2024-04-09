@@ -2,5 +2,27 @@ resources:
 - manifests.yaml
 - service.yaml
 
+namespace: rollout-system
+
 configurations:
 - kustomizeconfig.yaml
+
+patches:
+- patch: |-
+    - op: replace
+      path: /metadata/name
+      value: kusionstack-rollout-validating
+  target:
+    kind: ValidatingWebhookConfiguration
+- patch: |-
+    - op: replace
+      path: /metadata/name
+      value: kusionstack-rollout-mutating
+  target:
+    kind: MutatingWebhookConfiguration
+- patch: |-
+    - op: replace
+      path: /metadata/name
+      value: kusionstack-rollout-webhook
+  target:
+    kind: Service
