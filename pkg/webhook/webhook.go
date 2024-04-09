@@ -2,12 +2,16 @@ package webhook
 
 import (
 	"context"
+	"net/http"
 	"os"
+	"path"
+	"strings"
 	"sync"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,10 +32,20 @@ var webhookInitializerOnce sync.Once
 
 type RegisterHandlerFunc func(manager *webhook.Server)
 
-// SetupWithManager sets up the webhook with a manager.
-func SetupWithManager(mgr ctrl.Manager, f RegisterHandlerFunc) (bool, error) {
+// setupWebhook sets up the webhook with a manager.
+func setupWebhook(mgr ctrl.Manager, webhookType webhookType, obj runtime.Object, handler http.Handler) error {
 	// NOTE: we must register the webhook before initializing cert and configuration.
-	f(mgr.GetWebhookServer())
+	scheme := mgr.GetScheme()
+	gvks, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		return err
+	}
+	gvk := gvks[0]
+	kind := strings.ToLower(gvk.Kind)
+	hookPath := path.Join("/webhooks", string(webhookType), kind)
+
+	server := mgr.GetWebhookServer()
+	server.Register(hookPath, handler)
 
 	webhookInitializerOnce.Do(func() {
 		err := initializeCertKeyAndConfiguration(context.Background(), mgr)
@@ -40,16 +54,17 @@ func SetupWithManager(mgr ctrl.Manager, f RegisterHandlerFunc) (bool, error) {
 		}
 	})
 
-	return true, nil
+	return nil
 }
 
 func initializeCertKeyAndConfiguration(ctx context.Context, mgr ctrl.Manager) error {
 	logger := mgr.GetLogger().WithName("webhook")
 
+	host := getWebhookHost()
 	dir := mgr.GetWebhookServer().CertDir
-	logger.Info("load or generate webhook serving key and cert", "certDir", dir)
+	logger.Info("load or generate webhook serving key and cert", "certDir", dir, "host", host)
 	// 1. read key, cert, ca.cert from files or generate new ones if not exist
-	keyBytes, certBytes, caCertBytes, err := certutil.GenerateSelfSignedCertKeyWithFixtures(getWebhookHost(), nil, nil, dir)
+	keyBytes, certBytes, caCertBytes, err := certutil.GenerateSelfSignedCertKeyWithFixtures(host, nil, nil, dir)
 	if err != nil {
 		return err
 	}

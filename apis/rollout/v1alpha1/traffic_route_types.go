@@ -183,6 +183,7 @@ type CanaryBackendRule struct {
 
 type TrafficStrategy struct {
 	// Weight indicate how many percentage of traffic the canary pods should receive
+	//
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=100
 	Weight   *int32         `json:"weight,omitempty"`

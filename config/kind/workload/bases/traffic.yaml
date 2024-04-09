@@ -14,7 +14,6 @@ spec:
           cluster: cluster-a
   trafficType: InCluster
   backend:
-    kind: Service
     name: rollout-demo1
   routes:
   - apiVersion: networking.k8s.io/v1
@@ -37,7 +36,6 @@ spec:
           cluster: cluster-b
   trafficType: InCluster
   backend:
-    kind: Service
     name: rollout-demo2
   routes:
   - apiVersion: networking.k8s.io/v1

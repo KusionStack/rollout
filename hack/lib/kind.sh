@@ -45,3 +45,11 @@ kind::setup_rollout_cluster() {
     log::status "apply rollout and workloads v1"
     kubectl apply -k "${ROLLOUT_CONFIG_WORKLOADS_V1}"
 }
+
+kind::setup_rollout_webhook() {
+    local _kind_cluster_name=${1}
+    local _context_name="kind-${_kind_cluster_name}"
+    local _overlay=${2}
+    log::status "apply rollout webhook configuration"
+    kubectl apply -k "${ROLLOUT_CONFIG_WEBHOOK}/${_overlay}"
+}

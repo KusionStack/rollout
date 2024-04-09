@@ -56,6 +56,7 @@ type RolloutSpec struct {
 	Disabled bool `json:"disabled,omitempty"`
 
 	// TriggerPolicy defines when rollout will be triggered
+	// +kubebuilder:default=Auto
 	TriggerPolicy RolloutTriggerPolicy `json:"triggerPolicy,omitempty"`
 
 	// StrategyRef is the reference to the rollout strategy
@@ -88,6 +89,8 @@ type WorkloadRef struct {
 	// +optional
 	APIVersion string `json:"apiVersion"`
 	// Kind is the type of resource being referenced
+	//
+	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 	// Match indicates how to match workloads. only one workload should be matches in one cluster
 	Match ResourceMatch `json:"match"`

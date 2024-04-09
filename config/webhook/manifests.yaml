@@ -13,9 +13,9 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /pods/mutating
+      path: /webhooks/mutating/pod
   failurePolicy: Ignore
-  name: mpod.kb.io
+  name: pods.core.v1
   rules:
   - apiGroups:
     - ""
@@ -26,4 +26,96 @@ webhooks:
     - UPDATE
     resources:
     - pods
+  sideEffects: None
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /webhooks/validating/rollout
+  failurePolicy: Ignore
+  name: rollouts.rollout.kusionstack.io
+  rules:
+  - apiGroups:
+    - rollout.kusionstack.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rollouts
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /webhooks/validating/rolloutstrategy
+  failurePolicy: Ignore
+  name: rolloutstrategies.rollout.kusionstack.io
+  rules:
+  - apiGroups:
+    - rollout.kusionstack.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rolloutstrategies
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /webhooks/validating/rolloutrun
+  failurePolicy: Ignore
+  name: rolloutruns.rollout.kusionstack.io
+  rules:
+  - apiGroups:
+    - rollout.kusionstack.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rolloutruns
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /webhooks/validating/traffictopology
+  failurePolicy: Ignore
+  name: traffictopologies.rollout.kusionstack.io
+  rules:
+  - apiGroups:
+    - rollout.kusionstack.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - traffictopologies
   sideEffects: None

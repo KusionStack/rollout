@@ -30,6 +30,7 @@ COLOR_LOG=true
 export ROLLOUT_CONFIG_CRD="${PROJECT_ROOT_DIR}/config/crd"
 export ROLLOUT_CONFIG_PREREQUISITE="${PROJECT_ROOT_DIR}/config/kind/prerequisite"
 export ROLLOUT_CONFIG_CONTROLLER="${PROJECT_ROOT_DIR}/config/kind/controller"
+export ROLLOUT_CONFIG_WEBHOOK="${PROJECT_ROOT_DIR}/config/kind/webhook"
 export ROLLOUT_CONFIG_WORKLOADS_V1="${PROJECT_ROOT_DIR}/config/kind/workload/overlays/v1"
 export ROLLOUT_CONFIG_WORKLOADS_V2="${PROJECT_ROOT_DIR}/config/kind/workload/overlays/v2"
 

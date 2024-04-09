@@ -30,7 +30,10 @@ type RolloutWebhook struct {
 	ClientConfig WebhookClientConfig `json:"clientConfig,omitempty"`
 	// Minimum consecutive failures for the probe to be considered failed after having succeeded.
 	// Defaults to 3. Minimum value is 1.
+	//
 	// +optional
+	// +kubebuilder:default=3
+	// +kubebuilder:validation:Minimum=1
 	FailureThreshold int32 `json:"failureThreshold,omitempty" protobuf:"varint,6,opt,name=failureThreshold"`
 	// FailurePolicy defines how unrecognized errors from the admission endpoint are handled -
 	// allowed values are Ignore or Fail. Defaults to Ignore.
@@ -43,11 +46,6 @@ type RolloutWebhook struct {
 	// If provider is set, then the protocol of the interaction will be determined by the provider
 	// +optional
 	Provider *string `json:"provider,omitempty"`
-}
-
-// Error implements error.
-func (*RolloutWebhook) Error() string {
-	panic("unimplemented")
 }
 
 // FailurePolicyType specifies a failure policy that defines how unrecognized errors from the admission endpoint are handled.
@@ -98,13 +96,17 @@ type WebhookClientConfig struct {
 	// TimeoutSeconds specifies the timeout for this webhook. After the timeout passes,
 	// the webhook call will be ignored or the API call will fail based on the
 	// failure policy.
-	// Default to 10 seconds.
+	//
 	// +optional
+	// +kubebuilder:default=10
 	TimeoutSeconds int32 `json:"timeoutSeconds,omitempty"`
 
 	// How often (in seconds) to perform the probe.
 	// Default to 10 seconds. Minimum value is 1.
+	//
 	// +optional
+	// +kubebuilder:default=10
+	// +kubebuilder:validation:Minimum=1
 	PeriodSeconds int32 `json:"periodSeconds,omitempty"`
 }
 

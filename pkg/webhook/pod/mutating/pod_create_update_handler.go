@@ -11,9 +11,11 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -22,9 +24,9 @@ import (
 	"kusionstack.io/rollout/pkg/utils"
 )
 
-// +kubebuilder:webhook:path=/pods/mutating,mutating=true,failurePolicy=ignore,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="",resources=pods,verbs=create;update,versions=v1,name=mpod.kb.io
+// +kubebuilder:webhook:path=/webhooks/mutating/pod,mutating=true,failurePolicy=ignore,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="",resources=pods,verbs=create;update,versions=v1,name=pods.core.v1
 
-const webhookPathPodMutating = "/pods/mutating"
+const MutatingPod = "mutate-pod"
 
 // MiddleResources is the list of resources that are considered as middle resources, such as ReplicaSet.
 // We need to find the corresponding owner workload for these middle resources.
@@ -39,16 +41,16 @@ type PodCreateUpdateHandler struct {
 
 var _ admission.Handler = &PodCreateUpdateHandler{}
 
-// NewMutatingHandler returns a new PodCreateUpdateHandler.
-func NewMutatingHandler() admission.Handler {
-	return &PodCreateUpdateHandler{
-		WebhookAdmissionHandlerMixin: mixin.NewWebhookHandlerMixin(),
+func NewMutatingHandler(_ manager.Manager) map[runtime.Object]http.Handler {
+	return map[runtime.Object]http.Handler{
+		&corev1.Pod{}: &webhook.Admission{Handler: newPodCreateUpdateHandler()},
 	}
 }
 
-// RegisterHandler registers a handler to the webhook.
-func RegisterHandler(server *webhook.Server) {
-	server.Register(webhookPathPodMutating, &webhook.Admission{Handler: NewMutatingHandler()})
+func newPodCreateUpdateHandler() *PodCreateUpdateHandler {
+	return &PodCreateUpdateHandler{
+		WebhookAdmissionHandlerMixin: mixin.NewWebhookHandlerMixin(),
+	}
 }
 
 // Handle handles admission requests.

@@ -6,7 +6,3 @@ namespace: rollout-system
 resources:
 - namespace.yaml
 - clusterrole.yaml
-
-images:
-- name: rollout
-  newTag: d34d9c0d78
