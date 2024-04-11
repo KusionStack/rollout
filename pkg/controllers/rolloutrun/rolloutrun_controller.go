@@ -158,18 +158,16 @@ func (r *RolloutRunReconciler) satisfiedExpectations(instance *rolloutv1alpha1.R
 }
 
 func (r *RolloutRunReconciler) handleFinalizer(rolloutRun *rolloutv1alpha1.RolloutRun) error {
-	if rolloutRun.DeletionTimestamp.IsZero() {
-		if err := utils.AddAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
-			return err
-		}
-		return nil
-	}
-
 	if rolloutRun.IsCompleted() {
+		// remove finalizer when rolloutRun is completed
 		if err := utils.RemoveAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
 			return err
 		}
-		return nil
+	} else if rolloutRun.DeletionTimestamp.IsZero() {
+		// add finalizer when rolloutRun is not completed and not deleted
+		if err := utils.AddAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
+			return err
+		}
 	}
 
 	return nil

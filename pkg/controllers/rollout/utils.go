@@ -81,6 +81,7 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 			},
 			Annotations:     map[string]string{},
 			OwnerReferences: []metav1.OwnerReference{*owner},
+			Finalizers:      []string{rolloutapi.FinalizerRolloutProtection},
 		},
 		Spec: rolloutv1alpha1.RolloutRunSpec{
 			TargetType: rolloutv1alpha1.ObjectTypeRef{
@@ -215,4 +216,15 @@ func isGVKSupportedInMembers(discoveryClient multicluster.PartialCachedDiscovery
 		}
 	}
 	return false, nil
+}
+
+// RolloutRunByCreationTimestamp sorts a list of RolloutRun by creationTimestamp.
+type RolloutRunByCreationTimestamp []*rolloutv1alpha1.RolloutRun
+
+func (o RolloutRunByCreationTimestamp) Len() int      { return len(o) }
+func (o RolloutRunByCreationTimestamp) Swap(i, j int) { o[i], o[j] = o[j], o[i] }
+func (o RolloutRunByCreationTimestamp) Less(i, j int) bool {
+	time1 := o[i].CreationTimestamp
+	time2 := o[j].CreationTimestamp
+	return time1.Before(&time2)
 }

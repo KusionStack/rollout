@@ -55,11 +55,22 @@ type RolloutSpec struct {
 	// Default value is false.
 	Disabled bool `json:"disabled,omitempty"`
 
+	// HistoryLimit defines the maximum number of completed rolloutRun
+	// history records to keep.
+	// The HistoryLimit can start from 0 (no retained RolloutRun history).
+	// When not set or set to math.MaxInt32, the Rollout will keep all RolloutRun history records.
+	//
+	// +kubebuilder:default=10
+	HistoryLimit *int32 `json:"historyLimit,omitempty"`
+
 	// TriggerPolicy defines when rollout will be triggered
+	//
 	// +kubebuilder:default=Auto
 	TriggerPolicy RolloutTriggerPolicy `json:"triggerPolicy,omitempty"`
 
 	// StrategyRef is the reference to the rollout strategy
+	//
+	// +kubebuilder:validation:Required
 	StrategyRef string `json:"strategyRef,omitempty"`
 
 	// WorkloadRef is a reference to a kind of workloads
