@@ -4,6 +4,7 @@ kind: Rollout
 metadata:
   name: rollout-demo
 spec:
+  historyLimit: 1
   strategyRef: rollout-demo
   workloadRef:
     apiVersion: apps/v1

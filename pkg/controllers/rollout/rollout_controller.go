@@ -18,8 +18,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 
+	"github.com/elliotchance/pie/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -132,8 +135,8 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.V(2).Info("start reconciling rollout")
 	defer logger.V(2).Info("finish reconciling rollout")
 
-	instance := &rolloutv1alpha1.Rollout{}
-	err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), req.NamespacedName, instance)
+	obj := &rolloutv1alpha1.Rollout{}
+	err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), req.NamespacedName, obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.expectation.DeleteExpectations(key)
@@ -142,21 +145,32 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return reconcile.Result{}, err
 	}
 
-	if !r.satisfiedExpectations(instance) {
+	if !r.satisfiedExpectations(obj) {
 		return reconcile.Result{}, nil
 	}
 
 	// add or delete finalizer if necessary
-	err = r.ensureFinalizer(instance)
+	err = r.ensureFinalizer(obj)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// calculate new status
-	newStatus := r.calculateStatus(instance)
+	newStatus := r.calculateStatus(obj)
 
 	// get all workloads references
-	_, workloads, err := r.findWorkloadsCrossCluster(ctx, instance)
+	_, workloads, err := r.findWorkloadsCrossCluster(ctx, obj)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// get all rolloutRun
+	curRun, oldRuns, err := r.getAllRolloutRun(ctx, obj)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	err = r.cleanupHistory(ctx, obj, oldRuns)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -167,18 +181,18 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// sync status only
 	case rolloutv1alpha1.RolloutPhaseTerminating:
 		// finalize rollout
-		err = r.handleFinalizing(ctx, instance, workloads, newStatus)
+		err = r.handleFinalizing(ctx, obj, workloads, newStatus)
 	default:
 		// waiting or progressing
-		err = r.handleProgressing(ctx, instance, workloads, newStatus)
+		err = r.handleProgressing(ctx, obj, curRun, workloads, newStatus)
 	}
 
-	if tempErr := r.cleanupAnnotation(ctx, instance); tempErr != nil {
+	if tempErr := r.cleanupAnnotation(ctx, obj); tempErr != nil {
 		logger.Error(tempErr, "failed to clean up annotation")
 	}
 
 	// update status firstly
-	updateStatusError := r.updateStatusOnly(ctx, instance, newStatus)
+	updateStatusError := r.updateStatusOnly(ctx, obj, newStatus)
 	if updateStatusError != nil {
 		logger.Error(err, "failed to update status")
 		return reconcile.Result{}, updateStatusError
@@ -191,11 +205,11 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return reconcile.Result{}, nil
 }
 
-func (r *RolloutReconciler) satisfiedExpectations(instance *rolloutv1alpha1.Rollout) bool {
-	key := utils.ObjectKeyString(instance)
+func (r *RolloutReconciler) satisfiedExpectations(obj *rolloutv1alpha1.Rollout) bool {
+	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rollout", key)
 
-	if !r.rvExpectation.SatisfiedExpectations(key, instance.ResourceVersion) {
+	if !r.rvExpectation.SatisfiedExpectations(key, obj.ResourceVersion) {
 		logger.Info("rollout does not statisfy resourceVersion expectation, skip reconciling")
 		return false
 	}
@@ -207,22 +221,22 @@ func (r *RolloutReconciler) satisfiedExpectations(instance *rolloutv1alpha1.Roll
 	return true
 }
 
-func (r *RolloutReconciler) ensureFinalizer(instance *rolloutv1alpha1.Rollout) error {
-	logger := r.Logger.WithValues("rollout", utils.ObjectKeyString(instance))
-	if instance.DeletionTimestamp == nil {
+func (r *RolloutReconciler) ensureFinalizer(obj *rolloutv1alpha1.Rollout) error {
+	logger := r.Logger.WithValues("rollout", utils.ObjectKeyString(obj))
+	if obj.DeletionTimestamp == nil {
 		// ensure finalizer
-		if err := utils.AddAndUpdateFinalizer(r.Client, instance, rollout.FinalizerRolloutProtection); err != nil {
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "FailedUpdateFinalizer", "failed to add finalizer %s, err: %v", rollout.FinalizerRolloutProtection, err)
+		if err := utils.AddAndUpdateFinalizer(r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
+			r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedUpdateFinalizer", "failed to add finalizer %s, err: %v", rollout.FinalizerRolloutProtection, err)
 			logger.Error(err, "failed to add finalizer", "finalizer", rollout.FinalizerRolloutProtection)
 			return err
 		}
 		return nil
 	}
 
-	if condition.IsTerminationCompleted(instance.Status.Conditions) {
+	if condition.IsTerminationCompleted(obj.Status.Conditions) {
 		// remove finalizer
-		if err := utils.RemoveAndUpdateFinalizer(r.Client, instance, rollout.FinalizerRolloutProtection); err != nil {
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "FailedUpdateFinalizer", "failed to remove finalizer %s, err: %v", rollout.FinalizerRolloutProtection, err)
+		if err := utils.RemoveAndUpdateFinalizer(r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
+			r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedUpdateFinalizer", "failed to remove finalizer %s, err: %v", rollout.FinalizerRolloutProtection, err)
 			logger.Error(err, "failed to remove finalizer", "finalizer", rollout.FinalizerRolloutProtection)
 			return err
 		}
@@ -232,11 +246,11 @@ func (r *RolloutReconciler) ensureFinalizer(instance *rolloutv1alpha1.Rollout) e
 	return nil
 }
 
-func (r *RolloutReconciler) calculateStatus(instance *rolloutv1alpha1.Rollout) *rolloutv1alpha1.RolloutStatus {
-	newStatus := instance.Status.DeepCopy()
-	newStatus.ObservedGeneration = instance.Generation
+func (r *RolloutReconciler) calculateStatus(obj *rolloutv1alpha1.Rollout) *rolloutv1alpha1.RolloutStatus {
+	newStatus := obj.Status.DeepCopy()
+	newStatus.ObservedGeneration = obj.Generation
 
-	if instance.DeletionTimestamp != nil {
+	if obj.DeletionTimestamp != nil {
 		if newStatus.Phase != rolloutv1alpha1.RolloutPhaseTerminating {
 			newStatus.Phase = rolloutv1alpha1.RolloutPhaseTerminating
 			terminatingCond := condition.NewCondition(rolloutv1alpha1.RolloutConditionTerminating, metav1.ConditionTrue, "Terminating", "rollout is deleted")
@@ -245,7 +259,7 @@ func (r *RolloutReconciler) calculateStatus(instance *rolloutv1alpha1.Rollout) *
 		return newStatus
 	}
 
-	if instance.Spec.Disabled {
+	if obj.Spec.Disabled {
 		newStatus.Phase = rolloutv1alpha1.RolloutPhaseDisabled
 		return newStatus
 	}
@@ -258,18 +272,18 @@ func (r *RolloutReconciler) calculateStatus(instance *rolloutv1alpha1.Rollout) *
 	return newStatus
 }
 
-func (r *RolloutReconciler) handleFinalizing(ctx context.Context, instance *rolloutv1alpha1.Rollout, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
-	if instance.DeletionTimestamp == nil {
+func (r *RolloutReconciler) handleFinalizing(ctx context.Context, obj *rolloutv1alpha1.Rollout, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
+	if obj.DeletionTimestamp == nil {
 		return nil
 	}
 
 	// check if terminating is completed
-	if condition.IsTerminationCompleted(instance.Status.Conditions) {
+	if condition.IsTerminationCompleted(obj.Status.Conditions) {
 		// finalize completed
 		return nil
 	}
 
-	logger := r.Logger.WithValues("rollout", utils.ObjectKeyString(instance))
+	logger := r.Logger.WithValues("rollout", utils.ObjectKeyString(obj))
 	// TODO: do traffic finalizing here
 
 	// delete workloads label
@@ -296,7 +310,7 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, instance *roll
 	return nil
 }
 
-func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.Rollout, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
+func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.Rollout, curRun *rolloutv1alpha1.RolloutRun, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rollout", key)
 
@@ -308,15 +322,9 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 		return err
 	}
 
-	run, err := r.getCurrentRolloutRun(ctx, obj)
-	if err != nil {
-		logger.Error(err, "failed to get current rolloutRun of rollout")
-		return err
-	}
-
-	if run != nil && !run.IsCompleted() {
+	if curRun != nil && !curRun.IsCompleted() {
 		// NOTE: rollout will not sync strategy modification to running rolloutRun
-		return r.syncRun(ctx, obj, run, workloads, newStatus)
+		return r.syncRun(ctx, obj, curRun, workloads, newStatus)
 	}
 
 	// TODO: filter out-of-control workloads
@@ -324,7 +332,7 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 	rolloutID, needTrigger := r.needTrigger(obj, workloads)
 	if !needTrigger {
 		// sync status with current
-		return r.syncRun(ctx, obj, run, workloads, newStatus)
+		return r.syncRun(ctx, obj, curRun, workloads, newStatus)
 	}
 
 	// trigger a new rollout progress
@@ -335,26 +343,26 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 
 	logger.Info("rollout has been triggered, about to construct rolloutRun", "rolloutRun", rolloutID)
 
-	run = constructRolloutRun(obj, strategy, workloads, rolloutID)
+	curRun = constructRolloutRun(obj, strategy, workloads, rolloutID)
 
 	// NOTO: we have to set expectation before we create the rolloutRun to avoid
 	//       that the creation event comes so fast that we don't have time to set it
 	r.expectation.ExpectCreations(key, 1) // nolint
 
-	if err = r.Client.Create(clusterinfo.ContextFed, run); err != nil {
+	if err = r.Client.Create(clusterinfo.ContextFed, curRun); err != nil {
 		r.expectation.DeleteExpectations(key)
 
-		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to create a new rolloutRun %s: %v", run.Name, err)
-		logger.Error(err, "failed to create rolloutRun", "rolloutRun", run.Name)
-		resetRolloutStatus(newStatus, run.Name, rolloutv1alpha1.RolloutPhaseProgressing)
-		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s", run.Name))
+		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to create a new rolloutRun %s: %v", curRun.Name, err)
+		logger.Error(err, "failed to create rolloutRun", "rolloutRun", curRun.Name)
+		resetRolloutStatus(newStatus, curRun.Name, rolloutv1alpha1.RolloutPhaseProgressing)
+		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s", curRun.Name))
 		return err
 	}
 
-	r.Recorder.Eventf(obj, corev1.EventTypeNormal, "SucceedCreate", "create a new rolloutRun %s", run.Name)
+	r.Recorder.Eventf(obj, corev1.EventTypeNormal, "SucceedCreate", "create a new rolloutRun %s", curRun.Name)
 	logger.Info("a new rolloutRun has been created", "rolloutRun", rolloutID)
 	// update status
-	resetRolloutStatus(newStatus, run.Name, rolloutv1alpha1.RolloutPhaseProgressing)
+	resetRolloutStatus(newStatus, curRun.Name, rolloutv1alpha1.RolloutPhaseProgressing)
 	setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, "SucceedCreate", "a new rolloutRun is created")
 	return nil
 }
@@ -378,10 +386,10 @@ func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, workloads
 	return errorsutil.NewAggregate(errs)
 }
 
-func (r *RolloutReconciler) needTrigger(instance *rolloutv1alpha1.Rollout, workloads []*workload.Info) (string, bool) {
-	rolloutID := generateRolloutID(instance.Name)
+func (r *RolloutReconciler) needTrigger(obj *rolloutv1alpha1.Rollout, workloads []*workload.Info) (string, bool) {
+	rolloutID := generateRolloutID(obj.Name)
 
-	triggerName, ok := utils.GetMapValue(instance.Annotations, rollout.AnnoRolloutTrigger)
+	triggerName, ok := utils.GetMapValue(obj.Annotations, rollout.AnnoRolloutTrigger)
 	if ok {
 		if len(validation.IsQualifiedName(triggerName)) == 0 {
 			// use user defined trigger name as rolloutID
@@ -390,7 +398,7 @@ func (r *RolloutReconciler) needTrigger(instance *rolloutv1alpha1.Rollout, workl
 		return rolloutID, true
 	}
 
-	if instance.Spec.TriggerPolicy == rolloutv1alpha1.ManualTriggerPolicy {
+	if obj.Spec.TriggerPolicy == rolloutv1alpha1.ManualTriggerPolicy {
 		return "", false
 	}
 
@@ -412,7 +420,7 @@ func (r *RolloutReconciler) needTrigger(instance *rolloutv1alpha1.Rollout, workl
 	}
 
 	r.Logger.Info("check if rollout need to be triggered",
-		"rollout", instance.Name,
+		"rollout", obj.Name,
 		"count", count,
 		"triggered", waiting,
 		"pendings", strings.Join(pendings, " | "),
@@ -424,9 +432,9 @@ func (r *RolloutReconciler) needTrigger(instance *rolloutv1alpha1.Rollout, workl
 	return "", false
 }
 
-func (r *RolloutReconciler) parseUpgradeStrategy(instance *rolloutv1alpha1.Rollout) (*rolloutv1alpha1.RolloutStrategy, error) {
+func (r *RolloutReconciler) parseUpgradeStrategy(obj *rolloutv1alpha1.Rollout) (*rolloutv1alpha1.RolloutStrategy, error) {
 	ctx := clusterinfo.WithCluster(context.TODO(), clusterinfo.Fed)
-	strategyRef := instance.Spec.StrategyRef
+	strategyRef := obj.Spec.StrategyRef
 	if strategyRef == "" {
 		return nil, fmt.Errorf("empty strategyRef")
 	}
@@ -434,7 +442,7 @@ func (r *RolloutReconciler) parseUpgradeStrategy(instance *rolloutv1alpha1.Rollo
 	strategy := &rolloutv1alpha1.RolloutStrategy{}
 	err := r.Client.Get(ctx, types.NamespacedName{
 		Name:      strategyRef,
-		Namespace: instance.GetNamespace(),
+		Namespace: obj.GetNamespace(),
 	}, strategy)
 	if err != nil {
 		return nil, err
@@ -461,64 +469,98 @@ func (r *RolloutReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *
 	return rest, workloads, nil
 }
 
-func (r *RolloutReconciler) updateStatusOnly(ctx context.Context, instance *rolloutv1alpha1.Rollout, newStatus *rolloutv1alpha1.RolloutStatus) error {
-	if equality.Semantic.DeepEqual(instance.Status, *newStatus) {
+func (r *RolloutReconciler) getAllRolloutRun(ctx context.Context, obj *rolloutv1alpha1.Rollout) (*rolloutv1alpha1.RolloutRun, []*rolloutv1alpha1.RolloutRun, error) {
+	wList := &rolloutv1alpha1.RolloutRunList{}
+	err := r.Client.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), wList, client.InNamespace(obj.Namespace), client.MatchingLabels{
+		rollout.LabelControl:     "true",
+		rollout.LabelGeneratedBy: obj.Name,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	oldRuns := []*rolloutv1alpha1.RolloutRun{}
+	var curRun *rolloutv1alpha1.RolloutRun
+
+	for i := range wList.Items {
+		ror := &wList.Items[i]
+		owner := metav1.GetControllerOf(ror)
+		if owner == nil {
+			continue
+		}
+		if owner.Kind != "Rollout" || owner.Name != obj.Name {
+			continue
+		}
+
+		if len(obj.Status.RolloutID) == 0 && curRun == nil && !ror.IsCompleted() {
+			// use the first active rolloutRun as current if rolloutID is empty
+			curRun = ror
+			continue
+		} else if ror.Name == obj.Status.RolloutID {
+			curRun = ror
+			continue
+		}
+		oldRuns = append(oldRuns, ror)
+	}
+
+	return curRun, oldRuns, nil
+}
+
+func (r *RolloutReconciler) cleanupHistory(ctx context.Context, obj *rolloutv1alpha1.Rollout, oldRuns []*rolloutv1alpha1.RolloutRun) error {
+	// The HistoryLimit can start from 0 (no retained replicasSet). When set to math.MaxInt32,
+	// the Deployment will keep all revisions.
+	if obj.Spec.HistoryLimit == nil || *obj.Spec.HistoryLimit == math.MaxInt32 {
+		// no limit
+		return nil
+	}
+
+	// filter completed and alive runs
+	completedRun := pie.Filter(oldRuns, func(r *rolloutv1alpha1.RolloutRun) bool {
+		return r.IsCompleted() && r.ObjectMeta.DeletionTimestamp == nil
+	})
+
+	diff := int32(len(completedRun)) - *obj.Spec.HistoryLimit
+
+	if diff <= 0 {
+		return nil
+	}
+
+	sort.Sort(RolloutRunByCreationTimestamp(completedRun))
+
+	r.Logger.V(1).Info("start to cleanup old rolloutRun", "rollout", obj.Name, "count", diff)
+
+	for i := int32(0); i < diff; i++ {
+		run := completedRun[i]
+		// rolloutRun controller will delete protection finalizer if rollouRun is completed
+		if err := r.Client.Delete(clusterinfo.WithCluster(ctx, clusterinfo.Fed), run); err != nil {
+			return err
+		}
+		r.Logger.V(2).Info("succeed to delete old rolloutRun", "rolloutRun", run.Name)
+	}
+	return nil
+}
+
+func (r *RolloutReconciler) updateStatusOnly(ctx context.Context, obj *rolloutv1alpha1.Rollout, newStatus *rolloutv1alpha1.RolloutStatus) error {
+	if equality.Semantic.DeepEqual(obj.Status, *newStatus) {
 		// no change
 		return nil
 	}
-	key := utils.ObjectKeyString(instance)
+	key := utils.ObjectKeyString(obj)
 	now := metav1.Now()
 	newStatus.LastUpdateTime = &now
-	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), instance, func() error {
-		instance.Status = *newStatus
+	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), obj, func() error {
+		obj.Status = *newStatus
 		return nil
 	})
 	if err != nil {
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "FailedUpdateStatus", "failed to update rollout %q status: %v", key, err)
+		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedUpdateStatus", "failed to update rollout %q status: %v", key, err)
 		r.Logger.Error(err, "failed to update rollout status", "rollout", key)
 		return err
 	}
 
 	r.Logger.V(2).Info("succeed to update rollout status", "rollout", key)
-	r.rvExpectation.ExpectUpdate(key, instance.ResourceVersion) // nolint
+	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
 	return nil
-}
-
-func (r *RolloutReconciler) getCurrentRolloutRun(ctx context.Context, instance *rolloutv1alpha1.Rollout) (*rolloutv1alpha1.RolloutRun, error) {
-	logger := r.Logger.WithValues("rollout", utils.ObjectKeyString(instance))
-	if instance.Status.RolloutID == "" {
-		// get current active rolloutRun
-		wList := &rolloutv1alpha1.RolloutRunList{}
-		err := r.Client.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), wList, client.InNamespace(instance.Namespace), client.MatchingLabels{
-			rollout.LabelControl:     "true",
-			rollout.LabelGeneratedBy: instance.Name,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for i := range wList.Items {
-			w := &wList.Items[i]
-			if !w.IsCompleted() {
-				return w, nil
-			}
-		}
-		return nil, nil
-	}
-
-	run := &rolloutv1alpha1.RolloutRun{}
-	err := r.Client.Get(clusterinfo.ContextFed, types.NamespacedName{
-		Name:      instance.Status.RolloutID,
-		Namespace: instance.GetNamespace(),
-	}, run)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// the rolloutRun may be manually deleted
-			logger.Error(err, "failed to find current rolloutRun recorded in rollout status", "rolloutID", instance.Status.RolloutID)
-			return nil, nil
-		}
-		return nil, err
-	}
-	return run, nil
 }
 
 func (r *RolloutReconciler) syncRun(ctx context.Context, obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {

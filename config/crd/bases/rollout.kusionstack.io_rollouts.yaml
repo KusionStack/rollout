@@ -44,6 +44,11 @@ spec:
               disabled:
                 description: Disabled means that rollout will not response for new event. Default value is false.
                 type: boolean
+              historyLimit:
+                default: 10
+                description: HistoryLimit defines the maximum number of completed rolloutRun history records to keep. The HistoryLimit can start from 0 (no retained RolloutRun history). When set to math.MaxInt32, the Rollout will keep all RolloutRun history records.
+                format: int32
+                type: integer
               strategyRef:
                 description: StrategyRef is the reference to the rollout strategy
                 type: string
