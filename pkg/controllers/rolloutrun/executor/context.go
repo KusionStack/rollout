@@ -60,17 +60,12 @@ func (c *ExecutorContext) Initialize() {
 
 		// init canary status
 		if c.RolloutRun.Spec.Canary != nil && newStatus.CanaryStatus == nil {
-			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-				State: StepPending,
-			}
+			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{}
 		}
 		// init BatchStatus
 		if c.RolloutRun.Spec.Batch != nil {
 			if newStatus.BatchStatus == nil {
 				newStatus.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
-			}
-			if len(newStatus.BatchStatus.CurrentBatchState) == 0 {
-				newStatus.BatchStatus.CurrentBatchState = StepPending
 			}
 			// resize records
 			specBatchSize := len(c.RolloutRun.Spec.Batch.Batches)
@@ -80,7 +75,7 @@ func (c *ExecutorContext) Initialize() {
 					newStatus.BatchStatus.Records = append(newStatus.BatchStatus.Records,
 						rolloutv1alpha1.RolloutRunStepStatus{
 							Index: ptr.To(int32(statusBatchSize + i)),
-							State: StepPending,
+							State: StepNone,
 						},
 					)
 				}

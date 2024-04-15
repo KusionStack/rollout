@@ -137,12 +137,13 @@ func ValidateRolloutRunUpdate(newObj, oldObj *rolloutv1alpha1.RolloutRun) field.
 		}
 
 		// check orthers immutable fields according to current state
-		beforeRunning := false
-		if newObj.Status.CanaryStatus == nil {
-			beforeRunning = true
-		} else if newObj.Status.CanaryStatus.State == rolloutv1alpha1.RolloutStepPending {
-			beforeRunning = true
+		beforeRunning := true
+		if newObj.Status.CanaryStatus != nil &&
+			newObj.Status.CanaryStatus.State != rolloutv1alpha1.RolloutStepNone &&
+			newObj.Status.CanaryStatus.State != rolloutv1alpha1.RolloutStepPending {
+			beforeRunning = false
 		}
+
 		if !beforeRunning && !apiequality.Semantic.DeepEqual(newObj.Spec.Canary, oldObj.Spec.Canary) {
 			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec").Child("canary"), "canary is immutable after running"))
 		}
@@ -157,7 +158,8 @@ func ValidateRolloutRunUpdate(newObj, oldObj *rolloutv1alpha1.RolloutRun) field.
 		currentBatchIndex := -1
 		if newObj.Status.BatchStatus != nil {
 			currentBatchIndex = int(newObj.Status.BatchStatus.CurrentBatchIndex)
-			if newObj.Status.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepPending {
+			if newObj.Status.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepNone ||
+				newObj.Status.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepPending {
 				// current batch is not running yet, it can be mutated
 				immutableBatchIndex = int(newObj.Status.BatchStatus.CurrentBatchIndex - 1)
 			} else {
@@ -167,13 +169,17 @@ func ValidateRolloutRunUpdate(newObj, oldObj *rolloutv1alpha1.RolloutRun) field.
 
 		newBatchCount := len(newObj.Spec.Batch.Batches)
 
+		if oldObj.Spec.Batch.Batches[currentBatchIndex].Breakpoint != newObj.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
+			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "batch", "batches").Index(currentBatchIndex).Child("breakpoint"), "breakpoint in current batch is immutable"))
+		}
+
 		if newBatchCount < currentBatchIndex+1 {
-			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec").Child("batch").Child("batches"), "batches count is shorten then currently running batch"))
+			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "batch", "batches"), "batches count is shorten then currently running batch"))
 		} else {
 			// check immutable fields
 			for i := 0; i <= immutableBatchIndex; i++ {
 				if !apiequality.Semantic.DeepEqual(newObj.Spec.Batch.Batches[i], oldObj.Spec.Batch.Batches[i]) {
-					allErrs = append(allErrs, field.Forbidden(field.NewPath("spec").Child("batch").Child("batches").Index(i), "batch is immutable after running"))
+					allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "batch", "batches").Index(i), "batch is immutable after running"))
 				}
 			}
 		}

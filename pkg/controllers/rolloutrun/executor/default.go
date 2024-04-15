@@ -122,7 +122,7 @@ func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error)
 	if rolloutRun.Spec.Batch != nil && len(rolloutRun.Spec.Batch.Batches) > 0 {
 		// init BatchStatus
 		if len(newStatus.BatchStatus.CurrentBatchState) == 0 {
-			newStatus.BatchStatus.CurrentBatchState = StepPending
+			newStatus.BatchStatus.CurrentBatchState = StepNone
 		}
 		preCurrentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 		preCurrentBatchState := newStatus.BatchStatus.CurrentBatchState
@@ -130,10 +130,10 @@ func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error)
 			if preCurrentBatchIndex != newStatus.BatchStatus.CurrentBatchIndex ||
 				preCurrentBatchState != newStatus.BatchStatus.CurrentBatchState {
 				r.logger.Info("batch state trasition",
-					"index.current", preCurrentBatchIndex,
-					"state.current", preCurrentBatchState,
-					"index.next", newStatus.BatchStatus.CurrentBatchIndex,
-					"state.next", newStatus.BatchStatus.CurrentBatchState,
+					"current.index", preCurrentBatchIndex,
+					"current.state", preCurrentBatchState,
+					"next.index", newStatus.BatchStatus.CurrentBatchIndex,
+					"next.state", newStatus.BatchStatus.CurrentBatchState,
 				)
 			}
 		}()

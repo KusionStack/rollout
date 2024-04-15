@@ -41,7 +41,8 @@ func newBatchExecutor(logger logr.Logger, webhook webhookExecutor) *batchExecuto
 		stateMachine: newStepStateMachine(),
 	}
 
-	e.stateMachine.add(StepPending, StepPreBatchStepHook, e.doInit)
+	e.stateMachine.add(StepNone, StepPending, e.doPausing)
+	e.stateMachine.add(StepPending, StepPreBatchStepHook, skipStep)
 	e.stateMachine.add(StepPreBatchStepHook, StepRunning, e.doPreStepHook)
 	e.stateMachine.add(StepRunning, StepPostBatchStepHook, e.doBatchUpgrading)
 	e.stateMachine.add(StepPostBatchStepHook, StepSucceeded, e.doPostStepHook)
@@ -66,7 +67,7 @@ func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result,
 		// move to next batch
 		currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 		if int(currentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
-			newStatus.BatchStatus.CurrentBatchState = StepPending
+			newStatus.BatchStatus.CurrentBatchState = StepNone
 			newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
 		}
 	}
@@ -79,7 +80,7 @@ func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result,
 	return done, result, err
 }
 
-func (e *batchExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, error) {
+func (e *batchExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, error) {
 	rolloutName := ctx.Rollout.Name
 	rolloutRunName := ctx.RolloutRun.Name
 	newStatus := ctx.NewStatus
