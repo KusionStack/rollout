@@ -1,9 +1,7 @@
-
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   name: mutating-webhook-configuration
 webhooks:
 - admissionReviewVersions:
@@ -27,14 +25,33 @@ webhooks:
     resources:
     - pods
   sideEffects: None
-
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   name: validating-webhook-configuration
 webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /webhooks/validating/rolloutrun
+  failurePolicy: Ignore
+  name: rolloutruns.rollout.kusionstack.io
+  rules:
+  - apiGroups:
+    - rollout.kusionstack.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rolloutruns
+  sideEffects: None
 - admissionReviewVersions:
   - v1
   - v1beta1
@@ -76,27 +93,6 @@ webhooks:
     - UPDATE
     resources:
     - rolloutstrategies
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: webhook-service
-      namespace: system
-      path: /webhooks/validating/rolloutrun
-  failurePolicy: Ignore
-  name: rolloutruns.rollout.kusionstack.io
-  rules:
-  - apiGroups:
-    - rollout.kusionstack.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - rolloutruns
   sideEffects: None
 - admissionReviewVersions:
   - v1
