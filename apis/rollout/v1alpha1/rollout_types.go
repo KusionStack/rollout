@@ -203,6 +203,9 @@ type RolloutWorkloadStatus struct {
 type RolloutStepState string
 
 const (
+	// RolloutStepNone indicates that the step is not started.
+	RolloutStepNone RolloutStepState = ""
+
 	// RolloutStepPending indicates that the step is pending.
 	RolloutStepPending RolloutStepState = "Pending"
 

@@ -8,13 +8,13 @@ patches:
 - patch: |-
     - op: replace
       path: /webhooks/0/clientConfig
-      value: {"url": "https://host.docker.internal:9443/webhooks/validating/rollout"}
+      value: {"url": "https://host.docker.internal:9443/webhooks/validating/rolloutrun"}
     - op: replace
       path: /webhooks/1/clientConfig
-      value: {"url": "https://host.docker.internal:9443/webhooks/validating/rolloutstrategy"}
+      value: {"url": "https://host.docker.internal:9443/webhooks/validating/rollout"}
     - op: replace
       path: /webhooks/2/clientConfig
-      value: {"url": "https://host.docker.internal:9443/webhooks/validating/rolloutrun"}
+      value: {"url": "https://host.docker.internal:9443/webhooks/validating/rolloutstrategy"}
     - op: replace
       path: /webhooks/3/clientConfig
       value: {"url": "https://host.docker.internal:9443/webhooks/validating/traffictopology"}

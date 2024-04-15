@@ -19,6 +19,7 @@ package executor
 import rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 
 const (
+	StepNone               = rolloutv1alpha1.RolloutStepNone
 	StepPending            = rolloutv1alpha1.RolloutStepPending
 	StepPreCanaryStepHook  = rolloutv1alpha1.RolloutStepPreCanaryStepHook
 	StepPreBatchStepHook   = rolloutv1alpha1.RolloutStepPreBatchStepHook

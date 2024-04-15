@@ -38,7 +38,7 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 			if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
 				currentBatchIndex++
 				newBatchStatus.CurrentBatchIndex = currentBatchIndex
-				newBatchStatus.CurrentBatchState = StepPending
+				newBatchStatus.CurrentBatchState = StepNone
 			} else {
 				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 			}

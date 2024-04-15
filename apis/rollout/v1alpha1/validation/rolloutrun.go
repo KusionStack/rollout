@@ -140,7 +140,7 @@ func ValidateRolloutRunUpdate(newObj, oldObj *rolloutv1alpha1.RolloutRun) field.
 		beforeRunning := false
 		if newObj.Status.CanaryStatus == nil {
 			beforeRunning = true
-		} else if newObj.Status.CanaryStatus.State == rolloutv1alpha1.RolloutStepPending {
+		} else if !rolloutv1alpha1.IsRolloutStepStarted(newObj.Status.CanaryStatus.State) {
 			beforeRunning = true
 		}
 		if !beforeRunning && !apiequality.Semantic.DeepEqual(newObj.Spec.Canary, oldObj.Spec.Canary) {
@@ -157,7 +157,7 @@ func ValidateRolloutRunUpdate(newObj, oldObj *rolloutv1alpha1.RolloutRun) field.
 		currentBatchIndex := -1
 		if newObj.Status.BatchStatus != nil {
 			currentBatchIndex = int(newObj.Status.BatchStatus.CurrentBatchIndex)
-			if newObj.Status.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepPending {
+			if !rolloutv1alpha1.IsRolloutStepStarted(newObj.Status.BatchStatus.CurrentBatchState) {
 				// current batch is not running yet, it can be mutated
 				immutableBatchIndex = int(newObj.Status.BatchStatus.CurrentBatchIndex - 1)
 			} else {

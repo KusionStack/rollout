@@ -51,6 +51,7 @@ func newCanaryExecutor(logger logr.Logger, webhook webhookExecutor) *canaryExecu
 		stateMachine: newStepStateMachine(),
 	}
 
+	e.stateMachine.add(StepNone, StepPending, skipStep)
 	e.stateMachine.add(StepPending, StepPreCanaryStepHook, e.doInit)
 	e.stateMachine.add(StepPreCanaryStepHook, StepRunning, e.doPreStepHook)
 	e.stateMachine.add(StepRunning, StepPostCanaryStepHook, e.doCanary)

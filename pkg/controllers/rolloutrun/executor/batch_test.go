@@ -54,6 +54,75 @@ func Test_BatchExecutor_Do(t *testing.T) {
 		assertStatus func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus)
 	}{
 		{
+			name: "None to Pending(Paused)",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := testRollout.DeepCopy()
+				rolloutRun := testRolloutRun.DeepCopy()
+
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Breakpoint: true,
+					Targets:    unimportantTargets,
+				}}
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchState: StepNone,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{
+							State: StepNone,
+						},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			getWorkloads: unimportantWorkloads,
+			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+				assert.False(done)
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{Requeue: true}, result)
+			},
+			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
+				assert.EqualValues(rolloutv1alpha1.RolloutRunPhasePaused, status.Phase)
+				assert.EqualValues(StepPending, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepPending, status.BatchStatus.Records[0].State)
+			},
+		},
+		{
+			name: "None to Pending",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := testRollout.DeepCopy()
+				rolloutRun := testRolloutRun.DeepCopy()
+
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Targets: unimportantTargets,
+				}}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: StepNone,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{
+							State: StepNone,
+						},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			getWorkloads: unimportantWorkloads,
+			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
+				assert.False(done)
+				assert.Nil(err)
+				assert.Equal(reconcile.Result{Requeue: true}, result)
+			},
+			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
+				assert.EqualValues(rolloutv1alpha1.RolloutRunPhaseProgressing, status.Phase)
+				assert.EqualValues(StepPending, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepPending, status.BatchStatus.Records[0].State)
+			},
+		},
+		{
 			name: "Pending to PreBatchStepHook",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
 				rollout := testRollout.DeepCopy()
@@ -85,72 +154,6 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.Records[0].State)
 			},
 		},
-		{
-			name: "Pending to Paused",
-			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
-
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Breakpoint: true,
-					Targets:    unimportantTargets,
-				}}
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: StepPending,
-					},
-					Records: []rolloutv1alpha1.RolloutRunStepStatus{
-						{
-							State: StepPending,
-						},
-					},
-				}
-				return rollout, rolloutRun
-			},
-			getWorkloads: unimportantWorkloads,
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(reconcile.Result{Requeue: true}, result)
-			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(rolloutv1alpha1.RolloutRunPhasePaused, status.Phase)
-				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.Records[0].State)
-			},
-		},
-		// {
-		// 	name: "Paused do nothing",
-		// 	getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-		// 		rollout := testRollout.DeepCopy()
-		// 		rolloutRun := testRolloutRun.DeepCopy()
-
-		// 		rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-		// 			Breakpoint: true,
-		// 			Targets:    unimportantTargets,
-		// 		}}
-		// 		rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-		// 			RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-		// 				CurrentBatchState: rolloutv1alpha1.RolloutStepPaused,
-		// 			},
-		// 			Records: []rolloutv1alpha1.RolloutRunStepStatus{
-		// 				{
-		// 					State: rolloutv1alpha1.RolloutStepPaused,
-		// 				},
-		// 			},
-		// 		}
-		// 		return rollout, rolloutRun
-		// 	},
-		// 	assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
-		// 		assert.False(done)
-		// 		assert.Nil(err)
-		// 		assert.Equal(reconcile.Result{}, result)
-		// 	},
-		// 	assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-		// 		assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.CurrentBatchState)
-		// 		assert.EqualValues(rolloutv1alpha1.RolloutStepPaused, status.BatchStatus.Records[0].State)
-		// 	},
-		// },
 		{
 			name: "PreBatchStepHook to Running",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
@@ -284,9 +287,9 @@ func Test_BatchExecutor_Do(t *testing.T) {
 				assert.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(StepPending, status.BatchStatus.CurrentBatchState)
+				assert.EqualValues(StepNone, status.BatchStatus.CurrentBatchState)
 				assert.EqualValues(1, status.BatchStatus.CurrentBatchIndex)
-				assert.EqualValues(StepPending, status.BatchStatus.Records[1].State)
+				assert.EqualValues(StepNone, status.BatchStatus.Records[1].State)
 			},
 		},
 		{
