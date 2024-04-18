@@ -33,10 +33,16 @@ kind::setup_rollout_webhook "${kind_cluster_name}" "outcluster"
 log::status "starting manager"
 
 export WEBHOOK_HOST=host.docker.internal
+export ENABLE_SYNC_WEBHOOK_CERTS=true
+
+rm -rf bin/logs && mkdir -p bin/logs
 
 bin/manager --federated-mode=false \
     --health-probe-bind-address=:18081 \
     --feature-gates=OneTimeStrategy=true \
     --webhook-cert-dir=bin/certs \
+    --log_dir=bin/logs \
+    --logtostderr=false \
+    --alsologtostderr=true \
     --v=1 \
     "$*"
