@@ -29,3 +29,14 @@ func TestServingCerts_Validate(t *testing.T) {
 	assert.Nil(t, certs.Validate("bar.example.com"))
 	assert.NotNil(t, certs.Validate("unknown.example.com"))
 }
+
+func TestGenerateSelfSignedCerts(t *testing.T) {
+	certs, err := GenerateSelfSignedCerts("rollout.rollout-system.svc", nil, []string{"rollout.rollout-system.svc", "foo.example.com"})
+	assert.Nil(t, err)
+
+	err = certs.Validate("rollout.rollout-system.svc")
+	assert.Nil(t, err)
+
+	err = certs.Validate("foo.example.com")
+	assert.Nil(t, err)
+}
