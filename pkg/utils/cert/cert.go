@@ -21,72 +21,79 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
-	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/zoumo/golib/cert"
 	certutil "github.com/zoumo/golib/cert"
-	"k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/klog/v2"
 )
 
-// GenerateSelfSignedCertKeyWithFixtures creates a self-signed certificate and key for the given host.
-// Host may be an IP or a DNS name. You may also specify additional subject alt names (either ip or dns names)
-// for the certificate.
-//
-// If fixtureDirectory is non-empty, it is a directory path which can contain pre-generated certs. The format is:
-//   - tls.key: private key
-//   - tls.crt: public certificate
-//   - ca.crt: CA certificate
-//
-// Certs/keys not existing in that directory are created.
-func GenerateSelfSignedCertKeyWithFixtures(host string, alternateIPs []net.IP, alternateDNS []string, fixtureDirectory string) ([]byte, []byte, []byte, error) {
-	keyName := "tls.key"
-	certName := "tls.crt"
-	caCertName := "ca.crt"
-	keyPath := filepath.Join(fixtureDirectory, keyName)
-	certPath := filepath.Join(fixtureDirectory, certName)
-	caCertPath := filepath.Join(fixtureDirectory, caCertName)
+type ServingCerts struct {
+	Key    []byte
+	Cert   []byte
+	CAKey  []byte
+	CACert []byte
+}
 
-	if len(fixtureDirectory) > 0 {
-		// try to load cert from files
-		keyBytes, certBytes, caCertBytes, err := loadCertKeyAndCA(keyPath, certPath, caCertPath)
-		if err == nil {
-			klog.V(1).InfoS("loaded cert/key/ca", "dir", fixtureDirectory)
-			return keyBytes, certBytes, caCertBytes, nil
-		}
+func (c *ServingCerts) Validate(host string) error {
+	if len(c.Key) == 0 {
+		return fmt.Errorf("private key is empty")
+	}
+	if len(c.Cert) == 0 {
+		return fmt.Errorf("cetificate is empty")
+	}
+	if len(c.CAKey) == 0 {
+		return fmt.Errorf("CA private key is empty")
+	}
+	if len(c.CACert) == 0 {
+		return fmt.Errorf("CA certificate is empty")
 	}
 
-	_, caCert, key, cert, err := generateSelfSignedCertKey(host, alternateIPs, alternateDNS)
+	tlsCert, err := cert.X509KeyPair(c.Cert, c.Key)
 	if err != nil {
-		return nil, nil, nil, err
+		return fmt.Errorf("invalid x509 keypair: %w", err)
 	}
 
-	klog.V(1).InfoS("generate cert/key/ca", "host", host, "ips", alternateIPs, "dnses", alternateDNS)
+	// verify cert with ca and host
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(c.CACert) {
+		return fmt.Errorf("no valid CA certificate found")
+	}
+
+	options := x509.VerifyOptions{
+		Roots:       pool,
+		DNSName:     host,
+		CurrentTime: time.Now(),
+	}
+
+	_, err = tlsCert.X509Cert.Verify(options)
+	return err
+}
+
+func GenerateSelfSignedCerts(host string, alternateIPs []net.IP, alternateDNS []string) (*ServingCerts, error) {
+	caKey, caCert, key, cert, err := generateSelfSignedCertKey(host, alternateIPs, alternateDNS)
+	if err != nil {
+		return nil, err
+	}
 
 	keyPEM := certutil.MarshalRSAPrivateKeyToPEM(key)
 	cerPEM := certutil.MarshalCertToPEM(cert)
+	caKeyPEM := certutil.MarshalRSAPrivateKeyToPEM(caKey)
 	caCertPEM := certutil.MarshalCertToPEM(caCert)
 
-	if len(fixtureDirectory) > 0 {
-		err := os.MkdirAll(fixtureDirectory, 0o755)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to create directory %s: %v", fixtureDirectory, err)
-		}
-		err = keyPEM.WriteFile(keyPath)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to write key to %s: %v", keyPath, err)
-		}
-		err = cerPEM.WriteFile(certPath)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to write cert to %s: %v", certPath, err)
-		}
-		err = caCertPEM.WriteFile(caCertPath)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to write ca cert to %s: %v", caCertPath, err)
-		}
+	return &ServingCerts{
+		CAKey:  caKeyPEM.EncodeToMemory(),
+		CACert: caCertPEM.EncodeToMemory(),
+		Key:    keyPEM.EncodeToMemory(),
+		Cert:   cerPEM.EncodeToMemory(),
+	}, nil
+}
+
+func GenerateSelfSignedCertKeyIfNotExist(path string, host string, alternateHosts []string) error {
+	fscerts, err := NewFSProvider(path, FSOptions{})
+	if err != nil {
+		return err
 	}
-	return keyPEM.EncodeToMemory(), cerPEM.EncodeToMemory(), caCertPEM.EncodeToMemory(), nil
+	return fscerts.Ensure(host, alternateHosts)
 }
 
 func generateSelfSignedCertKey(host string, alternateIPs []net.IP, alternateDNS []string) (*rsa.PrivateKey, *x509.Certificate, *rsa.PrivateKey, *x509.Certificate, error) {
@@ -126,26 +133,4 @@ func generateSelfSignedCertKey(host string, alternateIPs []net.IP, alternateDNS 
 		return nil, nil, nil, nil, err
 	}
 	return caKey, caCert, key, cert, nil
-}
-
-func loadCertKeyAndCA(keyPath, certPath, caCertPath string) ([]byte, []byte, []byte, error) {
-	errList := []error{}
-	keyBytes, err := os.ReadFile(keyPath)
-	if err != nil {
-		errList = append(errList, err)
-	}
-	certBytes, err := os.ReadFile(certPath)
-	if err != nil {
-		errList = append(errList, err)
-	}
-	caBytes, err := os.ReadFile(caCertPath)
-	if err != nil {
-		errList = append(errList, err)
-	}
-
-	aerr := errors.NewAggregate(errList)
-	if aerr != nil {
-		return nil, nil, nil, aerr
-	}
-	return keyBytes, certBytes, caBytes, nil
 }
