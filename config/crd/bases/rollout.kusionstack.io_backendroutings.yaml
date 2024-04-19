@@ -16,7 +16,27 @@ spec:
     singular: backendrouting
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.trafficType
+      name: TYPE
+      type: string
+    - jsonPath: .spec.backend.name
+      name: BACKEND
+      type: string
+    - jsonPath: .spec.routes[*].name
+      name: ROUTES
+      type: string
+    - jsonPath: .status.backends.stable.name
+      name: STABLE
+      type: string
+    - jsonPath: .status.backends.canary.name
+      name: CANARY
+      type: string
+    - format: date-time
+      jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-

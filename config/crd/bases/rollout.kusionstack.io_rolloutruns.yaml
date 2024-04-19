@@ -17,6 +17,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .metadata.ownerReferences[0].name
+      name: OWNER
+      type: string
     - jsonPath: .status.phase
       name: Phase
       type: string
@@ -32,6 +35,10 @@ spec:
     - jsonPath: .status.error.code
       name: Error
       type: string
+    - format: date-time
+      jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:

@@ -26,11 +26,13 @@ import (
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=ror
+// +kubebuilder:printcolumn:name="OWNER",type="string",JSONPath=".metadata.ownerReferences[0].name"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Canary State",type="string",JSONPath=".status.canaryStatus.state"
 // +kubebuilder:printcolumn:name="Batch Index",type="string",JSONPath=".status.batchStatus.currentBatchIndex"
 // +kubebuilder:printcolumn:name="Batch State",type="string",JSONPath=".status.batchStatus.currentBatchState"
 // +kubebuilder:printcolumn:name="Error",type="string",JSONPath=".status.error.code"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp",format="date-time"
 
 type RolloutRun struct {
 	metav1.TypeMeta   `json:",inline"`

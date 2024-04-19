@@ -23,6 +23,10 @@ spec:
     - jsonPath: .status.rolloutID
       name: ID
       type: string
+    - format: date-time
+      jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
