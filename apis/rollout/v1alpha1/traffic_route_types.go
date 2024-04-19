@@ -11,6 +11,11 @@ import (
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=ttopo
+// +kubebuilder:printcolumn:name="TYPE",type="string",JSONPath=".spec.trafficType"
+// +kubebuilder:printcolumn:name="SERVICE",type="string",JSONPath=".spec.backend.name"
+// +kubebuilder:printcolumn:name="Routes",type="string",JSONPath=".spec.routes[*].name"
+// +kubebuilder:printcolumn:name="BACKEND_ROUTINGS",type="string",JSONPath=".status.topologies[*].backendRoutingName"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp",format="date-time"
 
 // TrafficTopologies defines the networking traffic relationships between
 // workloads, backend services, and routes.
@@ -132,6 +137,12 @@ type TopologyInfo struct {
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=bkr
+// +kubebuilder:printcolumn:name="TYPE",type="string",JSONPath=".spec.trafficType"
+// +kubebuilder:printcolumn:name="BACKEND",type="string",JSONPath=".spec.backend.name"
+// +kubebuilder:printcolumn:name="ROUTES",type="string",JSONPath=".spec.routes[*].name"
+// +kubebuilder:printcolumn:name="STABLE",type="string",JSONPath=".status.backends.stable.name"
+// +kubebuilder:printcolumn:name="CANARY",type="string",JSONPath=".status.backends.canary.name"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp",format="date-time"
 
 // BackendRouting defines defines the association between frontend routes and
 // backend service, and it allows the user to define forwarding rules for canary scenario.

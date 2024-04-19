@@ -29,6 +29,7 @@ import (
 // +kubebuilder:resource:shortName=ro
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="ID",type="string",JSONPath=".status.rolloutID"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp",format="date-time"
 
 // Rollout is the Schema for the rollouts API
 type Rollout struct {
