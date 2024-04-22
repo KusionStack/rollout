@@ -57,57 +57,8 @@ func NewSecretProvider(client SecretClient, namespace, name string) (*SecretProv
 	}, nil
 }
 
-func (p *SecretProvider) Load() (*ServingCerts, error) {
-	secret, err := p.client.Get(context.Background(), p.namespace, p.name)
-	if err != nil {
-		return nil, err
-	}
-
-	return convertSecretToCerts(secret), nil
-}
-
-func (p *SecretProvider) Create(certs *ServingCerts) error {
-	if certs == nil {
-		return fmt.Errorf("certs are required")
-	}
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: p.namespace,
-			Name:      p.name,
-		},
-		Type: corev1.SecretTypeTLS,
-	}
-
-	writeCertsToSecret(secret, certs)
-	// create it
-	// If there is another controller racer, an AlreadyExistsError may be returned.
-	return p.client.Create(context.Background(), secret)
-}
-
-func (p *SecretProvider) Overwrite(certs *ServingCerts) error {
-	if certs == nil {
-		return fmt.Errorf("certs are required")
-	}
-	secret, err := p.client.Get(context.Background(), p.namespace, p.name)
-	if client.IgnoreNotFound(err) != nil {
-		// err != NotFound, return it
-		return err
-	}
-
-	if apierrors.IsNotFound(err) {
-		// not found, create new one
-		return p.Create(certs)
-	}
-
-	// overwrite existing one
-	writeCertsToSecret(secret, certs)
-
-	// If there is another controller racer, an Conflict may be returned.
-	return p.client.Update(context.Background(), secret)
-}
-
-func (p *SecretProvider) Ensure(host string, alternateHosts []string) (*ServingCerts, error) {
-	certs, err := p.Load()
+func (p *SecretProvider) Ensure(ctx context.Context, host string, alternateHosts []string) (*ServingCerts, error) {
+	certs, err := p.Load(ctx)
 	if err != nil && !IsNotFound(err) {
 		return nil, err
 	}
@@ -127,9 +78,9 @@ func (p *SecretProvider) Ensure(host string, alternateHosts []string) (*ServingC
 		}
 		var opErr error
 		if op == "create" {
-			opErr = p.Create(certs)
+			opErr = p.create(ctx, certs)
 		} else {
-			opErr = p.Overwrite(certs)
+			opErr = p.overwrite(ctx, certs)
 		}
 		if opErr != nil {
 			return nil, opErr
@@ -138,6 +89,55 @@ func (p *SecretProvider) Ensure(host string, alternateHosts []string) (*ServingC
 	}
 
 	return certs, nil
+}
+
+func (p *SecretProvider) Load(ctx context.Context) (*ServingCerts, error) {
+	secret, err := p.client.Get(ctx, p.namespace, p.name)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertSecretToCerts(secret), nil
+}
+
+func (p *SecretProvider) create(ctx context.Context, certs *ServingCerts) error {
+	if certs == nil {
+		return fmt.Errorf("certs are required")
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: p.namespace,
+			Name:      p.name,
+		},
+		Type: corev1.SecretTypeTLS,
+	}
+
+	writeCertsToSecret(secret, certs)
+	// create it
+	// If there is another controller racer, an AlreadyExistsError may be returned.
+	return p.client.Create(ctx, secret)
+}
+
+func (p *SecretProvider) overwrite(ctx context.Context, certs *ServingCerts) error {
+	if certs == nil {
+		return fmt.Errorf("certs are required")
+	}
+	secret, err := p.client.Get(ctx, p.namespace, p.name)
+	if client.IgnoreNotFound(err) != nil {
+		// err != NotFound, return it
+		return err
+	}
+
+	if apierrors.IsNotFound(err) {
+		// not found, create new one
+		return p.create(ctx, certs)
+	}
+
+	// overwrite existing one
+	writeCertsToSecret(secret, certs)
+
+	// If there is another controller racer, an Conflict may be returned.
+	return p.client.Update(ctx, secret)
 }
 
 func convertSecretToCerts(secret *corev1.Secret) *ServingCerts {

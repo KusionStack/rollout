@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -77,6 +78,7 @@ func (c *WebhookCertSyncer) SetupWithManager(mgr manager.Manager) error {
 		&secretClient{
 			reader: c.APIReader,
 			writer: c.Client,
+			logger: c.Logger,
 		},
 		c.Namespace,
 		c.SecretName,
@@ -150,7 +152,8 @@ func (c *WebhookCertSyncer) enqueueSecret() handler.EventHandler {
 }
 
 func (c *WebhookCertSyncer) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	servingCerts, err := c.secret.Ensure(c.Host, c.AlternateHosts)
+	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
+	servingCerts, err := c.secret.Ensure(ctx, c.Host, c.AlternateHosts)
 	if err != nil {
 		if cert.IsConflict(err) {
 			// create error on AlreadyExists
@@ -242,11 +245,16 @@ var _ cert.SecretClient = &secretClient{}
 type secretClient struct {
 	reader client.Reader
 	writer client.Writer
+	logger logr.Logger
 }
 
 // Create implements cert.SecretClient.
 func (s *secretClient) Create(ctx context.Context, secret *corev1.Secret) error {
-	return s.writer.Create(ctx, secret)
+	err := s.writer.Create(ctx, secret)
+	if err == nil {
+		s.logger.Info("create secret successfully", "namespace", secret.Namespace, "name", secret.Name)
+	}
+	return err
 }
 
 // Get implements cert.SecretClient.
@@ -261,5 +269,9 @@ func (s *secretClient) Get(ctx context.Context, namespace string, name string) (
 
 // Update implements cert.SecretClient.
 func (s *secretClient) Update(ctx context.Context, secret *corev1.Secret) error {
-	return s.writer.Update(ctx, secret)
+	err := s.writer.Update(ctx, secret)
+	if err == nil {
+		s.logger.Info("update secret successfully", "namespace", secret.Namespace, "name", secret.Name)
+	}
+	return err
 }
