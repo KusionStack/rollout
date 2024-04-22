@@ -125,6 +125,10 @@ func (p *FSProvider) Load() (*ServingCerts, error) {
 }
 
 func (p *FSProvider) Overwrite(certs *ServingCerts) (bool, error) {
+	if certs == nil {
+		return false, fmt.Errorf("certs are required")
+	}
+
 	stat, err := p.FS.Stat(p.path)
 	if err != nil && !os.IsNotExist(err) {
 		return false, err

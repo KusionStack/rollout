@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -158,6 +159,10 @@ func (c *WebhookCertSyncer) Reconcile(ctx context.Context, req reconcile.Request
 			return reconcile.Result{RequeueAfter: 1 * time.Second}, nil
 		}
 		return reconcile.Result{}, err
+	}
+
+	if servingCerts == nil {
+		return reconcile.Result{}, fmt.Errorf("got empty serving certs from secret")
 	}
 
 	// got valid serving certs in secret
