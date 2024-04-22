@@ -67,6 +67,9 @@ func (p *SecretProvider) Load() (*ServingCerts, error) {
 }
 
 func (p *SecretProvider) Create(certs *ServingCerts) error {
+	if certs == nil {
+		return fmt.Errorf("certs are required")
+	}
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: p.namespace,
@@ -82,6 +85,9 @@ func (p *SecretProvider) Create(certs *ServingCerts) error {
 }
 
 func (p *SecretProvider) Overwrite(certs *ServingCerts) error {
+	if certs == nil {
+		return fmt.Errorf("certs are required")
+	}
 	secret, err := p.client.Get(context.Background(), p.namespace, p.name)
 	if client.IgnoreNotFound(err) != nil {
 		// err != NotFound, return it
@@ -126,7 +132,7 @@ func (p *SecretProvider) Ensure(host string, alternateHosts []string) (*ServingC
 			opErr = p.Overwrite(certs)
 		}
 		if opErr != nil {
-			return nil, err
+			return nil, opErr
 		}
 		return certs, nil
 	}
