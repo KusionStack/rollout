@@ -18,6 +18,7 @@ package cert
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -68,6 +69,35 @@ func NewFSProvider(path string, opts FSOptions) (*FSProvider, error) {
 		path:      path,
 		FSOptions: opts,
 	}, nil
+}
+
+func (p *FSProvider) Ensure(_ context.Context, host string, alternateHosts []string) error {
+	certs, err := p.Load()
+	if err != nil && !IsNotFound(err) {
+		return err
+	}
+
+	if IsNotFound(err) {
+		certs, err := GenerateSelfSignedCerts(host, nil, alternateHosts)
+		if err != nil {
+			return err
+		}
+		_, err = p.Overwrite(certs)
+		return err
+	}
+
+	err = certs.Validate(host)
+	if err != nil {
+		// re-generate if expired or invalid
+		klog.Info("certificates are invalid, regenerating...")
+		certs, err := GenerateSelfSignedCerts(host, nil, alternateHosts)
+		if err != nil {
+			return err
+		}
+		_, err = p.Overwrite(certs)
+		return err
+	}
+	return nil
 }
 
 func (p *FSProvider) checkIfExist() error {
@@ -193,33 +223,4 @@ func (p *FSProvider) writeFile(path string, data []byte) (bool, error) {
 	}
 	// changed
 	return true, afero.WriteFile(p.FS, path, data, 0o644)
-}
-
-func (p *FSProvider) Ensure(host string, alternateHosts []string) error {
-	certs, err := p.Load()
-	if err != nil && !IsNotFound(err) {
-		return err
-	}
-
-	if IsNotFound(err) {
-		certs, err := GenerateSelfSignedCerts(host, nil, alternateHosts)
-		if err != nil {
-			return err
-		}
-		_, err = p.Overwrite(certs)
-		return err
-	}
-
-	err = certs.Validate(host)
-	if err != nil {
-		// re-generate if expired or invalid
-		klog.Info("certificates are invalid, regenerating...")
-		certs, err := GenerateSelfSignedCerts(host, nil, alternateHosts)
-		if err != nil {
-			return err
-		}
-		_, err = p.Overwrite(certs)
-		return err
-	}
-	return nil
 }

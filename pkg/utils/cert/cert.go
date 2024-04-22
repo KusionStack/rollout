@@ -17,6 +17,7 @@
 package cert
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
@@ -93,7 +94,7 @@ func GenerateSelfSignedCertKeyIfNotExist(path string, host string, alternateHost
 	if err != nil {
 		return err
 	}
-	return fscerts.Ensure(host, alternateHosts)
+	return fscerts.Ensure(context.Background(), host, alternateHosts)
 }
 
 func generateSelfSignedCertKey(host string, alternateIPs []net.IP, alternateDNS []string) (*rsa.PrivateKey, *x509.Certificate, *rsa.PrivateKey, *x509.Certificate, error) {
