@@ -267,9 +267,7 @@ func (c *CanaryReleaseControl) canaryObject(stable *workload.Info) (client.Objec
 }
 
 func (c *CanaryReleaseControl) applyCanaryDefaults(canaryObj client.Object) {
-	canaryObj.SetFinalizers([]string{
-		rolloutapi.FinalizerCanaryResourceProtection,
-	})
+	controllerutil.AddFinalizer(canaryObj, rolloutapi.FinalizerCanaryResourceProtection)
 	utils.MutateLabels(canaryObj, func(labels map[string]string) {
 		labels[rolloutapi.LabelCanary] = "true"
 	})
