@@ -41,11 +41,10 @@ func generateRolloutID(name string) string {
 	return names.SimpleNameGenerator.GenerateName(prefix)
 }
 
-func resetRolloutStatus(status *rolloutv1alpha1.RolloutStatus, rolloutID string, phase rolloutv1alpha1.RolloutPhase) {
+func setStatusPhase(status *rolloutv1alpha1.RolloutStatus, rolloutID string, phase rolloutv1alpha1.RolloutPhase) {
 	// clean all existing status
 	status.RolloutID = rolloutID
 	status.Phase = phase
-	status.Conditions = []rolloutv1alpha1.Condition{}
 }
 
 func setStatusCondition(newStatus *rolloutv1alpha1.RolloutStatus, ctype rolloutv1alpha1.ConditionType, status metav1.ConditionStatus, reason, message string) {

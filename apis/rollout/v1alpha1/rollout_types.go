@@ -27,6 +27,7 @@ import (
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=ro
+// +kubebuilder:printcolumn:name="Available",type="string",JSONPath=".status.conditions[?(@.type=='Available')].status"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="ID",type="string",JSONPath=".status.rolloutID"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp",format="date-time"
@@ -141,6 +142,8 @@ const (
 const (
 	// rollout condition types
 
+	// Available means all the dependents of this Rollout are available.
+	RolloutConditionAvailable ConditionType = "Available"
 	// RolloutConditionProgressing means the rollout is progressing
 	RolloutConditionProgressing ConditionType = "Progressing"
 	// RolloutConditionCompleted means the rollout is Terminating

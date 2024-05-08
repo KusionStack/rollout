@@ -21,10 +21,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -70,7 +68,7 @@ func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) erro
 	var errs field.ErrorList
 	switch t := obj.(type) {
 	case *rolloutv1alpha1.Rollout:
-		errs = v.validateRollout(ctx, t)
+		errs = validation.ValidateRollout(t, registry.IsSupportedWorkload)
 	case *rolloutv1alpha1.RolloutStrategy:
 		errs = validation.ValidateRolloutStrategy(t)
 	case *rolloutv1alpha1.RolloutRun:
@@ -93,7 +91,7 @@ func (v *Validator) ValidateUpdate(ctx context.Context, oldObj runtime.Object, n
 	var errs field.ErrorList
 	switch newV := newObj.(type) {
 	case *rolloutv1alpha1.Rollout:
-		errs = v.validateRollout(ctx, newV)
+		errs = validation.ValidateRollout(newV, registry.IsSupportedWorkload)
 		if len(errs) == 0 {
 			errs = validation.ValidateRolloutUpdate(newV, oldObj.(*rolloutv1alpha1.Rollout))
 		}
@@ -110,41 +108,4 @@ func (v *Validator) ValidateUpdate(ctx context.Context, oldObj runtime.Object, n
 		return fmt.Errorf("unexpected object type %T", newObj)
 	}
 	return errs.ToAggregate()
-}
-
-func (v *Validator) validateRollout(ctx context.Context, obj *rolloutv1alpha1.Rollout) field.ErrorList {
-	errs := validation.ValidateRollout(obj, registry.IsSupportedWorkload)
-	if len(errs) > 0 {
-		return errs
-	}
-
-	var strategy rolloutv1alpha1.RolloutStrategy
-	err := v.Client.Get(
-		clusterinfo.WithCluster(ctx, clusterinfo.Fed),
-		client.ObjectKey{Namespace: obj.Namespace, Name: obj.Spec.StrategyRef},
-		&strategy,
-	)
-	if err != nil {
-		errs = append(errs, newGetFieldError(field.NewPath("spec", "strategyRef"), obj.Spec.StrategyRef, err))
-	}
-
-	for i, tt := range obj.Spec.TrafficTopologyRefs {
-		var topology rolloutv1alpha1.TrafficTopology
-		err := v.Client.Get(
-			clusterinfo.WithCluster(ctx, clusterinfo.Fed),
-			client.ObjectKey{Namespace: obj.Namespace, Name: tt},
-			&topology,
-		)
-		if err != nil {
-			errs = append(errs, newGetFieldError(field.NewPath("spec", "trafficTopologyRefs").Index(i), tt, err))
-		}
-	}
-	return errs
-}
-
-func newGetFieldError(fldPath *field.Path, value interface{}, err error) *field.Error {
-	if errors.IsNotFound(err) {
-		return field.NotFound(fldPath, value)
-	}
-	return field.InternalError(fldPath, err)
 }
