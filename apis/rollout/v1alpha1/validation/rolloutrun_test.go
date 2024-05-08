@@ -213,6 +213,17 @@ func TestValidateRolloutRun(t *testing.T) {
 			errLen:  1,
 		},
 		{
+			name: "valid traffic",
+			obj: func() *rolloutv1alpha1.RolloutRun {
+				obj := validRolloutRun.DeepCopy()
+				obj.Spec.Canary.Traffic = validTraffic
+				obj.Spec.Batch.Batches[0].Traffic = validTraffic
+				return obj
+			}(),
+			wantErr: false,
+			errLen:  0,
+		},
+		{
 			name: "invalid traffic",
 			obj: func() *rolloutv1alpha1.RolloutRun {
 				obj := validRolloutRun.DeepCopy()
@@ -373,10 +384,28 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 						CurrentBatchState: rolloutv1alpha1.RolloutStepRunning,
 					},
 				}
+				obj.Spec.Batch.Batches[0].Breakpoint = true
 				obj.Spec.Batch.Batches[0].Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Batch.Batches[0].Traffic = &rolloutv1alpha1.TrafficStrategy{
 					Weight: ptr.To[int32](10),
 				}
+				return obj
+			}(),
+			wantErr: true,
+			errLen:  1,
+		},
+		{
+			name:   "mutate pending batch's breakpoint",
+			oldObj: validRolloutRun,
+			newObj: func() *rolloutv1alpha1.RolloutRun {
+				obj := validRolloutRun.DeepCopy()
+				obj.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepPending,
+					},
+				}
+				obj.Spec.Batch.Batches[0].Breakpoint = true
 				return obj
 			}(),
 			wantErr: true,
@@ -387,11 +416,8 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			got := ValidateRolloutRunUpdate(tt.newObj, tt.oldObj)
-			if tt.wantErr != (got.ToAggregate() != nil) {
-				t.Errorf("ValidateRolloutRunUpdate() = %v, wantErr %v", got, tt.wantErr)
-			}
-			if tt.wantErr && len(got) != tt.errLen {
-				t.Errorf("ValidateRolloutRunUpdate() = %v, want errors count %v", got, tt.errLen)
+			if tt.wantErr != (len(got) != 0) || len(got) != tt.errLen {
+				t.Errorf("ValidateRolloutRunUpdate() = %v, error count %v, wantErr %v, wantErrLen %v", got, len(got), tt.wantErr, tt.errLen)
 			}
 		})
 	}

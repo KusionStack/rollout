@@ -140,8 +140,8 @@ func validateTrafficStrategy(traffic *rolloutv1alpha1.TrafficStrategy, fldPath *
 	}
 	allErrs := field.ErrorList{}
 
-	if traffic.Weight != nil && traffic.HTTPRule != nil {
-		allErrs = append(allErrs, field.Forbidden(fldPath, "weight and http rule cannot be specified together"))
+	if traffic.Weight != nil && (traffic.HTTPRule != nil && len(traffic.HTTPRule.Matches) > 0) {
+		allErrs = append(allErrs, field.Forbidden(fldPath, "weight and http rule matches cannot be specified together"))
 	}
 	return allErrs
 }
