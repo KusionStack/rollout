@@ -44,5 +44,5 @@ bin/manager --federated-mode=false \
     --log_dir=bin/logs \
     --logtostderr=false \
     --alsologtostderr=true \
-    --v=1 \
+    --v=2 \
     "$*"

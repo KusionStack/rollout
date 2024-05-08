@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -284,7 +283,6 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, obj *rolloutv1
 	}
 
 	logger := r.Logger.WithValues("rollout", utils.ObjectKeyString(obj))
-	// TODO: do traffic finalizing here
 
 	// delete workloads label
 	errs := []error{}
@@ -310,9 +308,53 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, obj *rolloutv1
 	return nil
 }
 
+func (r *RolloutReconciler) getDependentResources(ctx context.Context, obj *rolloutv1alpha1.Rollout) (ros *rolloutv1alpha1.RolloutStrategy, ttopos []*rolloutv1alpha1.TrafficTopology, errs []error) {
+	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
+	var strategy rolloutv1alpha1.RolloutStrategy
+	err := r.Client.Get(
+		ctx,
+		client.ObjectKey{Namespace: obj.Namespace, Name: obj.Spec.StrategyRef},
+		&strategy,
+	)
+	if err != nil {
+		errs = append(errs, err)
+	} else {
+		ros = &strategy
+	}
+
+	for _, tt := range obj.Spec.TrafficTopologyRefs {
+		var topology rolloutv1alpha1.TrafficTopology
+		err := r.Client.Get(
+			ctx,
+			client.ObjectKey{Namespace: obj.Namespace, Name: tt},
+			&topology,
+		)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			ttopos = append(ttopos, &topology)
+		}
+	}
+	return ros, ttopos, errs
+}
+
 func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv1alpha1.Rollout, curRun *rolloutv1alpha1.RolloutRun, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rollout", key)
+
+	// check if dependent resources exist
+	ros, _, errs := r.getDependentResources(ctx, obj)
+	if len(errs) > 0 {
+		err := errorsutil.NewAggregate(errs)
+		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "DependencyFailure", err.Error())
+		logger.Error(err, "invalid dependencies")
+		// record in status
+		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionAvailable, metav1.ConditionFalse, "DependencyFailure", err.Error())
+		return r.syncRun(ctx, obj, curRun, workloads, newStatus)
+	}
+
+	// valid rollout
+	setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionAvailable, metav1.ConditionTrue, "", "")
 
 	// add labels to workloads
 	err := r.ensureWorkloadsLabels(ctx, workloads)
@@ -336,14 +378,9 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 	}
 
 	// trigger a new rollout progress
-	strategy, err := r.parseUpgradeStrategy(obj)
-	if err != nil {
-		return err
-	}
-
 	logger.Info("rollout has been triggered, about to construct rolloutRun", "rolloutRun", rolloutID)
 
-	curRun = constructRolloutRun(obj, strategy, workloads, rolloutID)
+	curRun = constructRolloutRun(obj, ros, workloads, rolloutID)
 
 	// NOTO: we have to set expectation before we create the rolloutRun to avoid
 	//       that the creation event comes so fast that we don't have time to set it
@@ -354,7 +391,7 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 
 		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to create a new rolloutRun %s: %v", curRun.Name, err)
 		logger.Error(err, "failed to create rolloutRun", "rolloutRun", curRun.Name)
-		resetRolloutStatus(newStatus, curRun.Name, rolloutv1alpha1.RolloutPhaseProgressing)
+		setStatusPhase(newStatus, curRun.Name, rolloutv1alpha1.RolloutPhaseProgressing)
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s", curRun.Name))
 		return err
 	}
@@ -362,7 +399,7 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 	r.Recorder.Eventf(obj, corev1.EventTypeNormal, "SucceedCreate", "create a new rolloutRun %s", curRun.Name)
 	logger.Info("a new rolloutRun has been created", "rolloutRun", rolloutID)
 	// update status
-	resetRolloutStatus(newStatus, curRun.Name, rolloutv1alpha1.RolloutPhaseProgressing)
+	setStatusPhase(newStatus, curRun.Name, rolloutv1alpha1.RolloutPhaseProgressing)
 	setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, "SucceedCreate", "a new rolloutRun is created")
 	return nil
 }
@@ -430,29 +467,6 @@ func (r *RolloutReconciler) needTrigger(obj *rolloutv1alpha1.Rollout, workloads 
 		return rolloutID, true
 	}
 	return "", false
-}
-
-func (r *RolloutReconciler) parseUpgradeStrategy(obj *rolloutv1alpha1.Rollout) (*rolloutv1alpha1.RolloutStrategy, error) {
-	ctx := clusterinfo.WithCluster(context.TODO(), clusterinfo.Fed)
-	strategyRef := obj.Spec.StrategyRef
-	if strategyRef == "" {
-		return nil, fmt.Errorf("empty strategyRef")
-	}
-
-	strategy := &rolloutv1alpha1.RolloutStrategy{}
-	err := r.Client.Get(ctx, types.NamespacedName{
-		Name:      strategyRef,
-		Namespace: obj.GetNamespace(),
-	}, strategy)
-	if err != nil {
-		return nil, err
-	}
-
-	if strategy.Batch == nil {
-		return nil, fmt.Errorf("invalid BatchStrategy")
-	}
-
-	return strategy, nil
 }
 
 func (r *RolloutReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.Rollout) (workload.Accessor, []*workload.Info, error) {
@@ -565,7 +579,7 @@ func (r *RolloutReconciler) updateStatusOnly(ctx context.Context, obj *rolloutv1
 
 func (r *RolloutReconciler) syncRun(ctx context.Context, obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
 	if run == nil {
-		resetRolloutStatus(newStatus, "", rolloutv1alpha1.RolloutPhaseInitialized)
+		setStatusPhase(newStatus, "", rolloutv1alpha1.RolloutPhaseInitialized)
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingUnTriggered, "rollout is not triggered")
 		return nil
 	}
@@ -576,7 +590,7 @@ func (r *RolloutReconciler) syncRun(ctx context.Context, obj *rolloutv1alpha1.Ro
 
 	if run.IsCompleted() {
 		// wait for next trigger event
-		resetRolloutStatus(newStatus, run.Name, rolloutv1alpha1.RolloutPhaseInitialized)
+		setStatusPhase(newStatus, run.Name, rolloutv1alpha1.RolloutPhaseInitialized)
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, rolloutv1alpha1.RolloutReasonProgressingCompleted, "rolloutRun is completed")
 	} else {
 		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, rolloutv1alpha1.RolloutReasonProgressingRunning, "rolloutRun is running")
