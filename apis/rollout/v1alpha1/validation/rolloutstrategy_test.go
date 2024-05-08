@@ -22,13 +22,41 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
+var validTraffic = &rolloutv1alpha1.TrafficStrategy{
+	Weight: ptr.To[int32](10),
+	HTTPRule: &rolloutv1alpha1.HTTPRouteRule{
+		Filter: rolloutv1alpha1.HTTPRouteFilter{
+			RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+				Set: []gatewayapiv1.HTTPHeader{
+					{
+						Name:  "foo",
+						Value: "bar",
+					},
+				},
+			},
+		},
+	},
+}
+
 var invalidTraffic = &rolloutv1alpha1.TrafficStrategy{
-	Weight:   ptr.To[int32](10),
-	HTTPRule: &rolloutv1alpha1.HTTPRouteRule{},
+	Weight: ptr.To[int32](10),
+	HTTPRule: &rolloutv1alpha1.HTTPRouteRule{
+		Matches: []rolloutv1alpha1.HTTPRouteMatch{
+			{
+				Headers: []gatewayapiv1.HTTPHeaderMatch{
+					{
+						Name:  "foo",
+						Value: "bar",
+					},
+				},
+			},
+		},
+	},
 }
 
 func TestValidateRolloutStrategy(t *testing.T) {
@@ -83,6 +111,18 @@ func TestValidateRolloutStrategy(t *testing.T) {
 			wantErr: true,
 			errLen:  1,
 		},
+		{
+			name: "valid traffic",
+			obj: func() *rolloutv1alpha1.RolloutStrategy {
+				obj := validStratgy.DeepCopy()
+				obj.Canary.Traffic = validTraffic
+				obj.Batch.Batches[0].Traffic = validTraffic
+				return obj
+			}(),
+			wantErr: false,
+			errLen:  0,
+		},
+
 		{
 			name: "invalid traffic",
 			obj: func() *rolloutv1alpha1.RolloutStrategy {
