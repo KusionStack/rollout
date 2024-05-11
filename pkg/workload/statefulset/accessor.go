@@ -29,29 +29,33 @@ var GVK = appsv1.SchemeGroupVersion.WithKind("StatefulSet")
 
 var ObjectTypeError = fmt.Errorf("object must be %s", GVK.GroupKind().String())
 
-type accesorImpl struct{}
+type accessorImpl struct{}
 
 func New() workload.Accessor {
-	return &accesorImpl{}
+	return &accessorImpl{}
 }
 
-func (s *accesorImpl) GroupVersionKind() schema.GroupVersionKind {
+func (s *accessorImpl) GroupVersionKind() schema.GroupVersionKind {
 	return GVK
 }
 
-func (s *accesorImpl) Watchable() bool {
+func (c *accessorImpl) DependentWorkloadGVKs() []schema.GroupVersionKind {
+	return nil
+}
+
+func (s *accessorImpl) Watchable() bool {
 	return true
 }
 
-func (s *accesorImpl) NewObject() client.Object {
+func (s *accessorImpl) NewObject() client.Object {
 	return &appsv1.StatefulSet{}
 }
 
-func (s *accesorImpl) NewObjectList() client.ObjectList {
+func (s *accessorImpl) NewObjectList() client.ObjectList {
 	return &appsv1.StatefulSetList{}
 }
 
-func (s *accesorImpl) GetInfo(cluster string, obj client.Object) (*workload.Info, error) {
+func (s *accessorImpl) GetInfo(cluster string, obj client.Object) (*workload.Info, error) {
 	_, ok := obj.(*appsv1.StatefulSet)
 	if !ok {
 		return nil, ObjectTypeError
@@ -60,7 +64,7 @@ func (s *accesorImpl) GetInfo(cluster string, obj client.Object) (*workload.Info
 	return workload.NewInfo(cluster, GVK, obj, s.getStatus(obj)), nil
 }
 
-func (p *accesorImpl) getStatus(obj client.Object) workload.InfoStatus {
+func (p *accessorImpl) getStatus(obj client.Object) workload.InfoStatus {
 	sts := obj.(*appsv1.StatefulSet)
 	return workload.InfoStatus{
 		ObservedGeneration:       sts.Status.ObservedGeneration,
@@ -73,6 +77,10 @@ func (p *accesorImpl) getStatus(obj client.Object) workload.InfoStatus {
 	}
 }
 
-func (s *accesorImpl) ReleaseControl() workload.ReleaseControl {
+func (s *accessorImpl) ReleaseControl() workload.ReleaseControl {
 	return &releaseControl{}
+}
+
+func (s *accessorImpl) PodControl() workload.PodControl {
+	return &podControl{}
 }

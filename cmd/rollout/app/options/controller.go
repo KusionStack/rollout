@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	corev1 "k8s.io/api/core/v1"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
@@ -29,6 +30,7 @@ var GroupKindConcurrency = map[string]int{
 	rolloutv1alpha1.SchemeGroupVersion.WithKind("RolloutRun").GroupKind().String():      20,
 	rolloutv1alpha1.SchemeGroupVersion.WithKind("TrafficTopology").GroupKind().String(): 10,
 	rolloutv1alpha1.SchemeGroupVersion.WithKind("BackendRouting").GroupKind().String():  10,
+	corev1.SchemeGroupVersion.WithKind("Pod").GroupKind().String():                      50,
 }
 
 var _ subOptions = &ControllerOptions{}

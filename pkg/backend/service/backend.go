@@ -35,14 +35,10 @@ func (s *serviceBackend) GetBackendObject() client.Object {
 	return s.obj
 }
 
-func (s *serviceBackend) ForkCanary(canaryName, controllerName string) client.Object {
+func (s *serviceBackend) ForkCanary(canaryName string) client.Object {
 	canaryBackend := &corev1.Service{}
 	canaryBackend.Name = canaryName
 	canaryBackend.Namespace = s.obj.Namespace
-	canaryBackend.Labels = map[string]string{
-		rollout.LabelControl:   "true",
-		rollout.LabelCreatedBy: controllerName,
-	}
 	canaryBackend.Spec.Ports = s.obj.Spec.Ports
 	canaryBackend.Spec.Selector = s.obj.Spec.Selector
 	if canaryBackend.Spec.Selector == nil {
@@ -52,14 +48,10 @@ func (s *serviceBackend) ForkCanary(canaryName, controllerName string) client.Ob
 	return canaryBackend
 }
 
-func (s *serviceBackend) ForkStable(stableName, controllerName string) client.Object {
+func (s *serviceBackend) ForkStable(stableName string) client.Object {
 	stableBackend := &corev1.Service{}
 	stableBackend.Name = stableName
 	stableBackend.Namespace = s.obj.Namespace
-	stableBackend.Labels = map[string]string{
-		rollout.LabelControl:   "true",
-		rollout.LabelCreatedBy: controllerName,
-	}
 	stableBackend.Spec.Ports = s.obj.Spec.Ports
 	stableBackend.Spec.Selector = s.obj.Spec.Selector
 	if stableBackend.Spec.Selector == nil {

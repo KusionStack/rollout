@@ -44,5 +44,6 @@ bin/manager --federated-mode=false \
     --log_dir=bin/logs \
     --logtostderr=false \
     --alsologtostderr=true \
+    --controllers=*,podcanarylabel \
     --v=2 \
     "$*"

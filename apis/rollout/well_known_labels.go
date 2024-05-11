@@ -15,15 +15,17 @@
 package rollout
 
 const (
-	LabelControl     = "rollout.kusionstack.io/control"
-	LabelCreatedBy   = "rollout.kusionstack.io/created-by"
-	LabelWorkload    = "rollout.kusionstack.io/workload"
-	LabelGeneratedBy = "rollout.kusionstack.io/generated-by"
+	// This label is added to objects to reference their controller resource.
+	LabelControlledBy = "rollout.kusionstack.io/controlled-by"
+	// This label is added to workload object to identify the workload type.
+	LabelWorkload = "rollout.kusionstack.io/workload"
 )
 
 // canary labels
 const (
-	LabelCanary                 = "rollout.kusionstack.io/canary"
+	// This label will be added to canary workload and pods.
+	LabelCanary = "rollout.kusionstack.io/canary"
+	// This label indicates the revision of pods controlled by workload.
 	LabelPodRevision            = "pod.rollout.kusionstack.io/revision"
 	LabelValuePodRevisionBase   = "base"
 	LabelValuePodRevisionCanary = "canary"

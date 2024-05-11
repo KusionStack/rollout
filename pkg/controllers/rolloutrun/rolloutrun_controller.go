@@ -93,12 +93,9 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	key := req.String()
-
-	logger := r.Logger.WithValues("rolloutRun", key)
-
-	logger.V(2).Info("start reconciling rolloutRun")
-	defer logger.V(2).Info("finish reconciling rolloutRun")
+	logger := r.Logger.WithValues("rolloutRun", req.String())
+	logger.V(4).Info("started reconciling rolloutRun")
+	defer logger.V(4).Info("finished reconciling rolloutRun")
 
 	obj := &rolloutv1alpha1.RolloutRun{}
 	err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), req.NamespacedName, obj)

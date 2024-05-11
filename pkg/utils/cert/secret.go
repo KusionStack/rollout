@@ -57,7 +57,7 @@ func NewSecretProvider(client SecretClient, namespace, name string) (*SecretProv
 	}, nil
 }
 
-func (p *SecretProvider) Ensure(ctx context.Context, host string, alternateHosts []string) (*ServingCerts, error) {
+func (p *SecretProvider) Ensure(ctx context.Context, cfg Config) (*ServingCerts, error) {
 	certs, err := p.Load(ctx)
 	if err != nil && !IsNotFound(err) {
 		return nil, err
@@ -66,13 +66,13 @@ func (p *SecretProvider) Ensure(ctx context.Context, host string, alternateHosts
 	op := ""
 	if IsNotFound(err) {
 		op = "create"
-	} else if err := certs.Validate(host); err != nil {
+	} else if err := certs.Validate(cfg.CommonName); err != nil {
 		klog.ErrorS(err, "invalid certs in secret")
 		op = "overwrite"
 	}
 
 	if len(op) > 0 {
-		certs, err := GenerateSelfSignedCerts(host, nil, alternateHosts)
+		certs, err := GenerateSelfSignedCerts(cfg)
 		if err != nil {
 			return nil, err
 		}

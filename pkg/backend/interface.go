@@ -26,8 +26,8 @@ import (
 type IBackend interface {
 	GetBackendObject() client.Object
 	// todo: discussion: maybe Fork can be replaced by Create/Delete, and using Create/Delete to check if ready or deleted
-	ForkStable(stableName, controllerName string) client.Object
-	ForkCanary(canaryName, controllerName string) client.Object
+	ForkStable(stableName string) client.Object
+	ForkCanary(canaryName string) client.Object
 }
 
 type Store interface {

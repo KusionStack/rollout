@@ -153,7 +153,13 @@ func (c *WebhookCertSyncer) enqueueSecret() handler.EventHandler {
 
 func (c *WebhookCertSyncer) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
-	servingCerts, err := c.secret.Ensure(ctx, c.Host, c.AlternateHosts)
+	cfg := cert.Config{
+		CommonName: c.Host,
+		AltNames: cert.AltNames{
+			DNSNames: c.AlternateHosts,
+		},
+	}
+	servingCerts, err := c.secret.Ensure(ctx, cfg)
 	if err != nil {
 		if cert.IsConflict(err) {
 			// create error on AlreadyExists
