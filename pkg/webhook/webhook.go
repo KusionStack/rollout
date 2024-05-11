@@ -47,7 +47,13 @@ func initializeWebhookCerts(mgr ctrl.Manager) error {
 	// NOTE: firstly generate self signed cert anyway, so that we can start the server without waiting for the cert to be ready.
 	// The webhook certs will be synced by the controller later.
 	server := mgr.GetWebhookServer()
-	err := cert.GenerateSelfSignedCertKeyIfNotExist(server.CertDir, getWebhookHost(), getWebhookAlternateHosts())
+	cfg := cert.Config{
+		CommonName: getWebhookHost(),
+		AltNames: cert.AltNames{
+			DNSNames: getWebhookAlternateHosts(),
+		},
+	}
+	err := cert.GenerateSelfSignedCertKeyIfNotExist(server.CertDir, cfg)
 	if err != nil {
 		return err
 	}

@@ -28,6 +28,11 @@ import (
 	certutil "github.com/zoumo/golib/cert"
 )
 
+type (
+	Config   = cert.Config
+	AltNames = cert.AltNames
+)
+
 type ServingCerts struct {
 	Key    []byte
 	Cert   []byte
@@ -70,8 +75,8 @@ func (c *ServingCerts) Validate(host string) error {
 	return err
 }
 
-func GenerateSelfSignedCerts(host string, alternateIPs []net.IP, alternateDNS []string) (*ServingCerts, error) {
-	caKey, caCert, key, cert, err := generateSelfSignedCertKey(host, alternateIPs, alternateDNS)
+func GenerateSelfSignedCerts(cfg Config) (*ServingCerts, error) {
+	caKey, caCert, key, cert, err := generateSelfSignedCertKey(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -89,22 +94,22 @@ func GenerateSelfSignedCerts(host string, alternateIPs []net.IP, alternateDNS []
 	}, nil
 }
 
-func GenerateSelfSignedCertKeyIfNotExist(path string, host string, alternateHosts []string) error {
+func GenerateSelfSignedCertKeyIfNotExist(path string, cfg cert.Config) error {
 	fscerts, err := NewFSProvider(path, FSOptions{})
 	if err != nil {
 		return err
 	}
-	return fscerts.Ensure(context.Background(), host, alternateHosts)
+	return fscerts.Ensure(context.Background(), cfg)
 }
 
-func generateSelfSignedCertKey(host string, alternateIPs []net.IP, alternateDNS []string) (*rsa.PrivateKey, *x509.Certificate, *rsa.PrivateKey, *x509.Certificate, error) {
+func generateSelfSignedCertKey(cfg Config) (*rsa.PrivateKey, *x509.Certificate, *rsa.PrivateKey, *x509.Certificate, error) {
 	caKey, err := certutil.NewRSAPrivateKey()
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 
 	caCert, err := certutil.NewSelfSignedCACert(certutil.Config{
-		CommonName: fmt.Sprintf("%s-ca@%d", host, time.Now().Unix()),
+		CommonName: fmt.Sprintf("%s-ca@%d", cfg.CommonName, time.Now().Unix()),
 	}, caKey)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -115,18 +120,10 @@ func generateSelfSignedCertKey(host string, alternateIPs []net.IP, alternateDNS 
 		return nil, nil, nil, nil, err
 	}
 
-	cfg := certutil.Config{
-		CommonName: host,
-		AltNames: certutil.AltNames{
-			IPs:      alternateIPs,
-			DNSNames: alternateDNS,
-		},
-	}
-
-	if ip := net.ParseIP(host); ip != nil {
+	if ip := net.ParseIP(cfg.CommonName); ip != nil {
 		cfg.AltNames.IPs = append(cfg.AltNames.IPs, ip)
 	} else {
-		cfg.AltNames.DNSNames = append(cfg.AltNames.DNSNames, host)
+		cfg.AltNames.DNSNames = append(cfg.AltNames.DNSNames, cfg.CommonName)
 	}
 
 	cert, err := certutil.NewSignedCert(cfg, key, caKey, caCert)

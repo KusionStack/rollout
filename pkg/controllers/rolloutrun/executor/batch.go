@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -45,7 +46,8 @@ func newBatchExecutor(logger logr.Logger, webhook webhookExecutor) *batchExecuto
 	e.stateMachine.add(StepPending, StepPreBatchStepHook, skipStep)
 	e.stateMachine.add(StepPreBatchStepHook, StepRunning, e.doPreStepHook)
 	e.stateMachine.add(StepRunning, StepPostBatchStepHook, e.doBatchUpgrading)
-	e.stateMachine.add(StepPostBatchStepHook, StepSucceeded, e.doPostStepHook)
+	e.stateMachine.add(StepPostBatchStepHook, StepResourceRecycling, e.doPostStepHook)
+	e.stateMachine.add(StepResourceRecycling, StepSucceeded, e.doRecycle)
 	e.stateMachine.add(StepSucceeded, "", skipStep)
 	return e
 }
@@ -59,25 +61,65 @@ func (e *batchExecutor) loggerWithContext(executorContext *ExecutorContext) logr
 
 func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
 	newStatus := ctx.NewStatus
+	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	currentState := newStatus.BatchStatus.CurrentBatchState
 
 	stepDone, result, err := e.stateMachine.do(ctx, currentState)
+	if err != nil {
+		return false, result, err
+	}
+	if !stepDone {
+		return false, result, nil
+	}
 
-	if stepDone {
+	if int(currentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
 		// move to next batch
-		currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
-		if int(currentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
-			newStatus.BatchStatus.CurrentBatchState = StepNone
-			newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
+		newStatus.BatchStatus.CurrentBatchState = StepNone
+		newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
+		return false, result, nil
+	}
+
+	return true, result, nil
+}
+
+func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, error) {
+	// recycling only work on last batch now
+	if int(ctx.NewStatus.BatchStatus.CurrentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
+		return true, retryImmediately, nil
+	}
+
+	// last batch finished, try to finalize all workloads
+	allTargets := map[rolloutv1alpha1.CrossClusterObjectNameReference]bool{}
+	// finalize batch release
+	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
+
+	for _, item := range ctx.RolloutRun.Spec.Batch.Batches {
+		for _, target := range item.Targets {
+			allTargets[target.CrossClusterObjectNameReference] = true
 		}
 	}
 
-	if isFinalStepState(currentState) &&
-		isFinalStepState(newStatus.BatchStatus.CurrentBatchState) &&
-		int(newStatus.BatchStatus.CurrentBatchIndex+1) == len(ctx.RolloutRun.Spec.Batch.Batches) {
-		done = true
+	var finalizeErrs []error
+
+	for target := range allTargets {
+		wi := ctx.Workloads.Get(target.Cluster, target.Name)
+		if wi == nil {
+			// ignore not found workload
+			continue
+		}
+		err := batchControl.Finalize(wi)
+		if err != nil {
+			// try our best to finalize all workloasd
+			finalizeErrs = append(finalizeErrs, err)
+			continue
+		}
 	}
-	return done, result, err
+
+	if len(finalizeErrs) > 0 {
+		return false, retryDefault, utilerrors.NewAggregate(finalizeErrs)
+	}
+
+	return true, retryImmediately, nil
 }
 
 func (e *batchExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, error) {

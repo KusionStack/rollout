@@ -29,10 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/client-go/discovery"
-	memory "k8s.io/client-go/discovery/cached"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -67,8 +64,6 @@ type RolloutReconciler struct {
 
 	expectation   expectations.ControllerExpectationsInterface
 	rvExpectation expectations.ResourceVersionExpectationInterface
-
-	supportedGVK sets.String
 }
 
 func NewReconciler(mgr manager.Manager, workloadRegistry workload.Registry) *RolloutReconciler {
@@ -77,7 +72,6 @@ func NewReconciler(mgr manager.Manager, workloadRegistry workload.Registry) *Rol
 		expectation:      expectations.NewControllerExpectations(),
 		rvExpectation:    expectations.NewResourceVersionExpectation(),
 		workloadRegistry: workloadRegistry,
-		supportedGVK:     sets.NewString(),
 	}
 }
 
@@ -98,15 +92,7 @@ func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			enqueueRolloutForStrategyHandler(r.Client, r.Logger),
 		)
 
-	var discoveryClient multicluster.PartialCachedDiscoveryInterface
-	client, ok := r.Client.(multicluster.MultiClusterDiscovery)
-	if ok {
-		discoveryClient = client.MembersCachedDiscoveryInterface()
-	} else {
-		discoveryClient = memory.NewMemCacheClient(discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()))
-	}
-
-	allworkloads := getWatchableWorkloads(r.workloadRegistry, r.Logger, discoveryClient)
+	allworkloads := GetWatchableWorkloads(r.workloadRegistry, r.Logger, r.Client, r.Config)
 	for _, accessor := range allworkloads {
 		gvk := accessor.GroupVersionKind()
 		r.Logger.Info("add watcher for workload", "gvk", gvk.String())
@@ -130,9 +116,8 @@ func (r *RolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	key := req.String()
 	logger := r.Logger.WithValues("rollout", key)
-
-	logger.V(2).Info("start reconciling rollout")
-	defer logger.V(2).Info("finish reconciling rollout")
+	logger.V(4).Info("started reconciling rollout")
+	defer logger.V(4).Info("finished reconciling rollout")
 
 	obj := &rolloutv1alpha1.Rollout{}
 	err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), req.NamespacedName, obj)
@@ -290,6 +275,7 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, obj *rolloutv1
 		_, err := info.UpdateOnConflict(ctx, r.Client, func(obj client.Object) error {
 			utils.MutateLabels(obj, func(labels map[string]string) {
 				delete(labels, rollout.LabelWorkload)
+				delete(labels, rollout.LabelControlledBy)
 			})
 			return nil
 		})
@@ -357,7 +343,7 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 	setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionAvailable, metav1.ConditionTrue, "", "")
 
 	// add labels to workloads
-	err := r.ensureWorkloadsLabels(ctx, workloads)
+	err := r.ensureWorkloadsLabels(ctx, obj.Name, workloads)
 	if err != nil {
 		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedUpdateWorkload", "failed to ensure rollout label on workloads, err = %v", err)
 		logger.Error(err, "failed to add labels into workloads")
@@ -404,13 +390,14 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 	return nil
 }
 
-func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, workloads []*workload.Info) error {
+func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, name string, workloads []*workload.Info) error {
 	errs := []error{}
 	for _, info := range workloads {
 		kind := strings.ToLower(info.Kind)
 		_, err := info.UpdateOnConflict(ctx, r.Client, func(obj client.Object) error {
 			utils.MutateLabels(obj, func(labels map[string]string) {
 				labels[rollout.LabelWorkload] = kind
+				labels[rollout.LabelControlledBy] = name
 			})
 			return nil
 		})
@@ -456,7 +443,7 @@ func (r *RolloutReconciler) needTrigger(obj *rolloutv1alpha1.Rollout, workloads 
 		}
 	}
 
-	r.Logger.Info("check if rollout need to be triggered",
+	r.Logger.V(2).Info("check if rollout need to be triggered",
 		"rollout", obj.Name,
 		"count", count,
 		"triggered", waiting,
@@ -485,10 +472,7 @@ func (r *RolloutReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *
 
 func (r *RolloutReconciler) getAllRolloutRun(ctx context.Context, obj *rolloutv1alpha1.Rollout) (*rolloutv1alpha1.RolloutRun, []*rolloutv1alpha1.RolloutRun, error) {
 	wList := &rolloutv1alpha1.RolloutRunList{}
-	err := r.Client.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), wList, client.InNamespace(obj.Namespace), client.MatchingLabels{
-		rollout.LabelControl:     "true",
-		rollout.LabelGeneratedBy: obj.Name,
-	})
+	err := r.Client.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), wList, client.InNamespace(obj.Namespace))
 	if err != nil {
 		return nil, nil, err
 	}

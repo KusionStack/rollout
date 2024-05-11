@@ -290,7 +290,7 @@ func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.
 					if err != nil {
 						return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
 					}
-					stableForked := originBackend.ForkStable(br.Spec.Forwarding.Stable.Name, ControllerName)
+					stableForked := originBackend.ForkStable(br.Spec.Forwarding.Stable.Name)
 					err = b.Client.Create(clusterinfo.WithCluster(ctx, br.Spec.Backend.Cluster), stableForked)
 					if err != nil {
 						return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
@@ -475,7 +475,7 @@ func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1al
 			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
 		}
 
-		canaryForked := originBackend.ForkCanary(br.Spec.Forwarding.Canary.Name, ControllerName)
+		canaryForked := originBackend.ForkCanary(br.Spec.Forwarding.Canary.Name)
 		err = b.Client.Create(clusterinfo.WithCluster(ctx, br.Spec.Backend.Cluster), canaryForked)
 		if err != nil {
 			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)

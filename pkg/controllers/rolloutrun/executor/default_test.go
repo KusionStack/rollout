@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
@@ -121,4 +122,12 @@ func newFakeObject(cluster, namespace, name string, replicas, partition, updated
 			UpdatedReplicas: updated,
 		},
 	}
+}
+
+func withProgressingInfo(obj *appsv1.StatefulSet) *appsv1.StatefulSet {
+	if obj.Annotations == nil {
+		obj.Annotations = map[string]string{}
+	}
+	obj.Annotations[rolloutapi.AnnoRolloutProgressingInfo] = ""
+	return obj
 }

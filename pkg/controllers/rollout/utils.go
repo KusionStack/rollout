@@ -23,7 +23,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/names"
+	"k8s.io/client-go/discovery"
+	memory "k8s.io/client-go/discovery/cached"
+	"k8s.io/client-go/rest"
 	"kusionstack.io/kube-utils/multicluster"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -72,12 +76,9 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 	owner := metav1.NewControllerRef(obj, rolloutv1alpha1.SchemeGroupVersion.WithKind("Rollout"))
 	run := &rolloutv1alpha1.RolloutRun{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: obj.Namespace,
-			Name:      rolloutId,
-			Labels: map[string]string{
-				rolloutapi.LabelControl:     "true",
-				rolloutapi.LabelGeneratedBy: obj.Name,
-			},
+			Namespace:       obj.Namespace,
+			Name:            rolloutId,
+			Labels:          map[string]string{},
 			Annotations:     map[string]string{},
 			OwnerReferences: []metav1.OwnerReference{*owner},
 			Finalizers:      []string{rolloutapi.FinalizerRolloutProtection},
@@ -166,7 +167,15 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 	return result
 }
 
-func getWatchableWorkloads(registry workload.Registry, logger logr.Logger, discoveryClient multicluster.PartialCachedDiscoveryInterface) []workload.Accessor {
+func GetWatchableWorkloads(registry workload.Registry, logger logr.Logger, c client.Client, cfg *rest.Config) []workload.Accessor {
+	var discoveryClient multicluster.PartialCachedDiscoveryInterface
+	client, ok := c.(multicluster.MultiClusterDiscovery)
+	if ok {
+		discoveryClient = client.MembersCachedDiscoveryInterface()
+	} else {
+		discoveryClient = memory.NewMemCacheClient(discovery.NewDiscoveryClientForConfigOrDie(cfg))
+	}
+
 	result := make([]workload.Accessor, 0)
 
 	registry.Range(func(gvk schema.GroupVersionKind, item workload.Accessor) bool {

@@ -63,11 +63,11 @@ e2e-test: manifests envtest
 ##@ Build
 
 .PHONY: build
-build: manifests generate lint ## Build manager binary.
+build: test manifests generate lint ## Build manager binary.
 	go build -o bin/manager kusionstack.io/rollout/cmd/rollout
 
 .PHONY: run
-run: manifests generate lint ## Run a controller from your host.
+run: test manifests generate lint ## Run a controller from your host.
 	go run kusionstack.io/rollout/cmd/rollout
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.

@@ -71,14 +71,14 @@ func NewFSProvider(path string, opts FSOptions) (*FSProvider, error) {
 	}, nil
 }
 
-func (p *FSProvider) Ensure(_ context.Context, host string, alternateHosts []string) error {
+func (p *FSProvider) Ensure(_ context.Context, cfg Config) error {
 	certs, err := p.Load()
 	if err != nil && !IsNotFound(err) {
 		return err
 	}
 
 	if IsNotFound(err) {
-		certs, err := GenerateSelfSignedCerts(host, nil, alternateHosts)
+		certs, err := GenerateSelfSignedCerts(cfg)
 		if err != nil {
 			return err
 		}
@@ -86,11 +86,11 @@ func (p *FSProvider) Ensure(_ context.Context, host string, alternateHosts []str
 		return err
 	}
 
-	err = certs.Validate(host)
+	err = certs.Validate(cfg.CommonName)
 	if err != nil {
 		// re-generate if expired or invalid
 		klog.Info("certificates are invalid, regenerating...")
-		certs, err := GenerateSelfSignedCerts(host, nil, alternateHosts)
+		certs, err := GenerateSelfSignedCerts(cfg)
 		if err != nil {
 			return err
 		}

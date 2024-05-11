@@ -11,11 +11,12 @@ spec:
   selector:
     matchLabels:
       cluster: cluster-b
+      app: rollout-demo
   template:
     metadata:
       labels:
         cluster: cluster-b
-        pod.rollout.kusionstack.io/revision: base
+        app: rollout-demo
     spec:
       containers:
       - name: nginxdemo

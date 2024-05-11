@@ -20,10 +20,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zoumo/golib/cert"
 )
 
 func TestServingCerts_Validate(t *testing.T) {
-	certs, err := GenerateSelfSignedCerts("foo.example.com", nil, []string{"bar.example.com"})
+	cfg := Config{
+		CommonName: "foo.example.com",
+		AltNames: cert.AltNames{
+			DNSNames: []string{"bar.example.com"},
+		},
+	}
+	certs, err := GenerateSelfSignedCerts(cfg)
 	assert.Nil(t, err)
 	assert.Nil(t, certs.Validate("foo.example.com"))
 	assert.Nil(t, certs.Validate("bar.example.com"))
@@ -31,7 +38,13 @@ func TestServingCerts_Validate(t *testing.T) {
 }
 
 func TestGenerateSelfSignedCerts(t *testing.T) {
-	certs, err := GenerateSelfSignedCerts("rollout.rollout-system.svc", nil, []string{"rollout.rollout-system.svc", "foo.example.com"})
+	cfg := Config{
+		CommonName: "rollout.rollout-system.svc",
+		AltNames: cert.AltNames{
+			DNSNames: []string{"rollout.rollout-system.svc", "foo.example.com"},
+		},
+	}
+	certs, err := GenerateSelfSignedCerts(cfg)
 	assert.Nil(t, err)
 
 	err = certs.Validate("rollout.rollout-system.svc")
