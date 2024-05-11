@@ -41,8 +41,11 @@ type Accessor interface {
 	GetInfo(cluster string, obj client.Object) (*Info, error)
 	// ReleaseControl returns the release control for the workload
 	ReleaseControl() ReleaseControl
-	// PodControl returns the pod control for the workload
-	PodControl() PodControl
+	// PodControl returns the pod control for the workload.
+	//
+	// For certain workload types, such as Deployment, this feature is helpful for identifying the updated pods.
+	// Deployment must first locate the updated ReplicaSet and then retrieve the pod-template-hash to distinguish the pods.
+	PodControl(client.Reader) PodControl
 }
 
 // ReleaseControl defines the control functions for workload release

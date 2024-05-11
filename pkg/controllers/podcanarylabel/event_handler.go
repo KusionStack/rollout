@@ -91,7 +91,7 @@ func enqueueWorkloadPods(accessor workload.Accessor, reader client.Reader, schem
 			return
 		}
 
-		pc := accessor.PodControl()
+		pc := accessor.PodControl(reader)
 		selector, err := pc.GetPodSelector(obj)
 		if err != nil {
 			logger.Error(err, "failed to get PodSelector for workload", "key", key.String(), "gvk", gvk.String())

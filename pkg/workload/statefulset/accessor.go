@@ -81,6 +81,6 @@ func (s *accessorImpl) ReleaseControl() workload.ReleaseControl {
 	return &releaseControl{}
 }
 
-func (s *accessorImpl) PodControl() workload.PodControl {
+func (s *accessorImpl) PodControl(client.Reader) workload.PodControl {
 	return &podControl{}
 }
