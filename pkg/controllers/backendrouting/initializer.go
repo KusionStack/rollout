@@ -19,16 +19,14 @@ package backendrouting
 import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/backend"
 	"kusionstack.io/rollout/pkg/controllers/registry"
-	"kusionstack.io/rollout/pkg/route"
 )
 
 func InitFunc(mgr manager.Manager) (bool, error) {
 	return initFunc(mgr, registry.Backends, registry.Routes)
 }
 
-func initFunc(mgr manager.Manager, backendRegistry backend.Registry, routeRegistry route.Registry) (bool, error) {
+func initFunc(mgr manager.Manager, backendRegistry registry.BackendRegistry, routeRegistry registry.RouteRegistry) (bool, error) {
 	err := NewReconciler(mgr, backendRegistry, routeRegistry).SetupWithManager(mgr)
 	if err != nil {
 		return false, err

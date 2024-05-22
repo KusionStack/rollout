@@ -22,18 +22,22 @@ import (
 
 	"kusionstack.io/rollout/pkg/backend"
 	"kusionstack.io/rollout/pkg/backend/service"
-	"kusionstack.io/rollout/pkg/registry"
+	"kusionstack.io/rollout/pkg/genericregistry"
 )
 
 const (
 	BackendRegistryName = "backend-registry"
 )
 
-func NewBackendRegistry() backend.Registry {
-	return registry.New[schema.GroupVersionKind, backend.Store]()
+var Backends = NewBackendRegistry()
+
+type BackendRegistry interface {
+	genericregistry.Registry[schema.GroupVersionKind, backend.Store]
 }
 
-var Backends = NewBackendRegistry()
+func NewBackendRegistry() BackendRegistry {
+	return genericregistry.New[schema.GroupVersionKind, backend.Store]()
+}
 
 func InitBackendRegistry(mgr manager.Manager) (bool, error) {
 	Backends.Register(service.GVK, service.NewStorage(mgr))

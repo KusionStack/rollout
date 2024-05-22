@@ -34,6 +34,7 @@ import (
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/backend"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/route"
 )
 
@@ -43,11 +44,11 @@ const (
 
 type BackendRoutingReconciler struct {
 	*mixin.ReconcilerMixin
-	backendRegistry backend.Registry
-	routeRegistry   route.Registry
+	backendRegistry registry.BackendRegistry
+	routeRegistry   registry.RouteRegistry
 }
 
-func NewReconciler(mgr manager.Manager, backendRegistry backend.Registry, routeRegistry route.Registry) *BackendRoutingReconciler {
+func NewReconciler(mgr manager.Manager, backendRegistry registry.BackendRegistry, routeRegistry registry.RouteRegistry) *BackendRoutingReconciler {
 	return &BackendRoutingReconciler{
 		ReconcilerMixin: mixin.NewReconcilerMixin(ControllerName, mgr),
 		backendRegistry: backendRegistry,

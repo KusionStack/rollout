@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/registry"
 )
 
 type BackendChangeDetail struct {
@@ -48,5 +47,3 @@ type Store interface {
 	// Get returns a wrapped route interface
 	Get(ctx context.Context, cluster, namespace, name string) (IRoute, error)
 }
-
-type Registry = registry.Registry[schema.GroupVersionKind, Store]

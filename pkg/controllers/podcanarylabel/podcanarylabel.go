@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 	rolloutcontroller "kusionstack.io/rollout/pkg/controllers/rollout"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
@@ -42,10 +43,10 @@ const (
 type PodCanaryReconciler struct {
 	*mixin.ReconcilerMixin
 
-	workloadRegistry workload.Registry
+	workloadRegistry registry.WorkloadRegistry
 }
 
-func NewPodCanaryReconciler(mgr manager.Manager, workloadRegistry workload.Registry) *PodCanaryReconciler {
+func NewPodCanaryReconciler(mgr manager.Manager, workloadRegistry registry.WorkloadRegistry) *PodCanaryReconciler {
 	return &PodCanaryReconciler{
 		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
 		workloadRegistry: workloadRegistry,

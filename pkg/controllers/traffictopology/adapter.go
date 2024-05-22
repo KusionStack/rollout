@@ -35,17 +35,18 @@ import (
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
 type TPControllerAdapter struct {
 	client.Client
-	workloadRegistry        workload.Registry
+	workloadRegistry        registry.WorkloadRegistry
 	maxConcurrentReconciles int
 }
 
-func NewTPControllerAdapter(mgr manager.Manager, workloadRegistry workload.Registry) *TPControllerAdapter {
+func NewTPControllerAdapter(mgr manager.Manager, workloadRegistry registry.WorkloadRegistry) *TPControllerAdapter {
 	opts := mgr.GetControllerOptions()
 	groupKind := v1alpha1.SchemeGroupVersion.WithKind("TrafficTopology").GroupKind().String()
 	c := &TPControllerAdapter{

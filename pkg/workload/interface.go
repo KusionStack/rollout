@@ -15,8 +15,6 @@
 package workload
 
 import (
-	"context"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -24,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/registry"
 )
 
 // Accessor defines the functions to access the workload.
@@ -69,10 +66,4 @@ type PodControl interface {
 	IsUpdatedPod(obj client.Object, pod *corev1.Pod) (bool, error)
 	// GetPodSelector gets the pod selector of the workload
 	GetPodSelector(obj client.Object) (labels.Selector, error)
-}
-
-type Registry interface {
-	registry.Registry[schema.GroupVersionKind, Accessor]
-
-	GetPodOwnerWorkload(ctx context.Context, c client.Client, pod *corev1.Pod) (client.Object, Accessor, error)
 }
