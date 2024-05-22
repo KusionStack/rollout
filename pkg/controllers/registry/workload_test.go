@@ -36,6 +36,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+var (
+	podGVK        = corev1.SchemeGroupVersion.WithKind("Pod")
+	daemonsetGVK  = appsv1.SchemeGroupVersion.WithKind("DaemonSet")
+	deploymentGVK = appsv1.SchemeGroupVersion.WithKind("Deployment")
+	replicasetGVK = appsv1.SchemeGroupVersion.WithKind("ReplicaSet")
+)
+
 var _ workload.Accessor = &fakeWorkloadAccessor{}
 
 type fakeWorkloadAccessor struct {
@@ -96,7 +103,7 @@ func newTestWorkloadRegistry() WorkloadRegistry {
 	r.Register(statefulset.GVK, statefulset.New())
 	// we add a fake workload accessor for testing
 	// The workload resource owner chain is Deployment -> ReplicaSet -> Pod
-	fake := newFakeWorkloadAccessor(appsv1.SchemeGroupVersion.WithKind("Deployment"), appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))
+	fake := newFakeWorkloadAccessor(deploymentGVK, replicasetGVK)
 	r.Register(fake.GroupVersionKind(), fake)
 	return r
 }
@@ -138,7 +145,6 @@ func newFakeClient(objs ...client.Object) client.Client {
 
 func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 	utilruntime.Must(operatingv1alpha1.AddToScheme(scheme.Scheme))
-	podGVK := corev1.SchemeGroupVersion.WithKind("Pod")
 	tests := []struct {
 		name         string
 		getObject    func() (*corev1.Pod, client.Client)
@@ -190,10 +196,27 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 			},
 		},
 		{
+			name: "statefulset -> collaset -> pod",
+			getObject: func() (*corev1.Pod, client.Client) {
+				obj := newTestObject(statefulset.GVK, "default", "owner", nil)
+				dependent := newTestObject(collaset.GVK, obj.GetNamespace(), "dependent", obj)
+				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", dependent)
+				c := newFakeClient(obj, dependent, pod)
+				return pod.(*corev1.Pod), c
+			},
+			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
+				assert.NotNil(obj)
+				if assert.NotNil(accessor) {
+					assert.Equal(accessor.GroupVersionKind().Kind, "StatefulSet")
+				}
+				assert.NoError(err)
+			},
+		},
+		{
 			name: "deployment -> replicaset -> pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				obj := newTestObject(appsv1.SchemeGroupVersion.WithKind("Deployment"), "default", "owner", nil)
-				dependent := newTestObject(appsv1.SchemeGroupVersion.WithKind("ReplicaSet"), obj.GetNamespace(), "dependent", obj)
+				obj := newTestObject(deploymentGVK, "default", "owner", nil)
+				dependent := newTestObject(replicasetGVK, obj.GetNamespace(), "dependent", obj)
 				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", dependent)
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
@@ -209,7 +232,7 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 		{
 			name: "daemonset -> statefulset -> pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				obj := newTestObject(appsv1.SchemeGroupVersion.WithKind("DaemonSet"), "default", "owner", nil)
+				obj := newTestObject(daemonsetGVK, "default", "owner", nil)
 				dependent := newTestObject(statefulset.GVK, obj.GetNamespace(), "dependent", obj)
 				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", dependent)
 				c := newFakeClient(obj, dependent, pod)
@@ -220,6 +243,21 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 				if assert.NotNil(accessor) {
 					assert.Equal(accessor.GroupVersionKind().Kind, "StatefulSet")
 				}
+				assert.NoError(err)
+			},
+		},
+		{
+			name: "statefulset -> daemonset -> pod",
+			getObject: func() (*corev1.Pod, client.Client) {
+				obj := newTestObject(statefulset.GVK, "default", "owner", nil)
+				dependent := newTestObject(daemonsetGVK, obj.GetNamespace(), "dependent", obj)
+				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", dependent)
+				c := newFakeClient(obj, dependent, pod)
+				return pod.(*corev1.Pod), c
+			},
+			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
+				assert.Nil(obj)
+				assert.Nil(accessor)
 				assert.NoError(err)
 			},
 		},
