@@ -93,7 +93,7 @@ func (h *PodCreateUpdateHandler) Handle(ctx context.Context, req admission.Reque
 		return admission.Allowed("skip this pod because it is not controlled by known workload")
 	}
 
-	if workload.IsControlledByRollout(ownerObj) {
+	if !workload.IsControlledByRollout(ownerObj) {
 		// skip this pod because it is controlled by a rollout
 		return admission.Allowed("skip this pod because its owner workload is not controlled by a rollout")
 	}
