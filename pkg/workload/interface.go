@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/registry"
 )
 
 // Accessor defines the functions to access the workload.
@@ -68,5 +67,3 @@ type PodControl interface {
 	// GetPodSelector gets the pod selector of the workload
 	GetPodSelector(obj client.Object) (labels.Selector, error)
 }
-
-type Registry = registry.Registry[schema.GroupVersionKind, Accessor]

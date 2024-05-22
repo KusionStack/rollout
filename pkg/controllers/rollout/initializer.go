@@ -18,21 +18,20 @@ import (
 	"kusionstack.io/kube-utils/controller/initializer"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	registires "kusionstack.io/rollout/pkg/controllers/registry"
-	"kusionstack.io/rollout/pkg/workload"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 )
 
 func InitFunc(mgr manager.Manager) (bool, error) {
-	return initFunc(mgr, registires.Workloads)
+	return initFunc(mgr, registry.Workloads)
 }
 
-func InitFuncWith(registry workload.Registry) initializer.InitFunc {
+func InitFuncWith(registry registry.WorkloadRegistry) initializer.InitFunc {
 	return func(m manager.Manager) (enabled bool, err error) {
 		return initFunc(m, registry)
 	}
 }
 
-func initFunc(mgr manager.Manager, registry workload.Registry) (bool, error) {
+func initFunc(mgr manager.Manager, registry registry.WorkloadRegistry) (bool, error) {
 	err := NewReconciler(mgr, registry).SetupWithManager(mgr)
 	if err != nil {
 		return false, err

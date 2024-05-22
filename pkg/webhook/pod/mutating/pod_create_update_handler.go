@@ -6,15 +6,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/elliotchance/pie/v2"
 	"github.com/tidwall/gjson"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-utils/controller/mixin"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -22,17 +18,12 @@ import (
 	"kusionstack.io/rollout/apis/rollout"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils"
+	"kusionstack.io/rollout/pkg/workload"
 )
 
 // +kubebuilder:webhook:path=/webhooks/mutating/pod,mutating=true,failurePolicy=ignore,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="",resources=pods,verbs=create;update,versions=v1,name=pods.core.v1
 
 const MutatingPod = "mutate-pod"
-
-// MiddleResources is the list of resources that are considered as middle resources, such as ReplicaSet.
-// We need to find the corresponding owner workload for these middle resources.
-var MiddleResources = []schema.GroupVersionKind{
-	{Group: "apps", Version: "v1", Kind: "ReplicaSet"},
-}
 
 // PodCreateUpdateHandler handles Pod creation and update.
 type PodCreateUpdateHandler struct {
@@ -92,48 +83,19 @@ func (h *PodCreateUpdateHandler) Handle(ctx context.Context, req admission.Reque
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	ownerRef := metav1.GetControllerOf(pod)
-	if ownerRef == nil {
-		logger.Info("no owner reference found")
-		return admission.Allowed("no owner reference found")
-	}
-
-	ownerGVK, err := gvkOfOwner(ownerRef)
+	ownerObj, _, err := registry.Workloads.GetPodOwnerWorkload(ctx, h.Client, pod)
 	if err != nil {
-		logger.Error(err, "failed to get owner gvk")
+		logger.Error(err, "failed to get pod owner workload")
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
-
-	// Check if owner is controlled by rollout
-	if !controlledByRollout(ownerGVK) {
-		logger.Info("owner not controlled by rollout", "owner", ownerGVK)
-		return admission.Allowed("owner not controlled by rollout")
+	if ownerObj == nil {
+		// not found
+		return admission.Allowed("skip this pod because it is not controlled by known workload")
 	}
 
-	// Check if owner is middle resource, which means we need to find the corresponding owner's owner
-	if isMiddleResource(ownerGVK) {
-		ownerObj, err := getObjByGVK(ctx, h.Client, ownerGVK, pod.Namespace, ownerRef.Name)
-		if err != nil {
-			logger.Error(err, "failed to get owner object")
-			return admission.Errored(http.StatusInternalServerError, err)
-		}
-		ownerRef = metav1.GetControllerOf(ownerObj)
-		ownerGVK, err = gvkOfOwner(ownerRef)
-		if err != nil {
-			logger.Error(err, "failed to get owner gvk")
-			return admission.Errored(http.StatusInternalServerError, err)
-		}
-		if !controlledByRollout(ownerGVK) {
-			logger.Info("owner not controlled by rollout", "owner", ownerRef)
-			return admission.Allowed("owner not controlled by rollout")
-		}
-	}
-
-	// get owner object
-	ownerObj, err := getObjByGVK(ctx, h.Client, ownerGVK, pod.Namespace, ownerRef.Name)
-	if err != nil {
-		logger.Error(err, "failed to get owner object")
-		return admission.Errored(http.StatusInternalServerError, err)
+	if !workload.IsControlledByRollout(ownerObj) {
+		// skip this pod because it is controlled by a rollout
+		return admission.Allowed("skip this pod because its owner workload is not controlled by a rollout")
 	}
 
 	// update pod annotations if needed
@@ -141,52 +103,17 @@ func (h *PodCreateUpdateHandler) Handle(ctx context.Context, req admission.Reque
 		return admission.Allowed("Not changed")
 	}
 
-	marshaled, err := json.Marshal(pod)
+	newPodData, err := json.Marshal(pod)
 	if err != nil {
 		logger.Error(err, "failed to marshal pod json")
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
-	return admission.PatchResponseFromRaw(req.Object.Raw, marshaled)
-}
-
-func gvkOfOwner(ownerRef *metav1.OwnerReference) (schema.GroupVersionKind, error) {
-	ownerGV, err := schema.ParseGroupVersion(ownerRef.APIVersion)
-	if err != nil {
-		return schema.GroupVersionKind{}, err
-	}
-	return ownerGV.WithKind(ownerRef.Kind), nil
-}
-
-func getObjByGVK(ctx context.Context, cli client.Client, gvk schema.GroupVersionKind, namespace, name string) (client.Object, error) {
-	store, err := registry.Workloads.Get(gvk)
-	if err != nil {
-		return nil, err
-	}
-	obj := store.NewObject()
-	err = cli.Get(ctx, client.ObjectKey{
-		Namespace: namespace,
-		Name:      name,
-	}, obj)
-	if err != nil {
-		return nil, err
-	}
-	return obj, nil
-}
-
-func controlledByRollout(gvk schema.GroupVersionKind) bool {
-	_, err := registry.Workloads.Get(gvk)
-	return err == nil
-}
-
-func isMiddleResource(gvk schema.GroupVersionKind) bool {
-	return pie.Any(MiddleResources, func(value schema.GroupVersionKind) bool {
-		return value == gvk
-	})
+	return admission.PatchResponseFromRaw(req.Object.Raw, newPodData)
 }
 
 func mutatePod(ownerAnnos map[string]string, pod *corev1.Pod) bool {
-	ownerInfo := ownerAnnos[rollout.AnnoRolloutProgressingInfo]
-	podInfo := pod.Annotations[rollout.AnnoRolloutProgressingInfo]
+	ownerInfo := utils.GetMapValueByDefault(ownerAnnos, rollout.AnnoRolloutProgressingInfo, "")
+	podInfo := utils.GetMapValueByDefault(pod.Annotations, rollout.AnnoRolloutProgressingInfo, "")
 	if ownerInfo == "" || podInfo == ownerInfo {
 		return false
 	}
@@ -195,11 +122,9 @@ func mutatePod(ownerAnnos map[string]string, pod *corev1.Pod) bool {
 	if idInOwner == idInPod {
 		return false
 	}
-
 	// need update
-	if pod.Annotations == nil {
-		pod.Annotations = make(map[string]string)
-	}
-	pod.Annotations[rollout.AnnoRolloutProgressingInfo] = ownerInfo
+	utils.MutateAnnotations(pod, func(annotations map[string]string) {
+		annotations[rollout.AnnoRolloutProgressingInfo] = ownerInfo
+	})
 	return true
 }

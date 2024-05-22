@@ -20,11 +20,8 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -33,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 	rolloutcontroller "kusionstack.io/rollout/pkg/controllers/rollout"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
@@ -45,10 +43,10 @@ const (
 type PodCanaryReconciler struct {
 	*mixin.ReconcilerMixin
 
-	workloadRegistry workload.Registry
+	workloadRegistry registry.WorkloadRegistry
 }
 
-func NewPodCanaryReconciler(mgr manager.Manager, workloadRegistry workload.Registry) *PodCanaryReconciler {
+func NewPodCanaryReconciler(mgr manager.Manager, workloadRegistry registry.WorkloadRegistry) *PodCanaryReconciler {
 	return &PodCanaryReconciler{
 		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
 		workloadRegistry: workloadRegistry,
@@ -94,7 +92,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	}
 
 	// get workload of pod
-	accessor, workloadObj, err := r.getSupportedWorkloadFromPod(ctx, pod)
+	workloadObj, accessor, err := r.workloadRegistry.GetPodOwnerWorkload(ctx, r.Client, pod)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -131,98 +129,6 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	}
 
 	return reconcile.Result{}, err
-}
-
-func (r *PodCanaryReconciler) getSupportedWorkloadFromPod(ctx context.Context, pod *corev1.Pod) (workload.Accessor, client.Object, error) {
-	cluster := workload.GetClusterFromLabel(pod.Labels)
-	ctx = clusterinfo.WithCluster(ctx, cluster)
-
-	// firstly, get owner from pod
-	owner, ownerGVK, err := getOwnerAndGVK(pod)
-	if err != nil || owner == nil {
-		// no owner or get owner failed, return directly
-		return nil, nil, err
-	}
-
-	var accessor workload.Accessor
-	var result client.Object
-
-	for {
-		if !r.isSupportedGVK(ownerGVK) {
-			// not supported workload
-			break
-		}
-
-		// supported, get object of owner
-		tempObj, err := r.Scheme.New(ownerGVK)
-		if err != nil {
-			return nil, nil, err
-		}
-		ownerObj := tempObj.(client.Object)
-		err = r.Client.Get(ctx, client.ObjectKey{Namespace: pod.Namespace, Name: owner.Name}, ownerObj)
-		if err != nil {
-			return nil, nil, client.IgnoreNotFound(err)
-		}
-
-		ac, err := r.workloadRegistry.Get(ownerGVK)
-		if err == nil {
-			// if owner is workload, then we should record it as result
-			accessor = ac
-			result = ownerObj
-		}
-
-		// check if ownerObj has owner too
-		parentOwner, parentOwnerGVK, err := getOwnerAndGVK(ownerObj)
-		if err != nil {
-			return nil, nil, err
-		}
-		if parentOwner == nil {
-			// parent has no owner, so it is the root workload
-			break
-		}
-
-		owner = parentOwner
-		ownerGVK = parentOwnerGVK
-		// continue to find root workload
-	}
-
-	return accessor, result, nil
-}
-
-func (r *PodCanaryReconciler) isSupportedGVK(gvk schema.GroupVersionKind) bool {
-	_, err := r.workloadRegistry.Get(gvk)
-	if err == nil {
-		return true
-	}
-
-	var found bool
-	r.workloadRegistry.Range(func(_ schema.GroupVersionKind, value workload.Accessor) bool {
-		gvks := value.DependentWorkloadGVKs()
-
-		for i := range gvks {
-			if gvks[i] == gvk {
-				found = true
-				return false
-			}
-		}
-		return true
-	})
-	return found
-}
-
-func getOwnerAndGVK(obj client.Object) (*metav1.OwnerReference, schema.GroupVersionKind, error) {
-	owner := metav1.GetControllerOf(obj)
-	if owner == nil {
-		// not found
-		return nil, schema.GroupVersionKind{}, nil
-	}
-
-	gv, err := schema.ParseGroupVersion(owner.APIVersion)
-	if err != nil {
-		return nil, schema.GroupVersionKind{}, err
-	}
-	gvk := gv.WithKind(owner.Kind)
-	return owner, gvk, nil
 }
 
 func recognizePodRevision(pc workload.PodControl, workloadObj client.Object, pod *corev1.Pod) string {

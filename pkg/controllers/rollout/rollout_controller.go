@@ -44,6 +44,7 @@ import (
 	"kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
 	"kusionstack.io/rollout/pkg/utils"
@@ -60,13 +61,13 @@ const (
 type RolloutReconciler struct {
 	*mixin.ReconcilerMixin
 
-	workloadRegistry workload.Registry
+	workloadRegistry registry.WorkloadRegistry
 
 	expectation   expectations.ControllerExpectationsInterface
 	rvExpectation expectations.ResourceVersionExpectationInterface
 }
 
-func NewReconciler(mgr manager.Manager, workloadRegistry workload.Registry) *RolloutReconciler {
+func NewReconciler(mgr manager.Manager, workloadRegistry registry.WorkloadRegistry) *RolloutReconciler {
 	return &RolloutReconciler{
 		ReconcilerMixin:  mixin.NewReconcilerMixin(ControllerName, mgr),
 		expectation:      expectations.NewControllerExpectations(),

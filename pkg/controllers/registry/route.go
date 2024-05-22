@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/registry"
+	"kusionstack.io/rollout/pkg/genericregistry"
 	"kusionstack.io/rollout/pkg/route"
 	"kusionstack.io/rollout/pkg/route/ingress"
 )
@@ -29,11 +29,15 @@ const (
 	RouteRegistryName = "route-registry"
 )
 
-func NewRouteRegistry() route.Registry {
-	return registry.New[schema.GroupVersionKind, route.Store]()
+var Routes = NewRouteRegistry()
+
+type RouteRegistry interface {
+	genericregistry.Registry[schema.GroupVersionKind, route.Store]
 }
 
-var Routes = NewRouteRegistry()
+func NewRouteRegistry() RouteRegistry {
+	return genericregistry.New[schema.GroupVersionKind, route.Store]()
+}
 
 func InitRouteRegistry(mgr manager.Manager) (bool, error) {
 	Routes.Register(ingress.GVK, ingress.NewStorage(mgr))

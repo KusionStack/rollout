@@ -32,6 +32,7 @@ import (
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
+	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
 	"kusionstack.io/rollout/pkg/workload"
@@ -167,7 +168,7 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 	return result
 }
 
-func GetWatchableWorkloads(registry workload.Registry, logger logr.Logger, c client.Client, cfg *rest.Config) []workload.Accessor {
+func GetWatchableWorkloads(registry registry.WorkloadRegistry, logger logr.Logger, c client.Client, cfg *rest.Config) []workload.Accessor {
 	var discoveryClient multicluster.PartialCachedDiscoveryInterface
 	client, ok := c.(multicluster.MultiClusterDiscovery)
 	if ok {
