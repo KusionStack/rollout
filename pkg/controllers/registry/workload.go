@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/registry"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/collaset"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
@@ -30,11 +29,7 @@ const (
 	WorkloadRegistryName = "workload-registry"
 )
 
-func NewWorkloadRegistry() workload.Registry {
-	return registry.New[schema.GroupVersionKind, workload.Accessor]()
-}
-
-var Workloads = NewWorkloadRegistry()
+var Workloads = workload.NewRegistry()
 
 func InitWorkloadRegistry(mgr manager.Manager) (bool, error) {
 	Workloads.Register(collaset.GVK, collaset.New())

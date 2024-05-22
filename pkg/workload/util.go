@@ -16,6 +16,7 @@ package workload
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -81,4 +82,19 @@ func IsProgressing(workload client.Object) bool {
 func IsCanary(workload client.Object) bool {
 	_, ok := utils.GetMapValue(workload.GetLabels(), rolloutapi.LabelCanary)
 	return ok
+}
+
+func GetOwnerAndGVK(obj client.Object) (*metav1.OwnerReference, schema.GroupVersionKind, error) {
+	owner := metav1.GetControllerOf(obj)
+	if owner == nil {
+		// not found
+		return nil, schema.GroupVersionKind{}, nil
+	}
+
+	gv, err := schema.ParseGroupVersion(owner.APIVersion)
+	if err != nil {
+		return nil, schema.GroupVersionKind{}, err
+	}
+	gvk := gv.WithKind(owner.Kind)
+	return owner, gvk, nil
 }

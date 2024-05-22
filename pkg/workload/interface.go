@@ -15,6 +15,8 @@
 package workload
 
 import (
+	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -69,4 +71,8 @@ type PodControl interface {
 	GetPodSelector(obj client.Object) (labels.Selector, error)
 }
 
-type Registry = registry.Registry[schema.GroupVersionKind, Accessor]
+type Registry interface {
+	registry.Registry[schema.GroupVersionKind, Accessor]
+
+	GetPodOwnerWorkload(ctx context.Context, c client.Client, pod *corev1.Pod) (client.Object, Accessor, error)
+}
