@@ -12,7 +12,7 @@ webhooks:
       name: webhook-service
       namespace: system
       path: /webhooks/mutating/pod
-  failurePolicy: Ignore
+  failurePolicy: Fail
   name: pods.core.v1
   rules:
   - apiGroups:
@@ -39,7 +39,7 @@ webhooks:
       name: webhook-service
       namespace: system
       path: /webhooks/validating/rolloutrun
-  failurePolicy: Ignore
+  failurePolicy: Fail
   name: rolloutruns.rollout.kusionstack.io
   rules:
   - apiGroups:
@@ -60,7 +60,7 @@ webhooks:
       name: webhook-service
       namespace: system
       path: /webhooks/validating/rollout
-  failurePolicy: Ignore
+  failurePolicy: Fail
   name: rollouts.rollout.kusionstack.io
   rules:
   - apiGroups:
@@ -81,7 +81,7 @@ webhooks:
       name: webhook-service
       namespace: system
       path: /webhooks/validating/rolloutstrategy
-  failurePolicy: Ignore
+  failurePolicy: Fail
   name: rolloutstrategies.rollout.kusionstack.io
   rules:
   - apiGroups:
@@ -102,7 +102,7 @@ webhooks:
       name: webhook-service
       namespace: system
       path: /webhooks/validating/traffictopology
-  failurePolicy: Ignore
+  failurePolicy: Fail
   name: traffictopologies.rollout.kusionstack.io
   rules:
   - apiGroups:

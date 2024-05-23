@@ -1,11 +1,54 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
 resources:
 - manifests.yaml
 - service.yaml
 
-namespace: rollout-system
+namespace: rollout
 
-configurations:
-- kustomizeconfig.yaml
+replacements:
+- source:
+    kind: Service
+    fieldPath: metadata.name
+  targets:
+  - select:
+      kind: ValidatingWebhookConfiguration
+    fieldPaths:
+    - webhooks.*.clientConfig.service.name
+  - select:
+      kind: MutatingWebhookConfiguration
+    fieldPaths:
+    - webhooks.*.clientConfig.service.name
+- source:
+    kind: Service
+    fieldPath: metadata.namespace
+  targets:
+  - select:
+      kind: ValidatingWebhookConfiguration
+    fieldPaths:
+    - webhooks.*.clientConfig.service.namespace
+  - select:
+      kind: MutatingWebhookConfiguration
+    fieldPaths:
+    - webhooks.*.clientConfig.service.namespace
+- source:
+    kind: Service
+    fieldPath: spec.ports.0.port
+  targets:
+  - select:
+      kind: ValidatingWebhookConfiguration
+    fieldPaths:
+    - webhooks.*.clientConfig.service.port
+    options:
+      create: true
+  - select:
+      kind: MutatingWebhookConfiguration
+    fieldPaths:
+    - webhooks.*.clientConfig.service.port
+    options:
+      create: true
+
 
 patches:
 - patch: |-
@@ -20,9 +63,9 @@ patches:
       value: kusionstack-rollout-mutating
   target:
     kind: MutatingWebhookConfiguration
-- patch: |-
-    - op: replace
-      path: /metadata/name
-      value: kusionstack-rollout-webhook
-  target:
-    kind: Service
+# - patch: |-
+#     - op: replace
+#       path: /metadata/name
+#       value: kusionstack-rollout-webhook
+#   target:
+#     kind: Service
