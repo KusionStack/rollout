@@ -378,8 +378,8 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 
 		r.Recorder.Eventf(obj, corev1.EventTypeWarning, "FailedCreate", "failed to create a new rolloutRun %s: %v", curRun.Name, err)
 		logger.Error(err, "failed to create rolloutRun", "rolloutRun", curRun.Name)
-		setStatusPhase(newStatus, curRun.Name, rolloutv1alpha1.RolloutPhaseProgressing)
-		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s", curRun.Name))
+		// do not change status phase here if rolloutRun is not created
+		setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s", curRun.Name))
 		return err
 	}
 
@@ -387,7 +387,8 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 	logger.Info("a new rolloutRun has been created", "rolloutRun", rolloutID)
 	// update status
 	setStatusPhase(newStatus, curRun.Name, rolloutv1alpha1.RolloutPhaseProgressing)
-	setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, "SucceedCreate", "a new rolloutRun is created")
+	setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionTrue, "SucceedCreate", fmt.Sprintf("rolloutRun %s is created", curRun.Name))
+	setStatusCondition(newStatus, rolloutv1alpha1.RolloutConditionProgressing, metav1.ConditionTrue, "Triggered", "")
 	return nil
 }
 
