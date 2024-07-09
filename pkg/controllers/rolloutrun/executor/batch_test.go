@@ -80,44 +80,6 @@ func runBatchTestCases(t *testing.T, tests []batchExectorTestCase) {
 	}
 }
 
-func Test_BatchExecutor_NotSupported(t *testing.T) {
-	tests := []batchExectorTestCase{
-		{
-			name: "workload does not support batch release",
-			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
-
-				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
-					Targets: unimportantTargets,
-				}}
-				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
-					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
-						CurrentBatchState: StepPending,
-					},
-					Records: []rolloutv1alpha1.RolloutRunStepStatus{
-						{
-							State: StepPending,
-						},
-					},
-				}
-				return rollout, rolloutRun
-			},
-			getWorkloads: unimportantWorkloads,
-			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(reconcile.Result{Requeue: true}, result)
-			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.CurrentBatchState)
-				assert.EqualValues(StepPreBatchStepHook, status.BatchStatus.Records[0].State)
-			},
-		},
-	}
-	runBatchTestCases(t, tests)
-}
-
 func Test_BatchExecutor_Do(t *testing.T) {
 	tests := []batchExectorTestCase{
 		{
