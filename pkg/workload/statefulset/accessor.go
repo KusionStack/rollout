@@ -55,32 +55,31 @@ func (s *accessorImpl) NewObjectList() client.ObjectList {
 	return &appsv1.StatefulSetList{}
 }
 
-func (s *accessorImpl) GetInfo(cluster string, obj client.Object) (*workload.Info, error) {
-	_, ok := obj.(*appsv1.StatefulSet)
-	if !ok {
-		return nil, ObjectTypeError
+func (s *accessorImpl) GetInfo(cluster string, object client.Object) (*workload.Info, error) {
+	obj, err := checkObj(object)
+	if err != nil {
+		return nil, err
 	}
 
 	return workload.NewInfo(cluster, GVK, obj, s.getStatus(obj)), nil
 }
 
-func (p *accessorImpl) getStatus(obj client.Object) workload.InfoStatus {
-	sts := obj.(*appsv1.StatefulSet)
+func (p *accessorImpl) getStatus(obj *appsv1.StatefulSet) workload.InfoStatus {
 	return workload.InfoStatus{
-		ObservedGeneration:       sts.Status.ObservedGeneration,
-		StableRevision:           sts.Status.CurrentRevision,
-		UpdatedRevision:          sts.Status.UpdateRevision,
-		Replicas:                 ptr.Deref(sts.Spec.Replicas, 0),
-		UpdatedReplicas:          sts.Status.UpdatedReplicas,
-		UpdatedReadyReplicas:     sts.Status.UpdatedReplicas,
-		UpdatedAvailableReplicas: sts.Status.UpdatedReplicas,
+		ObservedGeneration:       obj.Status.ObservedGeneration,
+		StableRevision:           obj.Status.CurrentRevision,
+		UpdatedRevision:          obj.Status.UpdateRevision,
+		Replicas:                 ptr.Deref(obj.Spec.Replicas, 0),
+		UpdatedReplicas:          obj.Status.UpdatedReplicas,
+		UpdatedReadyReplicas:     obj.Status.UpdatedReplicas,
+		UpdatedAvailableReplicas: obj.Status.UpdatedReplicas,
 	}
 }
 
-func (s *accessorImpl) ReleaseControl() workload.ReleaseControl {
-	return &releaseControl{}
-}
-
-func (s *accessorImpl) PodControl(client.Reader) workload.PodControl {
-	return &podControl{}
+func checkObj(object client.Object) (*appsv1.StatefulSet, error) {
+	obj, ok := object.(*appsv1.StatefulSet)
+	if !ok {
+		return nil, ObjectTypeError
+	}
+	return obj, nil
 }

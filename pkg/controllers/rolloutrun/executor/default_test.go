@@ -57,6 +57,32 @@ var (
 			Conditions: []rolloutv1alpha1.Condition{},
 		},
 	}
+	testCanaryRolloutRun = rolloutv1alpha1.RolloutRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "ror-with-canary",
+			Namespace:   metav1.NamespaceDefault,
+			UID:         types.UID(uuid.New().String()),
+			Labels:      make(map[string]string),
+			Annotations: make(map[string]string),
+		},
+		Spec: rolloutv1alpha1.RolloutRunSpec{
+			TargetType: rolloutv1alpha1.ObjectTypeRef{
+				APIVersion: statefulset.GVK.GroupVersion().String(),
+				Kind:       statefulset.GVK.Kind,
+			},
+			Webhooks: []rolloutv1alpha1.RolloutWebhook{},
+			Canary: &rolloutv1alpha1.RolloutRunCanaryStrategy{
+				Targets: []rolloutv1alpha1.RolloutRunStepTarget{},
+			},
+			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
+				Toleration: &rolloutv1alpha1.TolerationStrategy{},
+				Batches:    []rolloutv1alpha1.RolloutRunStep{},
+			},
+		},
+		Status: rolloutv1alpha1.RolloutRunStatus{
+			Conditions: []rolloutv1alpha1.Condition{},
+		},
+	}
 )
 
 func newTestLogger() logr.Logger {

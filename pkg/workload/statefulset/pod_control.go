@@ -24,11 +24,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/pkg/utils"
+	"kusionstack.io/rollout/pkg/workload"
 )
 
-type podControl struct{}
+var _ workload.PodControl = &accessorImpl{}
 
-func (c *podControl) IsUpdatedPod(obj client.Object, pod *corev1.Pod) (bool, error) {
+func (c *accessorImpl) IsUpdatedPod(obj client.Object, pod *corev1.Pod) (bool, error) {
 	sts, ok := obj.(*appsv1.StatefulSet)
 	if !ok {
 		return false, ObjectTypeError
@@ -40,7 +41,7 @@ func (c *podControl) IsUpdatedPod(obj client.Object, pod *corev1.Pod) (bool, err
 	return false, nil
 }
 
-func (c *podControl) GetPodSelector(obj client.Object) (labels.Selector, error) {
+func (c *accessorImpl) GetPodSelector(obj client.Object) (labels.Selector, error) {
 	sts, ok := obj.(*appsv1.StatefulSet)
 	if !ok {
 		return nil, ObjectTypeError

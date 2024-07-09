@@ -172,6 +172,34 @@ func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutStepS
 	}
 }
 
+func (c *ExecutorContext) SkipCurrentRelease() {
+	c.Initialize()
+
+	newStatus := c.NewStatus
+	if c.inCanary() {
+		newStatus.CanaryStatus.State = StepSucceeded
+		if newStatus.CanaryStatus.StartTime == nil {
+			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
+		}
+		newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
+	} else {
+		newStatus.BatchStatus.CurrentBatchIndex = int32(len(c.RolloutRun.Spec.Batch.Batches) - 1)
+		newStatus.BatchStatus.CurrentBatchState = StepSucceeded
+		for i := range newStatus.BatchStatus.Records {
+			if newStatus.BatchStatus.Records[i].State == StepNone ||
+				newStatus.BatchStatus.Records[i].State == StepPending {
+				newStatus.BatchStatus.Records[i].State = StepSucceeded
+			}
+			if newStatus.BatchStatus.Records[i].StartTime == nil {
+				newStatus.BatchStatus.Records[i].StartTime = ptr.To(metav1.Now())
+			}
+			if newStatus.BatchStatus.Records[i].FinishTime == nil {
+				newStatus.BatchStatus.Records[i].FinishTime = ptr.To(metav1.Now())
+			}
+		}
+	}
+}
+
 func (c *ExecutorContext) Pause() {
 	c.Initialize()
 	c.NewStatus.Phase = rolloutv1alpha1.RolloutRunPhasePaused
