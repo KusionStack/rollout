@@ -71,10 +71,22 @@ func (e *canaryExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result
 		return true, ctrl.Result{Requeue: true}, nil
 	}
 
+	if !e.isSupported(ctx) {
+		// skip canary release if workload accessor don't support it.
+		e.loggerWithContext(ctx).Info("workload accessor don't support canary release, skip it")
+		ctx.SkipCurrentRelease()
+		return true, ctrl.Result{Requeue: true}, nil
+	}
+
 	logger := e.loggerWithContext(ctx)
 	ctx.TrafficManager.With(logger, ctx.RolloutRun.Spec.Canary.Targets, ctx.RolloutRun.Spec.Canary.Traffic)
 
 	return e.stateMachine.do(ctx, ctx.NewStatus.CanaryStatus.State)
+}
+
+func (e *canaryExecutor) isSupported(ctx *ExecutorContext) bool {
+	_, ok := ctx.Accessor.(workload.CanaryReleaseControl)
+	return ok
 }
 
 func (e *canaryExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, error) {

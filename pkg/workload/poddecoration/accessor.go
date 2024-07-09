@@ -14,29 +14,26 @@
  * limitations under the License.
  */
 
-package collaset
+package poddecoration
 
 import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/pkg/workload"
 )
 
-// GVK is the GroupVersionKind of the CollaSet
+// GVK is the GroupVersionKind of the PodDecoration
 var GVK = schema.GroupVersionKind{
 	Group:   operatingv1alpha1.GroupVersion.Group,
 	Version: operatingv1alpha1.GroupVersion.Version,
-	Kind:    "CollaSet",
+	Kind:    "PodDecoration",
 }
 
 var ObjectTypeError = fmt.Errorf("object must be %s", GVK.GroupKind().String())
-
-var _ workload.Accessor = &accessorImpl{}
 
 type accessorImpl struct{}
 
@@ -57,35 +54,36 @@ func (w *accessorImpl) Watchable() bool {
 }
 
 func (w *accessorImpl) NewObject() client.Object {
-	return &operatingv1alpha1.CollaSet{}
+	return &operatingv1alpha1.PodDecoration{}
 }
 
 func (w *accessorImpl) NewObjectList() client.ObjectList {
-	return &operatingv1alpha1.CollaSetList{}
+	return &operatingv1alpha1.PodDecorationList{}
 }
 
 func (w *accessorImpl) GetInfo(cluster string, object client.Object) (*workload.Info, error) {
-	obj, err := w.checkObj(object)
+	obj, err := checkObj(object)
 	if err != nil {
 		return nil, err
 	}
+
 	return workload.NewInfo(cluster, GVK, obj, w.getStatus(obj)), nil
 }
 
-func (w *accessorImpl) getStatus(obj *operatingv1alpha1.CollaSet) workload.InfoStatus {
+func (w *accessorImpl) getStatus(obj *operatingv1alpha1.PodDecoration) workload.InfoStatus {
 	return workload.InfoStatus{
 		StableRevision:           obj.Status.CurrentRevision,
 		UpdatedRevision:          obj.Status.UpdatedRevision,
 		ObservedGeneration:       obj.Status.ObservedGeneration,
-		Replicas:                 ptr.Deref(obj.Spec.Replicas, 0),
-		UpdatedReplicas:          obj.Status.UpdatedReplicas,
-		UpdatedReadyReplicas:     obj.Status.UpdatedReadyReplicas,
-		UpdatedAvailableReplicas: obj.Status.UpdatedAvailableReplicas,
+		Replicas:                 obj.Status.MatchedPods,
+		UpdatedReplicas:          obj.Status.UpdatedPods,
+		UpdatedReadyReplicas:     obj.Status.UpdatedReadyPods,
+		UpdatedAvailableReplicas: obj.Status.UpdatedAvailablePods,
 	}
 }
 
-func (c *accessorImpl) checkObj(object client.Object) (*operatingv1alpha1.CollaSet, error) {
-	obj, ok := object.(*operatingv1alpha1.CollaSet)
+func checkObj(object client.Object) (*operatingv1alpha1.PodDecoration, error) {
+	obj, ok := object.(*operatingv1alpha1.PodDecoration)
 	if !ok {
 		return nil, ObjectTypeError
 	}

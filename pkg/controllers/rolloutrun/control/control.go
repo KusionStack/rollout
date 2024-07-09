@@ -41,14 +41,14 @@ import (
 
 type BatchReleaseControl struct {
 	workload workload.Accessor
-	control  workload.ReleaseControl
+	control  workload.BatchReleaseControl
 	client   client.Client
 }
 
 func NewBatchReleaseControl(impl workload.Accessor, client client.Client) *BatchReleaseControl {
 	return &BatchReleaseControl{
 		workload: impl,
-		control:  impl.ReleaseControl(),
+		control:  impl.(workload.BatchReleaseControl),
 		client:   client,
 	}
 }
@@ -99,14 +99,14 @@ func (c *BatchReleaseControl) Finalize(workload *workload.Info) error {
 
 type CanaryReleaseControl struct {
 	workload workload.Accessor
-	control  workload.ReleaseControl
+	control  workload.CanaryReleaseControl
 	client   client.Client
 }
 
 func NewCanaryReleaseControl(impl workload.Accessor, client client.Client) *CanaryReleaseControl {
 	return &CanaryReleaseControl{
 		workload: impl,
-		control:  impl.ReleaseControl(),
+		control:  impl.(workload.CanaryReleaseControl),
 		client:   client,
 	}
 }

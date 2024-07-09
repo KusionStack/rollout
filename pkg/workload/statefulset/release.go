@@ -29,10 +29,13 @@ import (
 	"kusionstack.io/rollout/pkg/workload"
 )
 
-type releaseControl struct{}
+var (
+	_ workload.CanaryReleaseControl = &accessorImpl{}
+	_ workload.BatchReleaseControl  = &accessorImpl{}
+)
 
-func (c *releaseControl) BatchPreCheck(object client.Object) error {
-	obj, err := c.checkObj(object)
+func (c *accessorImpl) BatchPreCheck(object client.Object) error {
+	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
@@ -42,8 +45,8 @@ func (c *releaseControl) BatchPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *releaseControl) ApplyPartition(object client.Object, partition intstr.IntOrString) error {
-	obj, err := c.checkObj(object)
+func (c *accessorImpl) ApplyPartition(object client.Object, partition intstr.IntOrString) error {
+	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
@@ -83,12 +86,12 @@ func (c *releaseControl) ApplyPartition(object client.Object, partition intstr.I
 	return nil
 }
 
-func (c *releaseControl) CanaryPreCheck(object client.Object) error {
+func (c *accessorImpl) CanaryPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *releaseControl) Scale(object client.Object, replicas int32) error {
-	obj, err := c.checkObj(object)
+func (c *accessorImpl) Scale(object client.Object, replicas int32) error {
+	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
@@ -96,21 +99,13 @@ func (c *releaseControl) Scale(object client.Object, replicas int32) error {
 	return nil
 }
 
-func (c *releaseControl) ApplyCanaryPatch(object client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error {
-	obj, err := c.checkObj(object)
+func (c *accessorImpl) ApplyCanaryPatch(object client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error {
+	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
 	applyPodTemplateMetadataPatch(obj, podTemplatePatch)
 	return nil
-}
-
-func (c *releaseControl) checkObj(object client.Object) (*appsv1.StatefulSet, error) {
-	obj, ok := object.(*appsv1.StatefulSet)
-	if !ok {
-		return nil, ObjectTypeError
-	}
-	return obj, nil
 }
 
 func applyPodTemplateMetadataPatch(obj *appsv1.StatefulSet, patch *rolloutv1alpha1.MetadataPatch) {

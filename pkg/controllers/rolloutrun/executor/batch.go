@@ -64,6 +64,13 @@ func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result,
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	currentState := newStatus.BatchStatus.CurrentBatchState
 
+	if !e.isSupported(ctx) {
+		// skip batch release if workload accessor don't support it.
+		e.loggerWithContext(ctx).Info("workload accessor don't support batch release, skip it")
+		ctx.SkipCurrentRelease()
+		return true, ctrl.Result{Requeue: true}, nil
+	}
+
 	stepDone, result, err := e.stateMachine.do(ctx, currentState)
 	if err != nil {
 		return false, result, err
@@ -80,6 +87,11 @@ func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result,
 	}
 
 	return true, result, nil
+}
+
+func (e *batchExecutor) isSupported(ctx *ExecutorContext) bool {
+	_, ok := ctx.Accessor.(workload.BatchReleaseControl)
+	return ok
 }
 
 func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, error) {

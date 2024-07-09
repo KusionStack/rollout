@@ -28,12 +28,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/collaset"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var (
@@ -79,16 +79,6 @@ func (f *fakeWorkloadAccessor) NewObject() client.Object {
 
 // NewObjectList implements workload.Accessor.
 func (f *fakeWorkloadAccessor) NewObjectList() client.ObjectList {
-	panic("unimplemented")
-}
-
-// PodControl implements workload.Accessor.
-func (f *fakeWorkloadAccessor) PodControl(client.Reader) workload.PodControl {
-	panic("unimplemented")
-}
-
-// ReleaseControl implements workload.Accessor.
-func (f *fakeWorkloadAccessor) ReleaseControl() workload.ReleaseControl {
 	panic("unimplemented")
 }
 

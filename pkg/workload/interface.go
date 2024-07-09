@@ -25,6 +25,10 @@ import (
 )
 
 // Accessor defines the functions to access the workload.
+// The following interfaces are optional:
+// - CanaryReleaseControl
+// - BatchReleaseControl
+// - PodControl
 type Accessor interface {
 	// GroupVersionKind returns the GroupVersionKind of the workload
 	GroupVersionKind() schema.GroupVersionKind
@@ -38,21 +42,18 @@ type Accessor interface {
 	Watchable() bool
 	// GetInfo returns a info represent workload
 	GetInfo(cluster string, obj client.Object) (*Info, error)
-	// ReleaseControl returns the release control for the workload
-	ReleaseControl() ReleaseControl
-	// PodControl returns the pod control for the workload.
-	//
-	// For certain workload types, such as Deployment, this feature is helpful for identifying the updated pods.
-	// Deployment must first locate the updated ReplicaSet and then retrieve the pod-template-hash to distinguish the pods.
-	PodControl(client.Reader) PodControl
 }
 
-// ReleaseControl defines the control functions for workload release
-type ReleaseControl interface {
+// BatchReleaseControl defines the control functions for workload batch release
+type BatchReleaseControl interface {
 	// BatchPreCheck checks object before batch release.
 	BatchPreCheck(obj client.Object) error
 	// ApplyPartition applies partition to the workload
 	ApplyPartition(obj client.Object, partition intstr.IntOrString) error
+}
+
+// CanaryReleaseControl defines the control functions for workload canary release
+type CanaryReleaseControl interface {
 	// CanaryPreCheck checks object before canary release.
 	CanaryPreCheck(obj client.Object) error
 	// Scale scales the workload replicas.

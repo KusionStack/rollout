@@ -114,7 +114,13 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
-	podRevision := recognizePodRevision(accessor.PodControl(r.Client), workloadObj, pod)
+	pc, ok := accessor.(workload.PodControl)
+	if !ok {
+		logger.V(2).Info("accessor does not support pod control, skip reconciling pod")
+		return reconcile.Result{}, nil
+	}
+
+	podRevision := recognizePodRevision(pc, workloadObj, pod)
 
 	// patch pod label
 	updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {

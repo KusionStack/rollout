@@ -21,32 +21,32 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/pkg/utils"
+	"kusionstack.io/rollout/pkg/workload"
 )
 
-type podControl struct{}
+var _ workload.PodControl = &accessorImpl{}
 
-func (c *podControl) IsUpdatedPod(obj client.Object, pod *corev1.Pod) (bool, error) {
-	cls, ok := obj.(*operatingv1alpha1.CollaSet)
-	if !ok {
-		return false, ObjectTypeError
+func (c *accessorImpl) IsUpdatedPod(object client.Object, pod *corev1.Pod) (bool, error) {
+	obj, err := c.checkObj(object)
+	if err != nil {
+		return false, err
 	}
-	revision := utils.GetMapValueByDefault(pod.Labels, appsv1.ControllerRevisionHashLabelKey, cls.Status.CurrentRevision)
-	if revision == cls.Status.UpdatedRevision {
+	revision := utils.GetMapValueByDefault(pod.Labels, appsv1.ControllerRevisionHashLabelKey, obj.Status.CurrentRevision)
+	if revision == obj.Status.UpdatedRevision {
 		return true, nil
 	}
 	return false, nil
 }
 
-func (c *podControl) GetPodSelector(obj client.Object) (labels.Selector, error) {
-	cls, ok := obj.(*operatingv1alpha1.CollaSet)
-	if !ok {
-		return nil, ObjectTypeError
+func (c *accessorImpl) GetPodSelector(object client.Object) (labels.Selector, error) {
+	obj, err := c.checkObj(object)
+	if err != nil {
+		return nil, err
 	}
-	selector, err := metav1.LabelSelectorAsSelector(cls.Spec.Selector)
+	selector, err := metav1.LabelSelectorAsSelector(obj.Spec.Selector)
 	if err != nil {
 		return nil, err
 	}
