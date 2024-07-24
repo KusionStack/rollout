@@ -120,7 +120,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		return reconcile.Result{}, nil
 	}
 
-	podRevision := recognizePodRevision(pc, workloadObj, pod)
+	podRevision := recognizePodRevision(pc, r.Client, workloadObj, pod)
 
 	// patch pod label
 	updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
@@ -137,7 +137,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	return reconcile.Result{}, err
 }
 
-func recognizePodRevision(pc workload.PodControl, workloadObj client.Object, pod *corev1.Pod) string {
+func recognizePodRevision(pc workload.PodControl, reader client.Reader, workloadObj client.Object, pod *corev1.Pod) string {
 	if workload.IsCanary(workloadObj) {
 		// canary workload, always set pod revision to canary
 		return rolloutapi.LabelValuePodRevisionCanary
@@ -149,7 +149,7 @@ func recognizePodRevision(pc workload.PodControl, workloadObj client.Object, pod
 	}
 
 	// workload is progressing, set updated pod revision to canary
-	if updated, _ := pc.IsUpdatedPod(workloadObj, pod); updated {
+	if updated, _ := pc.IsUpdatedPod(reader, workloadObj, pod); updated {
 		return rolloutapi.LabelValuePodRevisionCanary
 	}
 	return rolloutapi.LabelValuePodRevisionBase

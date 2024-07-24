@@ -64,7 +64,7 @@ type CanaryReleaseControl interface {
 
 type PodControl interface {
 	// IsUpdatedPod checks if the pod revision is updated of the workload
-	IsUpdatedPod(obj client.Object, pod *corev1.Pod) (bool, error)
+	IsUpdatedPod(reader client.Reader, obj client.Object, pod *corev1.Pod) (bool, error)
 	// GetPodSelector gets the pod selector of the workload
 	GetPodSelector(obj client.Object) (labels.Selector, error)
 }
