@@ -28,6 +28,7 @@ import (
 	"kusionstack.io/rollout/pkg/genericregistry"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/collaset"
+	"kusionstack.io/rollout/pkg/workload/poddecoration"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
 )
 
@@ -51,6 +52,7 @@ func NewWorkloadRegistry() WorkloadRegistry {
 
 func InitWorkloadRegistry(mgr manager.Manager) (bool, error) {
 	Workloads.Register(collaset.GVK, collaset.New())
+	Workloads.Register(poddecoration.GVK, poddecoration.New())
 	Workloads.Register(statefulset.GVK, statefulset.New())
 	return true, nil
 }
