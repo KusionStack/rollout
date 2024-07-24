@@ -29,7 +29,7 @@ import (
 
 var _ workload.PodControl = &accessorImpl{}
 
-func (c *accessorImpl) IsUpdatedPod(object client.Object, pod *corev1.Pod) (bool, error) {
+func (c *accessorImpl) IsUpdatedPod(_ client.Reader, object client.Object, pod *corev1.Pod) (bool, error) {
 	obj, err := c.checkObj(object)
 	if err != nil {
 		return false, err

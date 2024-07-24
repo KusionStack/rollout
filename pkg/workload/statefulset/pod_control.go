@@ -29,7 +29,7 @@ import (
 
 var _ workload.PodControl = &accessorImpl{}
 
-func (c *accessorImpl) IsUpdatedPod(obj client.Object, pod *corev1.Pod) (bool, error) {
+func (c *accessorImpl) IsUpdatedPod(_ client.Reader, obj client.Object, pod *corev1.Pod) (bool, error) {
 	sts, ok := obj.(*appsv1.StatefulSet)
 	if !ok {
 		return false, ObjectTypeError
