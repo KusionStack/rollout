@@ -48,8 +48,8 @@ type Accessor interface {
 type BatchReleaseControl interface {
 	// BatchPreCheck checks object before batch release.
 	BatchPreCheck(obj client.Object) error
-	// ApplyPartition applies partition to the workload
-	ApplyPartition(obj client.Object, partition intstr.IntOrString) error
+	// ApplyPartition use expectedUpdated replicas to calculate partition and apply it to the workload.
+	ApplyPartition(obj client.Object, expectedUpdated intstr.IntOrString) error
 }
 
 // CanaryReleaseControl defines the control functions for workload canary release

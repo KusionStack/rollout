@@ -78,11 +78,11 @@ func (c *BatchReleaseControl) Initialize(workload *workload.Info, rollout, rollo
 	return err
 }
 
-func (c *BatchReleaseControl) UpdatePartition(workload *workload.Info, partition intstr.IntOrString) (bool, error) {
+func (c *BatchReleaseControl) UpdatePartition(workload *workload.Info, expectedUpdated intstr.IntOrString) (bool, error) {
 	ctx := clusterinfo.WithCluster(context.Background(), workload.ClusterName)
 	obj := workload.Object
 	return utils.UpdateOnConflict(ctx, c.client, c.client, obj, func() error {
-		return c.control.ApplyPartition(obj, partition)
+		return c.control.ApplyPartition(obj, expectedUpdated)
 	})
 }
 
@@ -174,7 +174,7 @@ func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workl
 	cluster := stable.ClusterName
 	ctx = clusterinfo.WithCluster(ctx, cluster)
 
-	canaryReplicas, err := workload.CalculatePartitionReplicas(&stable.Status.Replicas, replicas)
+	canaryReplicas, err := workload.CalculateUpdatedReplicas(&stable.Status.Replicas, replicas)
 	if err != nil {
 		return controllerutil.OperationResultNone, nil, err
 	}

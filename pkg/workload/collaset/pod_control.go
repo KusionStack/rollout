@@ -30,7 +30,7 @@ import (
 var _ workload.PodControl = &accessorImpl{}
 
 func (c *accessorImpl) IsUpdatedPod(_ client.Reader, object client.Object, pod *corev1.Pod) (bool, error) {
-	obj, err := c.checkObj(object)
+	obj, err := checkObj(object)
 	if err != nil {
 		return false, err
 	}
@@ -42,7 +42,7 @@ func (c *accessorImpl) IsUpdatedPod(_ client.Reader, object client.Object, pod *
 }
 
 func (c *accessorImpl) GetPodSelector(object client.Object) (labels.Selector, error) {
-	obj, err := c.checkObj(object)
+	obj, err := checkObj(object)
 	if err != nil {
 		return nil, err
 	}

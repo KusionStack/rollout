@@ -41,41 +41,29 @@ func (c *accessorImpl) BatchPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *accessorImpl) ApplyPartition(object client.Object, partition intstr.IntOrString) error {
+func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated intstr.IntOrString) error {
 	// object must be *operatingv1alpha1.PodDecoration
 	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
 
-	// partition in PodDecoration means the number of pods with current revision.
-	expectedUpdatedPartition, err := workload.CalculatePartitionReplicas(&obj.Status.MatchedPods, partition)
-	if err != nil {
-		return err
-	}
-
-	totalReplicas := obj.Status.MatchedPods
-
 	var specPartition int32
 	if obj.Spec.UpdateStrategy.RollingUpdate != nil {
 		specPartition = ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.Partition, 0)
 	}
-	currentUpdatedPartition := totalReplicas - specPartition
 
-	if currentUpdatedPartition >= expectedUpdatedPartition {
-		// already updated if the current updated partition is greater than or equal to the expected updated partition
-		return nil
+	expectedPartition, err := workload.CalculateExpectedPartition(&obj.Status.MatchedPods, expectedUpdated, specPartition)
+	if err != nil {
+		return err
 	}
 
-	// calculate the expected partition
-	realPartition := totalReplicas - expectedUpdatedPartition
-	// update partition
-	obj.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.PodDecorationRollingUpdate{
-		Partition: ptr.To(realPartition),
-	}
-	if realPartition == 0 {
+	if expectedPartition == 0 {
 		obj.Spec.UpdateStrategy.RollingUpdate = nil
+	} else {
+		obj.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.PodDecorationRollingUpdate{
+			Partition: ptr.To(expectedPartition),
+		}
 	}
-
 	return nil
 }

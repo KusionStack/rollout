@@ -34,12 +34,12 @@ func GetClusterFromLabel(labels map[string]string) string {
 	return labels[clusterinfo.ClusterLabelKey]
 }
 
-func CalculatePartitionReplicas(totalReplicas *int32, partition intstr.IntOrString) (int32, error) {
+func CalculateUpdatedReplicas(totalReplicas *int32, expectedReplicas intstr.IntOrString) (int32, error) {
 	replicas := ptr.Deref(totalReplicas, 0)
 	if replicas == 0 {
 		return 0, nil
 	}
-	partitionInt, err := intstr.GetScaledValueFromIntOrPercent(&partition, int(replicas), true)
+	partitionInt, err := intstr.GetScaledValueFromIntOrPercent(&expectedReplicas, int(replicas), true)
 	if err != nil {
 		return 0, err
 	}
@@ -47,6 +47,28 @@ func CalculatePartitionReplicas(totalReplicas *int32, partition intstr.IntOrStri
 		partitionInt = int(replicas)
 	}
 	return int32(partitionInt), nil
+}
+
+// CalculateExpectedPartition calculates the expected partition based on the total replicas, expected replicas, and the partition in the spec.
+// In this function, partition means how many replicas are not updated.
+func CalculateExpectedPartition(total *int32, expectedReplicas intstr.IntOrString, partitionInSpec int32) (int32, error) {
+	expectedUpdatedReplicas, err := CalculateUpdatedReplicas(total, expectedReplicas)
+	if err != nil {
+		return 0, err
+	}
+
+	totalReplicas := ptr.Deref(total, 0)
+	currentUpdatedReplicas := totalReplicas - partitionInSpec
+	if currentUpdatedReplicas < 0 {
+		currentUpdatedReplicas = 0
+	}
+
+	if currentUpdatedReplicas >= expectedUpdatedReplicas {
+		// already updated if the current updated partition is greater than or equal to the expected updated partition
+		return partitionInSpec, nil
+	}
+
+	return totalReplicas - expectedUpdatedReplicas, nil
 }
 
 // PatchMetadata patches metadata with the given patch

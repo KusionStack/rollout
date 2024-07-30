@@ -98,6 +98,15 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
 			},
 		},
+		{
+			name:   "total 10, want to update 11",
+			object: newTestApplyPartitionObject(10, 0),
+			input:  intstr.FromInt(11),
+			checkResult: func(assert assert.Assertions, object *operatingv1alpha1.PodDecoration, err error) {
+				assert.Nil(err)
+				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
+			},
+		},
 	}
 	for i := range tests {
 		tt := tests[i]

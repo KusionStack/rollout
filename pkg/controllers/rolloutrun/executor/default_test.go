@@ -92,6 +92,7 @@ func newTestLogger() logr.Logger {
 func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rolloutv1alpha1.RolloutRun, objs ...client.Object) *ExecutorContext {
 	infos := []*workload.Info{}
 	inter := newTestWorkloadInterface()
+	rolloutv1alpha1.AddToScheme(scheme.Scheme)
 	clientbuilder := fake.NewClientBuilder().WithScheme(scheme.Scheme)
 	for i := range objs {
 		obj := objs[i]
@@ -128,7 +129,7 @@ func newTestWorkloadInterface() workload.Accessor {
 
 func newFakeObject(cluster, namespace, name string, replicas, partition, updated int32) *appsv1.StatefulSet {
 	realPartition := replicas - partition
-	return &appsv1.StatefulSet{
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Namespace:   namespace,
@@ -148,6 +149,10 @@ func newFakeObject(cluster, namespace, name string, replicas, partition, updated
 			UpdatedReplicas: updated,
 		},
 	}
+	if realPartition <= 0 {
+		sts.Spec.UpdateStrategy.RollingUpdate = nil
+	}
+	return sts
 }
 
 func withProgressingInfo(obj *appsv1.StatefulSet) *appsv1.StatefulSet {

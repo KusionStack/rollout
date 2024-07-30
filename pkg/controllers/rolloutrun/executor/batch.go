@@ -223,7 +223,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		// target will not be nil here
 		info := ctx.Workloads.Get(item.Cluster, item.Name)
 		status := info.APIStatus()
-		partition, _ := workload.CalculatePartitionReplicas(&status.Replicas, item.Replicas)
+		partition, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
 
 		if !info.CheckUpdatedReady(partition) {
 			// ready

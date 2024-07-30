@@ -17,6 +17,8 @@
 package collaset
 
 import (
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
@@ -33,37 +35,41 @@ var (
 )
 
 func (c *accessorImpl) BatchPreCheck(object client.Object) error {
+	obj, err := checkObj(object)
+	if err != nil {
+		return err
+	}
+
+	if obj.Spec.UpdateStrategy.RollingUpdate != nil && obj.Spec.UpdateStrategy.RollingUpdate.ByLabel != nil {
+		return fmt.Errorf("rollout can not upgrade partition in CollaSet if the 'spec.updateStrategy.rollingUpdate.byLabel' is not nil")
+	}
 	return nil
 }
 
-func (c *accessorImpl) ApplyPartition(object client.Object, partition intstr.IntOrString) error {
-	obj, err := c.checkObj(object)
-	if err != nil {
-		return err
-	}
-	expectedPartition, err := workload.CalculatePartitionReplicas(obj.Spec.Replicas, partition)
+func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated intstr.IntOrString) error {
+	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
 
-	currentPartition := int32(0)
+	specPartition := int32(0)
 	if obj.Spec.UpdateStrategy.RollingUpdate != nil && obj.Spec.UpdateStrategy.RollingUpdate.ByPartition != nil {
-		currentPartition = ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition, 0)
+		specPartition = ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition, 0)
 	}
 
-	if currentPartition >= expectedPartition {
-		return nil
+	expectedPartition, err := workload.CalculateExpectedPartition(obj.Spec.Replicas, expectedUpdated, specPartition)
+	if err != nil {
+		return err
 	}
 
-	// update
-	obj.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.RollingUpdateCollaSetStrategy{
-		ByPartition: &operatingv1alpha1.ByPartition{
-			Partition: ptr.To(expectedPartition),
-		},
-	}
-
-	if expectedPartition == *obj.Spec.Replicas {
+	if expectedPartition == 0 {
 		obj.Spec.UpdateStrategy.RollingUpdate = nil
+	} else {
+		obj.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.RollingUpdateCollaSetStrategy{
+			ByPartition: &operatingv1alpha1.ByPartition{
+				Partition: ptr.To(expectedPartition),
+			},
+		}
 	}
 
 	return nil
@@ -74,7 +80,7 @@ func (c *accessorImpl) CanaryPreCheck(object client.Object) error {
 }
 
 func (c *accessorImpl) Scale(object client.Object, replicas int32) error {
-	obj, err := c.checkObj(object)
+	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
@@ -83,7 +89,7 @@ func (c *accessorImpl) Scale(object client.Object, replicas int32) error {
 }
 
 func (c *accessorImpl) ApplyCanaryPatch(object client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error {
-	obj, err := c.checkObj(object)
+	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
