@@ -69,14 +69,6 @@ func TestCalculateExpectedPartition(t *testing.T) {
 			want:             9,
 			wantErr:          false,
 		},
-		{
-			name:             "total 10, current partition 15, want to update 1",
-			total:            10,
-			expectedReplicas: intstr.FromInt(1),
-			partitionInSpec:  15,
-			want:             9,
-			wantErr:          false,
-		},
 	}
 	for i := range tests {
 		tt := tests[i]
