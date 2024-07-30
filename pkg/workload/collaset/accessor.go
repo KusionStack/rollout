@@ -65,7 +65,7 @@ func (w *accessorImpl) NewObjectList() client.ObjectList {
 }
 
 func (w *accessorImpl) GetInfo(cluster string, object client.Object) (*workload.Info, error) {
-	obj, err := w.checkObj(object)
+	obj, err := checkObj(object)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (w *accessorImpl) getStatus(obj *operatingv1alpha1.CollaSet) workload.InfoS
 	}
 }
 
-func (c *accessorImpl) checkObj(object client.Object) (*operatingv1alpha1.CollaSet, error) {
+func checkObj(object client.Object) (*operatingv1alpha1.CollaSet, error) {
 	obj, ok := object.(*operatingv1alpha1.CollaSet)
 	if !ok {
 		return nil, ObjectTypeError

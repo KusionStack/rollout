@@ -32,7 +32,7 @@ func newTestApplyPartitionObject(total int32, updated int32) *operatingv1alpha1.
 			UpdateStrategy: operatingv1alpha1.UpdateStrategy{
 				RollingUpdate: &operatingv1alpha1.RollingUpdateCollaSetStrategy{
 					ByPartition: &operatingv1alpha1.ByPartition{
-						Partition: ptr.To(updated),
+						Partition: ptr.To(total - updated),
 					},
 				},
 			},
@@ -58,7 +58,7 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition)
 				partition := object.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition
 				if assert.NotNil(partition) {
-					assert.EqualValues(1, *partition)
+					assert.EqualValues(9, *partition)
 				}
 			},
 		},
@@ -73,7 +73,7 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition)
 				partition := object.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition
 				if assert.NotNil(partition) {
-					assert.EqualValues(6, *partition)
+					assert.EqualValues(4, *partition)
 				}
 			},
 		},
@@ -88,7 +88,7 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition)
 				partition := object.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition
 				if assert.NotNil(partition) {
-					assert.EqualValues(9, *partition)
+					assert.EqualValues(1, *partition)
 				}
 			},
 		},
@@ -96,6 +96,15 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 			name:   "total 10, want to update 100%",
 			object: newTestApplyPartitionObject(10, 0),
 			input:  intstr.FromString("100%"),
+			checkResult: func(assert assert.Assertions, object *operatingv1alpha1.CollaSet, err error) {
+				assert.Nil(err)
+				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
+			},
+		},
+		{
+			name:   "total 10, want to update 11",
+			object: newTestApplyPartitionObject(10, 0),
+			input:  intstr.FromInt(11),
 			checkResult: func(assert assert.Assertions, object *operatingv1alpha1.CollaSet, err error) {
 				assert.Nil(err)
 				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)

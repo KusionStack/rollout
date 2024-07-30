@@ -45,44 +45,33 @@ func (c *accessorImpl) BatchPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *accessorImpl) ApplyPartition(object client.Object, partition intstr.IntOrString) error {
+func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated intstr.IntOrString) error {
 	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
-	expectedReplicas, err := workload.CalculatePartitionReplicas(obj.Spec.Replicas, partition)
+	// get current partition number
+	specPartition := int32(0)
+	if obj.Spec.UpdateStrategy.RollingUpdate != nil {
+		specPartition = ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.Partition, 0)
+	}
+
+	expectedPartition, err := workload.CalculateExpectedPartition(obj.Spec.Replicas, expectedUpdated, specPartition)
 	if err != nil {
 		return err
 	}
 
-	// get current partition number
-	currentPartition := int32(0)
-	if obj.Spec.UpdateStrategy.RollingUpdate != nil {
-		currentPartition = ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.Partition, 0)
-	}
-
-	// get total replicas number
-	totalReplicas := ptr.Deref(obj.Spec.Replicas, 0)
-	// if totalReplicas == 100, expectReplicas == 10, then expectedPartition is 90
-	expectedPartition := totalReplicas - expectedReplicas
-
-	if currentPartition <= expectedPartition {
-		// already update
-		return nil
-	}
-
-	obj.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
-		Type: appsv1.RollingUpdateStatefulSetStrategyType,
-		RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
-			Partition: ptr.To(expectedPartition),
-		},
-	}
-
-	// omit partition when it is zero, zero means update all
 	if expectedPartition == 0 {
+		// omit partition when it is zero, zero means update all
 		obj.Spec.UpdateStrategy.RollingUpdate = nil
+	} else {
+		obj.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
+			Type: appsv1.RollingUpdateStatefulSetStrategyType,
+			RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
+				Partition: ptr.To(expectedPartition),
+			},
+		}
 	}
-
 	return nil
 }
 

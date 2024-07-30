@@ -154,7 +154,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						newRunStepTarget("cluster-a", "test-0", intstr.FromInt(100)),
+						newRunStepTarget("cluster-a", "test-0", intstr.FromInt(10)),
+						newRunStepTarget("cluster-a", "test-1", intstr.FromInt(100)),
 					},
 				}}
 				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
@@ -171,7 +172,8 @@ func Test_BatchExecutor_Do(t *testing.T) {
 			},
 			getWorkloads: func() []client.Object {
 				return []client.Object{
-					newFakeObject("cluster-a", "default", "test-0", 100, 100, 100),
+					newFakeObject("cluster-a", "default", "test-0", 100, 10, 10),
+					newFakeObject("cluster-a", "default", "test-1", 100, 100, 100),
 				}
 			},
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
