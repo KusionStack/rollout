@@ -21,7 +21,7 @@ import (
 	"kusionstack.io/rollout/pkg/workload"
 )
 
-// +kubebuilder:webhook:path=/webhooks/mutating/pod,mutating=true,failurePolicy=ignore,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="",resources=pods,verbs=create;update,versions=v1,name=pods.core.v1
+// +kubebuilder:webhook:path=/webhooks/mutating/pod,mutating=true,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="",resources=pods,verbs=create;update,versions=v1,name=pods.core.v1
 
 const MutatingPod = "mutate-pod"
 

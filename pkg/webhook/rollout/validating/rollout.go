@@ -32,10 +32,10 @@ import (
 	"kusionstack.io/rollout/pkg/controllers/registry"
 )
 
-// +kubebuilder:webhook:path=/webhooks/validating/rolloutrun,mutating=false,failurePolicy=ignore,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=rolloutruns,verbs=create;update,versions=v1alpha1,name=rolloutruns.rollout.kusionstack.io
-// +kubebuilder:webhook:path=/webhooks/validating/rolloutstrategy,mutating=false,failurePolicy=ignore,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=rolloutstrategies,verbs=create;update,versions=v1alpha1,name=rolloutstrategies.rollout.kusionstack.io
-// +kubebuilder:webhook:path=/webhooks/validating/rollout,mutating=false,failurePolicy=ignore,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=rollouts,verbs=create;update,versions=v1alpha1,name=rollouts.rollout.kusionstack.io
-// +kubebuilder:webhook:path=/webhooks/validating/traffictopology,mutating=false,failurePolicy=ignore,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=traffictopologies,verbs=create;update,versions=v1alpha1,name=traffictopologies.rollout.kusionstack.io
+// +kubebuilder:webhook:path=/webhooks/validating/rolloutrun,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=rolloutruns,verbs=create;update,versions=v1alpha1,name=rolloutruns.rollout.kusionstack.io
+// +kubebuilder:webhook:path=/webhooks/validating/rolloutstrategy,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=rolloutstrategies,verbs=create;update,versions=v1alpha1,name=rolloutstrategies.rollout.kusionstack.io
+// +kubebuilder:webhook:path=/webhooks/validating/rollout,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=rollouts,verbs=create;update,versions=v1alpha1,name=rollouts.rollout.kusionstack.io
+// +kubebuilder:webhook:path=/webhooks/validating/traffictopology,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=traffictopologies,verbs=create;update,versions=v1alpha1,name=traffictopologies.rollout.kusionstack.io
 
 const (
 	ValidatingRollout = "validate-rollout.kusionstack.io"
