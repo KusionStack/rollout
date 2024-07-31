@@ -107,6 +107,24 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
 			},
 		},
+		{
+			name: "should not change spec",
+			object: &operatingv1alpha1.PodDecoration{
+				Spec: operatingv1alpha1.PodDecorationSpec{
+					UpdateStrategy: operatingv1alpha1.PodDecorationUpdateStrategy{
+						RollingUpdate: nil,
+					},
+				},
+				Status: operatingv1alpha1.PodDecorationStatus{
+					MatchedPods: 10,
+				},
+			},
+			input: intstr.FromInt(10),
+			checkResult: func(assert assert.Assertions, object *operatingv1alpha1.PodDecoration, err error) {
+				assert.Nil(err)
+				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
+			},
+		},
 	}
 	for i := range tests {
 		tt := tests[i]

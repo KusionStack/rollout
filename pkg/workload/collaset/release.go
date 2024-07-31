@@ -62,14 +62,16 @@ func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated ints
 		return err
 	}
 
-	if expectedPartition == 0 {
-		obj.Spec.UpdateStrategy.RollingUpdate = nil
-	} else {
+	if expectedPartition > 0 {
 		obj.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.RollingUpdateCollaSetStrategy{
 			ByPartition: &operatingv1alpha1.ByPartition{
 				Partition: ptr.To(expectedPartition),
 			},
 		}
+	} else if obj.Spec.UpdateStrategy.RollingUpdate != nil &&
+		obj.Spec.UpdateStrategy.RollingUpdate.ByPartition != nil {
+		// expectedPartition == 0
+		obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition = nil
 	}
 
 	return nil

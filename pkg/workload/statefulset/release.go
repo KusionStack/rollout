@@ -61,16 +61,16 @@ func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated ints
 		return err
 	}
 
-	if expectedPartition == 0 {
-		// omit partition when it is zero, zero means update all
-		obj.Spec.UpdateStrategy.RollingUpdate = nil
-	} else {
+	if expectedPartition > 0 {
 		obj.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
 			Type: appsv1.RollingUpdateStatefulSetStrategyType,
 			RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
 				Partition: ptr.To(expectedPartition),
 			},
 		}
+	} else if obj.Spec.UpdateStrategy.RollingUpdate != nil {
+		// omit partition when it is zero, zero means update all
+		obj.Spec.UpdateStrategy.RollingUpdate.Partition = nil
 	}
 	return nil
 }
