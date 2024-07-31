@@ -98,7 +98,7 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 			input:  intstr.FromString("100%"),
 			checkResult: func(assert assert.Assertions, object *operatingv1alpha1.CollaSet, err error) {
 				assert.Nil(err)
-				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
+				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition)
 			},
 		},
 		{
@@ -107,7 +107,43 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 			input:  intstr.FromInt(11),
 			checkResult: func(assert assert.Assertions, object *operatingv1alpha1.CollaSet, err error) {
 				assert.Nil(err)
+				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition)
+			},
+		},
+		{
+			name: "should not change spec 1",
+			object: &operatingv1alpha1.CollaSet{
+				Spec: operatingv1alpha1.CollaSetSpec{
+					Replicas: ptr.To[int32](10),
+					UpdateStrategy: operatingv1alpha1.UpdateStrategy{
+						RollingUpdate: nil,
+					},
+				},
+			},
+			input: intstr.FromInt(10),
+			checkResult: func(assert assert.Assertions, object *operatingv1alpha1.CollaSet, err error) {
+				assert.Nil(err)
 				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
+			},
+		},
+		{
+			name: "should not change spec 2",
+			object: &operatingv1alpha1.CollaSet{
+				Spec: operatingv1alpha1.CollaSetSpec{
+					Replicas: ptr.To[int32](10),
+					UpdateStrategy: operatingv1alpha1.UpdateStrategy{
+						RollingUpdate: &operatingv1alpha1.RollingUpdateCollaSetStrategy{
+							ByPartition: nil,
+						},
+					},
+				},
+			},
+			input: intstr.FromInt(10),
+			checkResult: func(assert assert.Assertions, object *operatingv1alpha1.CollaSet, err error) {
+				assert.Nil(err)
+				if assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate) {
+					assert.Nil(object.Spec.UpdateStrategy.RollingUpdate.ByPartition)
+				}
 			},
 		},
 	}

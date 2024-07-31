@@ -200,12 +200,16 @@ var _ = AfterSuite(func() {
 	cancel()
 	By("tearing down the test environment")
 
-	err := fedEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
-
-	err = clusterEnv1.Stop()
-	Expect(err).NotTo(HaveOccurred())
-
-	err = clusterEnv2.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	if fedEnv != nil {
+		err := fedEnv.Stop()
+		Expect(err).NotTo(HaveOccurred())
+	}
+	if clusterEnv1 != nil {
+		err := clusterEnv1.Stop()
+		Expect(err).NotTo(HaveOccurred())
+	}
+	if clusterEnv2 != nil {
+		err := clusterEnv2.Stop()
+		Expect(err).NotTo(HaveOccurred())
+	}
 })
