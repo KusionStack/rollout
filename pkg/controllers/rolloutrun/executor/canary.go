@@ -90,7 +90,7 @@ func (e *canaryExecutor) isSupported(ctx *ExecutorContext) bool {
 }
 
 func (e *canaryExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, error) {
-	rollout := ctx.Rollout
+	rolloutName := ctx.RolloutName
 	rolloutRun := ctx.RolloutRun
 	releaseControl := control.NewCanaryReleaseControl(ctx.Accessor, ctx.Client)
 	for _, item := range rolloutRun.Spec.Canary.Targets {
@@ -99,7 +99,7 @@ func (e *canaryExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, erro
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		err := releaseControl.Initialize(wi, rollout.Name, rolloutRun.Name)
+		err := releaseControl.Initialize(wi, rolloutName, rolloutRun.Name)
 		if err != nil {
 			return false, retryStop, err
 		}

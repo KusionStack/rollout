@@ -20,13 +20,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/elliotchance/pie/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -210,11 +208,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rolloutRun", key)
 
-	rollout := &rolloutv1alpha1.Rollout{}
-	if err := r.findRollout(ctx, obj, rollout); err != nil {
-		logger.Error(err, "findRollout error")
-		return ctrl.Result{}, err
-	}
+	ownerName := r.findOwnerName(obj)
 
 	topologies, err := r.findTrafficTopology(ctx, obj)
 	if err != nil {
@@ -245,7 +239,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 		Client:         r.Client,
 		Recorder:       r.Recorder,
 		Accessor:       accesor,
-		Rollout:        rollout,
+		RolloutName:    ownerName,
 		RolloutRun:     obj,
 		NewStatus:      newStatus,
 		Workloads:      workloads,
@@ -283,22 +277,12 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 	return result, nil
 }
 
-// findRollout get Rollout from rolloutRun
-func (r *RolloutRunReconciler) findRollout(ctx context.Context, rolloutRun *rolloutv1alpha1.RolloutRun, rollout *rolloutv1alpha1.Rollout) error {
-	index := pie.FindFirstUsing(rolloutRun.OwnerReferences, func(o metav1.OwnerReference) bool {
-		return o.Kind == "Rollout"
-	})
-	if index == -1 {
-		objectKey := types.NamespacedName{Namespace: rolloutRun.Namespace, Name: rolloutRun.Name}
-		return fmt.Errorf("rollout not exist in rolloutRun(%v) ownerReferences", objectKey)
+func (r *RolloutRunReconciler) findOwnerName(rolloutRun *rolloutv1alpha1.RolloutRun) string {
+	owner := metav1.GetControllerOf(rolloutRun)
+	if owner != nil {
+		return owner.Name
 	}
-	ref := rolloutRun.OwnerReferences[index]
-	objectKey := types.NamespacedName{Namespace: rolloutRun.Namespace, Name: ref.Name}
-	if err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), objectKey, rollout); err != nil {
-		return err
-	}
-
-	return nil
+	return ""
 }
 
 func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) (workload.Accessor, *workload.Set, error) {

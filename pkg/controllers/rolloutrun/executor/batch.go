@@ -135,7 +135,7 @@ func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, er
 }
 
 func (e *batchExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, error) {
-	rolloutName := ctx.Rollout.Name
+	rolloutName := ctx.RolloutName
 	rolloutRunName := ctx.RolloutRun.Name
 	newStatus := ctx.NewStatus
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
