@@ -148,7 +148,7 @@ const (
 	RolloutConditionProgressing ConditionType = "Progressing"
 	// RolloutConditionCompleted means the rollout is Terminating
 	RolloutConditionTerminating ConditionType = "Terminating"
-	// RolloutConditionTrigger means the rollout is
+	// RolloutConditionTrigger means the rollout is triggered.
 	RolloutConditionTrigger ConditionType = "Trigger"
 
 	// rollout condition reasons

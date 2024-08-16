@@ -93,3 +93,11 @@ func IsTerminationCompleted(conditions []rolloutv1alpha1.Condition) bool {
 	}
 	return false
 }
+
+func IsAvailable(conditions []rolloutv1alpha1.Condition) bool {
+	cond := GetCondition(conditions, rolloutv1alpha1.RolloutConditionAvailable)
+	if cond != nil && cond.Status == metav1.ConditionTrue {
+		return true
+	}
+	return false
+}
