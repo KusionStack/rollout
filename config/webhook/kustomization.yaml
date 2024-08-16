@@ -63,9 +63,9 @@ patches:
       value: kusionstack-rollout-mutating
   target:
     kind: MutatingWebhookConfiguration
-# - patch: |-
-#     - op: replace
-#       path: /metadata/name
-#       value: kusionstack-rollout-webhook
-#   target:
-#     kind: Service
+- patch: |-
+    - op: replace
+      path: /metadata/name
+      value: kusionstack-rollout-webhook
+  target:
+    kind: Service
