@@ -94,7 +94,7 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 			input:  intstr.FromString("100%"),
 			checkResult: func(assert assert.Assertions, object *appsv1.StatefulSet, err error) {
 				assert.Nil(err)
-				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate.Partition)
+				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
 			},
 		},
 		{
@@ -103,7 +103,7 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 			input:  intstr.FromInt(11),
 			checkResult: func(assert assert.Assertions, object *appsv1.StatefulSet, err error) {
 				assert.Nil(err)
-				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate.Partition)
+				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
 			},
 		},
 		{
