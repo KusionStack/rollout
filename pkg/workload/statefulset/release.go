@@ -70,7 +70,8 @@ func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated ints
 		}
 	} else if obj.Spec.UpdateStrategy.RollingUpdate != nil {
 		// omit partition when it is zero, zero means update all
-		obj.Spec.UpdateStrategy.RollingUpdate.Partition = nil
+		// if obj.Spec.UpdateStrategy.RollingUpdate != nil, partition will have a default value 0
+		obj.Spec.UpdateStrategy.RollingUpdate = nil
 	}
 	return nil
 }

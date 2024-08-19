@@ -16,12 +16,21 @@
 
 KIND_NODE_IMAGE="kindest/node:v1.22.17"
 
+kubeconfig="${HOME}/.kube/kind-rollout-dev.kubeconfig"
+
 kind::ensure_cluster() {
     local kind_cluster_name=${1}
     log::status "ensure kind cluster ${kind_cluster_name}"
     if ! kind get clusters | grep "${kind_cluster_name}"; then
         kind create cluster --name="${kind_cluster_name}" --image="${KIND_NODE_IMAGE}"
     fi
+
+    if [[ ! -f "${kubeconfig}" ]]; then
+        mkdir -p "$(dirname $kubeconfig)"
+        kind get kubeconfig --name rollout-dev >"${kubeconfig}"
+    fi
+
+    export KUBECONFIG="${kubeconfig}"
 }
 
 kind::install_crds() {

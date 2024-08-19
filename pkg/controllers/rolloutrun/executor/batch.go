@@ -184,7 +184,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
 
 	logger := e.loggerWithContext(ctx)
-	logger.Info("do batch upgrading and check")
+	// logger.Info("do batch upgrading and check")
 
 	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
 
@@ -215,6 +215,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 	if workloadChanged {
 		// check next time, give the controller a little time to react
+		logger.Info("workload changed, wait for next check")
 		return false, retryDefault, nil
 	}
 

@@ -31,7 +31,6 @@ import (
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
@@ -50,11 +49,6 @@ func setStatusPhase(status *rolloutv1alpha1.RolloutStatus, rolloutID string, pha
 	// clean all existing status
 	status.RolloutID = rolloutID
 	status.Phase = phase
-}
-
-func setStatusCondition(newStatus *rolloutv1alpha1.RolloutStatus, ctype rolloutv1alpha1.ConditionType, status metav1.ConditionStatus, reason, message string) {
-	cond := condition.NewCondition(ctype, status, reason, message)
-	newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *cond)
 }
 
 func filterWorkloadsByMatch(workloads []*workload.Info, match *rolloutv1alpha1.ResourceMatch) []*workload.Info {
