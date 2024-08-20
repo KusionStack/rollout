@@ -352,7 +352,6 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 		return err
 	}
 
-	r.Logger.V(2).Info("succeed to update rolloutRun status", "rolloutRun", key)
 	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
 	return nil
 }

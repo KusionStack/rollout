@@ -11,9 +11,49 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /webhooks/mutating/collaset
+  failurePolicy: Fail
+  name: collasets.apps.kusionstack.io
+  rules:
+  - apiGroups:
+    - apps.kusionstack.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - UPDATE
+    resources:
+    - collasets
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /webhooks/mutating/poddecoration
+  failurePolicy: Fail
+  name: poddecorations.apps.kusionstack.io
+  rules:
+  - apiGroups:
+    - apps.kusionstack.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - UPDATE
+    resources:
+    - poddecorations
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /webhooks/mutating/pod
   failurePolicy: Fail
-  name: pods.core.v1
+  name: pods.core.k8s.io
   rules:
   - apiGroups:
     - ""
@@ -24,6 +64,26 @@ webhooks:
     - UPDATE
     resources:
     - pods
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /webhooks/mutating/statefulset
+  failurePolicy: Fail
+  name: statefulset.apps.k8s.io
+  rules:
+  - apiGroups:
+    - apps
+    apiVersions:
+    - v1
+    operations:
+    - UPDATE
+    resources:
+    - statefulsets
   sideEffects: None
 ---
 apiVersion: admissionregistration.k8s.io/v1

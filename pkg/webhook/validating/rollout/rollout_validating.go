@@ -38,10 +38,10 @@ import (
 // +kubebuilder:webhook:path=/webhooks/validating/traffictopology,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=traffictopologies,verbs=create;update,versions=v1alpha1,name=traffictopologies.rollout.kusionstack.io
 
 const (
-	ValidatingRollout = "validate-rollout.kusionstack.io"
+	WebhookInitializerName = "validate-rollout.kusionstack.io"
 )
 
-func NewValidatingHandler(mgr manager.Manager) map[runtime.Object]http.Handler {
+func NewValidatingHandlers(mgr manager.Manager) map[runtime.Object]http.Handler {
 	validator := &Validator{Client: mgr.GetClient()}
 	objs := []runtime.Object{
 		&rolloutv1alpha1.Rollout{},

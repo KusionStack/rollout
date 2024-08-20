@@ -296,7 +296,7 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionAvailable, metav1.ConditionFalse, "DependencyFailure", err.Error())
 	} else {
 		// valid rollout
-		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionAvailable, metav1.ConditionTrue, "", "")
+		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionAvailable, metav1.ConditionTrue, "Available", "all dependencies are valid")
 
 		// 2. add rollout label to workloads if rollout is available
 		err := r.ensureWorkloadsLabels(ctx, obj.Name, workloads)
@@ -456,18 +456,18 @@ func (r *RolloutReconciler) shouldTrigger(obj *rolloutv1alpha1.Rollout, workload
 		return "", false
 	}
 
-	count := len(workloads)
+	total := len(workloads)
 
-	if count == 0 {
+	if total == 0 {
 		return "", false
 	}
 
-	waiting := 0
+	triggered := 0
 	pendings := []string{}
 
 	for _, info := range workloads {
 		if workload.IsWaitingRollout(*info) {
-			waiting++
+			triggered++
 		} else {
 			pendings = append(pendings, info.String())
 		}
@@ -475,12 +475,12 @@ func (r *RolloutReconciler) shouldTrigger(obj *rolloutv1alpha1.Rollout, workload
 
 	r.Logger.V(2).Info("check if rollout should be triggered",
 		"rollout", obj.Name,
-		"count", count,
-		"triggered", waiting,
-		"pendings", strings.Join(pendings, " | "),
+		"total", total,
+		"triggered", triggered,
+		"waitfor", strings.Join(pendings, " | "),
 	)
 
-	if count == waiting {
+	if total == triggered {
 		return rolloutID, true
 	}
 	return "", false

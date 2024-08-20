@@ -8,15 +8,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"kusionstack.io/rollout/pkg/utils/cert"
 	"kusionstack.io/rollout/pkg/webhook/controller"
 )
 
 var webhookInitializerOnce sync.Once
-
-type RegisterHandlerFunc func(manager *webhook.Server)
 
 // setupWebhook sets up the webhook with a manager.
 func setupWebhook(mgr ctrl.Manager, webhookType webhookType, obj runtime.Object, handler http.Handler) error {

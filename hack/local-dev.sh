@@ -30,9 +30,11 @@ kind::setup_rollout_cluster "${kind_cluster_name}"
 
 kind::setup_rollout_webhook "${kind_cluster_name}" "outcluster"
 
+kind::setup_rollout_workloads "${kind_cluster_name}"
+
 log::status "starting manager"
 
-export WEBHOOK_HOST=host.docker.internal
+export WEBHOOK_ALTERNATE_HOSTS=host.docker.internal
 export ENABLE_SYNC_WEBHOOK_CERTS=true
 
 rm -rf bin/logs && mkdir -p bin/logs

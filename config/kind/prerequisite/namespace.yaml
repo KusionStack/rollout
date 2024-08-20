@@ -1,4 +1,6 @@
 apiVersion: v1
 kind: Namespace
 metadata:
+  labels:
+    webhook.rollout.kusionstack.io/disabled: "true"
   name: rollout-system

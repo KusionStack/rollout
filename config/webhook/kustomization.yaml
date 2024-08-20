@@ -5,9 +5,43 @@ resources:
 - manifests.yaml
 - service.yaml
 
-namespace: rollout
+namespace: rollout-system
+
+
+patches:
+# change validating and mutating webhook configuration name
+- patch: |-
+    - op: replace
+      path: /metadata/name
+      value: kusionstack-rollout-validating
+  target:
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+- patch: |-
+    - op: replace
+      path: /metadata/name
+      value: kusionstack-rollout-mutating
+  target:
+    kind: MutatingWebhookConfiguration
+    name: mutating-webhook-configuration
+# change service name to kusionstack-rollout-webhook
+- patch: |-
+    - op: replace
+      path: /metadata/name
+      value: kusionstack-rollout-webhook-service
+  target:
+    kind: Service
+# set namespaceSelector to only match namespaces without the label webhook.rollout.kusionstack.io/disabled
+- patch: |-
+    - op: replace
+      path: /webhooks/0/namespaceSelector
+      value: {"matchExpressions":[{"key":"webhook.rollout.kusionstack.io/disabled","operator":"DoesNotExist"}]}
+  target:
+    kind: ValidatingWebhookConfiguration
+
 
 replacements:
+# replace service name and namespace and port in webhook configuration
 - source:
     kind: Service
     fieldPath: metadata.name
@@ -32,40 +66,22 @@ replacements:
       kind: MutatingWebhookConfiguration
     fieldPaths:
     - webhooks.*.clientConfig.service.namespace
+# replace namespaceSelector in webhook configuration
 - source:
-    kind: Service
-    fieldPath: spec.ports.0.port
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+    fieldPath: webhooks.0.namespaceSelector
   targets:
   - select:
       kind: ValidatingWebhookConfiguration
     fieldPaths:
-    - webhooks.*.clientConfig.service.port
+    - webhooks.*.namespaceSelector
     options:
       create: true
   - select:
       kind: MutatingWebhookConfiguration
     fieldPaths:
-    - webhooks.*.clientConfig.service.port
+    - webhooks.*.namespaceSelector
     options:
       create: true
 
-
-patches:
-- patch: |-
-    - op: replace
-      path: /metadata/name
-      value: kusionstack-rollout-validating
-  target:
-    kind: ValidatingWebhookConfiguration
-- patch: |-
-    - op: replace
-      path: /metadata/name
-      value: kusionstack-rollout-mutating
-  target:
-    kind: MutatingWebhookConfiguration
-- patch: |-
-    - op: replace
-      path: /metadata/name
-      value: kusionstack-rollout-webhook
-  target:
-    kind: Service
