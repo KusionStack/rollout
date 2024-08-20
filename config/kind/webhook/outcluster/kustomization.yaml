@@ -4,66 +4,24 @@ kind: Kustomization
 resources:
 - ../../../webhook
 
-configMapGenerator:
-- name: webhook-hosts
-  envs:
-  - webhook-hosts.env
-  options:
-    disableNameSuffixHash: true
-
 patches:
-- patch: |-
-    - op: replace
-      path: /webhooks/0/clientConfig
-      value: {"url": "https://host.docker.internal:9443"}
-    - op: replace
-      path: /webhooks/1/clientConfig
-      value: {"url": "https://host.docker.internal:9443"}
-    - op: replace
-      path: /webhooks/2/clientConfig
-      value: {"url": "https://host.docker.internal:9443"}
-    - op: replace
-      path: /webhooks/3/clientConfig
-      value: {"url": "https://host.docker.internal:9443"}
-  target:
-    kind: ValidatingWebhookConfiguration
-- path: delete-svc.yaml
-- path: delete-mutating.yaml
+- path: patches/service.yaml
+- path: patches/webhook.yaml
 
 replacements:
 - source:
-    kind: ConfigMap
-    name: webhook-hosts
-    fieldPath: data.rollout
+    kind: Service
+    fieldPath: spec.ports.1.port
   targets:
   - select:
       kind: ValidatingWebhookConfiguration
     fieldPaths:
-    - webhooks.[name=rollouts.rollout.kusionstack.io].clientConfig.url
-- source:
-    kind: ConfigMap
-    name: webhook-hosts
-    fieldPath: data.rolloutrun
-  targets:
+    - webhooks.*.clientConfig.service.port
+    options:
+      create: true
   - select:
-      kind: ValidatingWebhookConfiguration
+      kind: MutatingWebhookConfiguration
     fieldPaths:
-    - webhooks.[name=rolloutruns.rollout.kusionstack.io].clientConfig.url
-- source:
-    kind: ConfigMap
-    name: webhook-hosts
-    fieldPath: data.rolloutstrategy
-  targets:
-  - select:
-      kind: ValidatingWebhookConfiguration
-    fieldPaths:
-    - webhooks.[name=rolloutstrategies.rollout.kusionstack.io].clientConfig.url
-- source:
-    kind: ConfigMap
-    name: webhook-hosts
-    fieldPath: data.traffictopology
-  targets:
-  - select:
-      kind: ValidatingWebhookConfiguration
-    fieldPaths:
-    - webhooks.[name=traffictopologies.rollout.kusionstack.io].clientConfig.url
+    - webhooks.*.clientConfig.service.port
+    options:
+      create: true

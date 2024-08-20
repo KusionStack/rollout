@@ -5,8 +5,6 @@ metadata:
 spec:
   updateStrategy:
     type: RollingUpdate
-    rollingUpdate:
-      partition: 5
   template:
     metadata:
       annotations:

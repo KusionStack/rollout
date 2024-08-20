@@ -5,8 +5,13 @@ metadata:
   name: webhook-service
 spec:
   ports:
+    - port: 443
+      protocol: TCP
+      targetPort: 9443
+      name: webhook-443
     - port: 9443
       protocol: TCP
       targetPort: 9443
+      name: webhook-9443
   selector:
     app: rollout-controller

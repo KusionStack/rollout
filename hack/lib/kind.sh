@@ -16,18 +16,18 @@
 
 KIND_NODE_IMAGE="kindest/node:v1.22.17"
 
-kubeconfig="${HOME}/.kube/kind-rollout-dev.kubeconfig"
-
 kind::ensure_cluster() {
     local kind_cluster_name=${1}
-    log::status "ensure kind cluster ${kind_cluster_name}"
     if ! kind get clusters | grep "${kind_cluster_name}"; then
+        log::status "create kind cluster ${kind_cluster_name}"
         kind create cluster --name="${kind_cluster_name}" --image="${KIND_NODE_IMAGE}"
     fi
 
+    kubeconfig="${HOME}/.kube/kind-${kind_cluster_name}.kubeconfig"
     if [[ ! -f "${kubeconfig}" ]]; then
+        log::status "write kubeconfig to ${kubeconfig}"
         mkdir -p "$(dirname $kubeconfig)"
-        kind get kubeconfig --name rollout-dev >"${kubeconfig}"
+        kind get kubeconfig --name "${kind_cluster_name}" >"${kubeconfig}"
     fi
 
     export KUBECONFIG="${kubeconfig}"
@@ -40,25 +40,30 @@ kind::install_crds() {
 
 kind::setup_rollout_cluster() {
     local _kind_cluster_name=${1}
-    local _context_name="kind-${_kind_cluster_name}"
     # ensure cluster
     kind::ensure_cluster "${_kind_cluster_name}"
     # apply crds
-    kubectl config use-context "${_context_name}"
     log::status "applying crds..."
     kubectl apply -k "${ROLLOUT_CONFIG_CRD}"
     # create namespace clusterrolebinding
     log::status "apply namespace clusterrolebinding"
     kubectl apply -k "${ROLLOUT_CONFIG_PREREQUISITE}"
-    # create rollout and workloads
-    log::status "apply rollout and workloads v1"
-    kubectl apply -k "${ROLLOUT_CONFIG_WORKLOADS_V1}"
 }
 
 kind::setup_rollout_webhook() {
     local _kind_cluster_name=${1}
-    local _context_name="kind-${_kind_cluster_name}"
     local _overlay=${2}
+    # ensure cluster
+    kind::ensure_cluster "${_kind_cluster_name}"
     log::status "apply rollout webhook configuration"
     kubectl apply -k "${ROLLOUT_CONFIG_WEBHOOK}/${_overlay}"
+}
+
+kind::setup_rollout_workloads() {
+    local _kind_cluster_name=${1}
+    # ensure cluster
+    kind::ensure_cluster "${_kind_cluster_name}"
+    # create rollout and workloads
+    log::status "apply rollout and workloads v1"
+    kubectl apply -k "${ROLLOUT_CONFIG_WORKLOADS_V1}"
 }
