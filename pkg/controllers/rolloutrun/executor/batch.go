@@ -215,7 +215,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 	if workloadChanged {
 		// check next time, give the controller a little time to react
-		logger.Info("workload changed, wait for next check")
+		logger.V(1).Info("workload changed, wait for next check")
 		return false, retryDefault, nil
 	}
 
@@ -228,7 +228,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 		if !info.CheckUpdatedReady(partition) {
 			// ready
-			logger.Info("still waiting for target ready", "target", item.CrossClusterObjectNameReference)
+			logger.V(3).Info("still waiting for target ready", "target", item.CrossClusterObjectNameReference)
 			return false, retryDefault, nil
 		}
 	}

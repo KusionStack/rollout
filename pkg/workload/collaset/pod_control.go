@@ -35,6 +35,9 @@ func (c *accessorImpl) IsUpdatedPod(_ client.Reader, object client.Object, pod *
 		return false, err
 	}
 	revision := utils.GetMapValueByDefault(pod.Labels, appsv1.ControllerRevisionHashLabelKey, obj.Status.CurrentRevision)
+	if revision == obj.Status.CurrentRevision {
+		return false, nil
+	}
 	if revision == obj.Status.UpdatedRevision {
 		return true, nil
 	}
