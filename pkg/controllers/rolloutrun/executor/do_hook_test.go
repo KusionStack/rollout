@@ -98,7 +98,7 @@ type webhookTestCase struct {
 }
 
 func newTestWebhookExecutor() webhookExecutor {
-	return newWebhookExecutor(newTestLogger(), 2*time.Second)
+	return newWebhookExecutor(2 * time.Second)
 }
 
 func runWebhookTestCases(t *testing.T, hookType rolloutv1alpha1.HookType, tests []webhookTestCase) {

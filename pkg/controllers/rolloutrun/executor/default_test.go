@@ -1,6 +1,8 @@
 package executor
 
 import (
+	"context"
+
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	appsv1 "k8s.io/api/apps/v1"
@@ -111,6 +113,7 @@ func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rol
 	workloads := workload.NewSet(infos...)
 	client := clientbuilder.Build()
 	ctx := &ExecutorContext{
+		Context:     context.TODO(),
 		Client:      client,
 		Recorder:    recorder,
 		Accessor:    inter,
@@ -120,6 +123,7 @@ func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rol
 		NewStatus:   rolloutRun.Status.DeepCopy(),
 	}
 	ctx.Initialize()
+	ctx.WithLogger(newTestLogger())
 	return ctx
 }
 

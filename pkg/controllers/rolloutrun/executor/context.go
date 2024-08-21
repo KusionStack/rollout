@@ -295,11 +295,30 @@ func (r *ExecutorContext) makeRolloutWebhookReview(hookType rolloutv1alpha1.Hook
 	return review
 }
 
-func (e *ExecutorContext) loggerWithContext(logger logr.Logger) logr.Logger {
-	e.Initialize()
-	return logger.WithValues(
+func (e *ExecutorContext) WithLogger(logger logr.Logger) logr.Logger {
+	l := logger.WithValues(
 		"namespace", e.RolloutRun.Namespace,
 		"rollout", e.RolloutName,
 		"rolloutRun", e.RolloutRun.Name,
 	)
+
+	e.Context = logr.NewContext(e.Context, l)
+	return l
+}
+
+func (e *ExecutorContext) GetLogger() logr.Logger {
+	return logr.FromContextOrDiscard(e.Context)
+}
+
+func (e *ExecutorContext) GetBatchLogger() logr.Logger {
+	e.Initialize()
+	l := e.GetLogger().WithValues("step", "batch")
+	if e.NewStatus != nil && e.NewStatus.BatchStatus != nil {
+		l = l.WithValues("batchIndex", e.NewStatus.BatchStatus.CurrentBatchIndex)
+	}
+	return l
+}
+
+func (e *ExecutorContext) GetCanaryLogger() logr.Logger {
+	return e.GetLogger().WithValues("step", "canary")
 }

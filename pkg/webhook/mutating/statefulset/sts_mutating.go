@@ -25,14 +25,13 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"kusionstack.io/rollout/pkg/utils"
+	"kusionstack.io/rollout/pkg/webhook/generic"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -40,44 +39,33 @@ import (
 
 const WebhookInitialzierName = "mutate-apps"
 
-// MutatingHandler handles CollaSets and PodDecorations update.
-type MutatingHandler struct {
-	*mixin.WebhookAdmissionHandlerMixin
-}
-
-var _ admission.Handler = &MutatingHandler{}
-
-func NewMutatingHandlers(_ manager.Manager) map[runtime.Object]http.Handler {
-	return map[runtime.Object]http.Handler{
-		&appsv1.StatefulSet{}: &webhook.Admission{Handler: newMutatingHandler()},
+func NewMutatingHandlers(_ manager.Manager) map[schema.GroupKind]admission.Handler {
+	gks := []schema.GroupKind{
+		appsv1.SchemeGroupVersion.WithKind("StatefulSet").GroupKind(),
 	}
-}
-
-func newMutatingHandler() *MutatingHandler {
-	return &MutatingHandler{
+	handlers := map[schema.GroupKind]admission.Handler{}
+	delegate := &mutatingHandler{
 		WebhookAdmissionHandlerMixin: mixin.NewWebhookHandlerMixin(),
 	}
+	for _, gk := range gks {
+		handlers[gk] = generic.NewAdmissionHandler("mutating", gk, delegate)
+	}
+	return handlers
+}
+
+var _ admission.Handler = &mutatingHandler{}
+
+// mutatingHandler handles StatefulSet update.
+// It should be wrapped by generic.AdmissionHandler.
+type mutatingHandler struct {
+	*mixin.WebhookAdmissionHandlerMixin
 }
 
 // Handle handles admission requests.
 // It will only handle Pod creation and update. It will query the workload that manages it via the pod's ownerReference,
 // and then apply the processing label from the workload onto the pod. In special cases where the pod's ownerReference
 // is a ReplicaSet, it will continue to query its ownerReference to find the corresponding Deployment workload.
-func (h *MutatingHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
-	if ptr.Deref(req.DryRun, false) {
-		return admission.Allowed("dry run")
-	}
-
-	logger := h.Logger.WithValues(
-		"kind", req.Kind.Kind,
-		"key", utils.AdmissionRequestObjectKeyString(req),
-		"op", req.Operation,
-	)
-	ctx = logr.NewContext(ctx, logger)
-
-	logger.V(4).Info("mutating handler start", "name", WebhookInitialzierName)
-	defer logger.V(4).Info("mutating handler end", "name", WebhookInitialzierName)
-
+func (h *mutatingHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
 	switch req.Kind.Kind {
 	case "StatefulSet":
 		return h.mutateStatefulSet(ctx, req)
@@ -85,7 +73,7 @@ func (h *MutatingHandler) Handle(ctx context.Context, req admission.Request) adm
 	return admission.Allowed("")
 }
 
-func (h *MutatingHandler) mutateStatefulSet(ctx context.Context, req admission.Request) admission.Response {
+func (h *mutatingHandler) mutateStatefulSet(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation != admissionv1.Update || req.SubResource != "" {
 		return admission.Allowed("only care about update events of collaset")
 	}
@@ -120,7 +108,7 @@ func (h *MutatingHandler) mutateStatefulSet(ctx context.Context, req admission.R
 		return admission.Allowed("pod template is not changed")
 	}
 
-	logger.Info("pod template is changed and it is controlled by rollout, set Partition to replicas to pause RollingUpdate")
+	logger.Info("pod template is changed and it is controlled by rollout, set Partition to replicas to pause RollingUpdate", "replicas", ptr.Deref(obj.Spec.Replicas, 0))
 	obj.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
 		Partition: obj.Spec.Replicas,
 	}

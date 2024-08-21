@@ -1,10 +1,9 @@
 package webhook
 
 import (
-	"net/http"
-
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	kuperatormutating "kusionstack.io/rollout/pkg/webhook/mutating/kuperator"
 	podmutating "kusionstack.io/rollout/pkg/webhook/mutating/pod"
@@ -12,7 +11,7 @@ import (
 	rolloutvalidating "kusionstack.io/rollout/pkg/webhook/validating/rollout"
 )
 
-type NewWebhookHandler func(manager.Manager) map[runtime.Object]http.Handler
+type NewWebhookHandler func(manager.Manager) map[schema.GroupKind]admission.Handler
 
 var (
 	mutatingWebhooks   = map[string]NewWebhookHandler{}
@@ -21,7 +20,7 @@ var (
 
 func init() {
 	// setup mutating webhook handlers
-	mutatingWebhooks[podmutating.WebhookInitializerName] = podmutating.NewMutatingHandler
+	mutatingWebhooks[podmutating.WebhookInitializerName] = podmutating.NewMutatingHandlers
 	mutatingWebhooks[stsmutating.WebhookInitialzierName] = stsmutating.NewMutatingHandlers
 	mutatingWebhooks[kuperatormutating.WebhookInitialzierName] = kuperatormutating.NewMutatingHandlers
 	// setup validating webhook handlers

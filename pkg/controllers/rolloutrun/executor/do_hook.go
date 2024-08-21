@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/elliotchance/pie/v2"
-	"github.com/go-logr/logr"
 	"k8s.io/utils/ptr"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -25,14 +24,12 @@ type webhookExecutor interface {
 }
 
 type webhookExecutorImpl struct {
-	logger          logr.Logger
 	webhookManager  webhook.Manager
 	webhookInitTime time.Duration
 }
 
-func newWebhookExecutor(logger logr.Logger, webhookInitTime time.Duration) webhookExecutor {
+func newWebhookExecutor(webhookInitTime time.Duration) webhookExecutor {
 	return &webhookExecutorImpl{
-		logger:          logger,
 		webhookManager:  webhook.NewManager(),
 		webhookInitTime: webhookInitTime,
 	}
@@ -44,7 +41,7 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 		return true, retryImmediately, nil
 	}
 
-	logger := ctx.loggerWithContext(r.logger)
+	logger := ctx.GetLogger()
 	logger.Info("processing webhook", "hookType", hookType, "webhook", curWebhook.Name)
 
 	hookResult, _, err := r.startOrGetWebhookWorker(ctx, hookType, *curWebhook.RolloutWebhook, curWebhook.status)
@@ -116,7 +113,7 @@ func (r *webhookExecutorImpl) findCurrentAndNextWebhook(executorContext *Executo
 		}
 	}
 
-	current, next := getCurrentAndNext[rolloutv1alpha1.RolloutWebhook](webhooks, index)
+	current, next := getCurrentAndNext(webhooks, index)
 	if current == nil {
 		return nil, nil
 	}
@@ -132,6 +129,7 @@ func (r *webhookExecutorImpl) findCurrentAndNextWebhook(executorContext *Executo
 func (r *webhookExecutorImpl) startOrGetWebhookWorker(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType, webhookCfg rolloutv1alpha1.RolloutWebhook, lastStatus *rolloutv1alpha1.RolloutWebhookStatus) (*webhook.Result, bool, error) {
 	run := ctx.RolloutRun
 	key := run.UID
+	logger := ctx.GetLogger()
 	worker, ok := r.webhookManager.Get(key)
 	if ok {
 		// webhook already started
@@ -147,11 +145,11 @@ func (r *webhookExecutorImpl) startOrGetWebhookWorker(ctx *ExecutorContext, hook
 		}
 
 		// webhook name or type not match, stop it and start a new one
-		r.logger.Info("stop the old webhook worker", "rolloutRun", run.Name, "webhook", curResult.Name, "type", curResult.HookType)
+		logger.Info("stop the old webhook worker", "webhook", curResult.Name, "type", curResult.HookType)
 		worker.Stop()
 	}
 
-	r.logger.Info("start a new webhook worker and wait for the result for a brief period.", "rolloutRun", run.Name, "webhook", webhookCfg.Name, "type", hookType)
+	logger.Info("start a new webhook worker and wait for the result for a brief period.", "webhook", webhookCfg.Name, "type", hookType)
 
 	review := ctx.makeRolloutWebhookReview(hookType, webhookCfg)
 	worker, err := r.webhookManager.Start(key, webhookCfg, review)

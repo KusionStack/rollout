@@ -66,6 +66,7 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	defer GinkgoRecover()
 	logf.SetLogger(zap.New(zap.WriteTo(os.Stdout), zap.UseDevMode(true)))
 
 	ctx, cancel = context.WithCancel(context.TODO())

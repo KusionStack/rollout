@@ -18,9 +18,9 @@ type Executor struct {
 }
 
 func NewDefaultExecutor(logger logr.Logger) *Executor {
-	webhookExec := newWebhookExecutor(logger, time.Second)
-	canaryExec := newCanaryExecutor(logger, webhookExec)
-	batchExec := newBatchExecutor(logger, webhookExec)
+	webhookExec := newWebhookExecutor(time.Second)
+	canaryExec := newCanaryExecutor(webhookExec)
+	batchExec := newBatchExecutor(webhookExec)
 	e := &Executor{
 		logger: logger,
 		canary: canaryExec,
@@ -31,10 +31,10 @@ func NewDefaultExecutor(logger logr.Logger) *Executor {
 
 // Do execute the lifecycle for rollout run, and will return new status
 func (r *Executor) Do(ctx *ExecutorContext) (bool, ctrl.Result, error) {
-	logger := ctx.loggerWithContext(r.logger)
-
 	// init NewStatus
 	ctx.Initialize()
+
+	logger := ctx.WithLogger(r.logger)
 
 	newStatus := ctx.NewStatus
 	rolloutRun := ctx.RolloutRun
@@ -108,6 +108,8 @@ func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error)
 	rolloutRun := ctx.RolloutRun
 	newStatus := ctx.NewStatus
 
+	logger := ctx.GetLogger()
+
 	if ctx.inCanary() {
 		canaryDone, result, err := r.canary.Do(ctx)
 		if err != nil {
@@ -129,7 +131,7 @@ func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error)
 		defer func() {
 			if preCurrentBatchIndex != newStatus.BatchStatus.CurrentBatchIndex ||
 				preCurrentBatchState != newStatus.BatchStatus.CurrentBatchState {
-				r.logger.Info("batch state trasition",
+				logger.Info("batch state trasition",
 					"current.index", preCurrentBatchIndex,
 					"current.state", preCurrentBatchState,
 					"next.index", newStatus.BatchStatus.CurrentBatchIndex,
