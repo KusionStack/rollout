@@ -20,11 +20,8 @@ func addInitializer() {
 	for key, newFuc := range mutatingWebhooks {
 		utilruntime.Must(Initializer.Add(key, func(mgr ctrl.Manager) (bool, error) {
 			handlers := newFuc(mgr)
-			for obj, h := range handlers {
-				err := setupWebhook(mgr, mutatingWebhook, obj, h)
-				if err != nil {
-					return false, err
-				}
+			for gk, h := range handlers {
+				setupWebhook(mgr, mutatingWebhook, gk, h)
 			}
 			return true, nil
 		}))
@@ -33,11 +30,8 @@ func addInitializer() {
 	for key, newFuc := range validatingWebhooks {
 		utilruntime.Must(Initializer.Add(key, func(mgr ctrl.Manager) (bool, error) {
 			handlers := newFuc(mgr)
-			for obj, h := range handlers {
-				err := setupWebhook(mgr, validatingWebhook, obj, h)
-				if err != nil {
-					return false, err
-				}
+			for gk, h := range handlers {
+				setupWebhook(mgr, validatingWebhook, gk, h)
 			}
 			return true, nil
 		}))

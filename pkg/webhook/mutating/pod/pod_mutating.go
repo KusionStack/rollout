@@ -21,19 +21,19 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-logr/logr"
 	"github.com/tidwall/gjson"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/ptr"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"kusionstack.io/rollout/apis/rollout"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils"
+	"kusionstack.io/rollout/pkg/webhook/generic"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -41,48 +41,38 @@ import (
 
 const WebhookInitializerName = "mutate-pod"
 
-// PodCreateUpdateHandler handles Pod creation and update.
-type PodCreateUpdateHandler struct {
-	*mixin.WebhookAdmissionHandlerMixin
-}
-
-var _ admission.Handler = &PodCreateUpdateHandler{}
-
-func NewMutatingHandler(_ manager.Manager) map[runtime.Object]http.Handler {
-	return map[runtime.Object]http.Handler{
-		&corev1.Pod{}: &webhook.Admission{Handler: newPodCreateUpdateHandler()},
+func NewMutatingHandlers(_ manager.Manager) map[schema.GroupKind]admission.Handler {
+	gks := []schema.GroupKind{
+		corev1.SchemeGroupVersion.WithKind("Pod").GroupKind(),
 	}
-}
-
-func newPodCreateUpdateHandler() *PodCreateUpdateHandler {
-	return &PodCreateUpdateHandler{
+	handlers := map[schema.GroupKind]admission.Handler{}
+	delegate := &mutatingHandler{
 		WebhookAdmissionHandlerMixin: mixin.NewWebhookHandlerMixin(),
 	}
+	for _, gk := range gks {
+		handlers[gk] = generic.NewAdmissionHandler("mutating", gk, delegate)
+	}
+	return handlers
+}
+
+var _ admission.Handler = &mutatingHandler{}
+
+// mutatingHandler handles Pod creation and update.
+type mutatingHandler struct {
+	*mixin.WebhookAdmissionHandlerMixin
 }
 
 // Handle handles admission requests.
 // It will only handle Pod creation and update. It will query the workload that manages it via the pod's ownerReference,
 // and then apply the processing label from the workload onto the pod. In special cases where the pod's ownerReference
 // is a ReplicaSet, it will continue to query its ownerReference to find the corresponding Deployment workload.
-func (h *PodCreateUpdateHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
-	if ptr.Deref(req.DryRun, false) {
-		return admission.Allowed("dry run")
+func (h *mutatingHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
+	if (req.Operation != admissionv1.Create && req.Operation != admissionv1.Update) || req.SubResource != "" {
+		return admission.Allowed("only care about pod create and update event")
 	}
 
-	if req.Kind.Kind != "Pod" ||
-		req.SubResource != "" ||
-		(req.Operation != admissionv1.Create && req.Operation != admissionv1.Update) {
-		return admission.Allowed("PodCreateUpdateHandler only care about pod create and update event")
-	}
+	logger := logr.FromContextOrDiscard(ctx)
 
-	logger := h.Logger.WithValues(
-		"kind", req.Kind.Kind,
-		"key", utils.AdmissionRequestObjectKeyString(req),
-		"op", req.Operation,
-	)
-
-	logger.V(4).Info("PodCreateUpdateHandler Handle start")
-	defer logger.V(4).Info("PodCreateUpdateHandler Handle end")
 	pod := &corev1.Pod{}
 	err := h.Decoder.Decode(req, pod)
 	if err != nil {

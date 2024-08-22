@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -30,14 +29,12 @@ import (
 )
 
 type batchExecutor struct {
-	logger       logr.Logger
 	webhook      webhookExecutor
 	stateMachine *stepStateMachine
 }
 
-func newBatchExecutor(logger logr.Logger, webhook webhookExecutor) *batchExecutor {
+func newBatchExecutor(webhook webhookExecutor) *batchExecutor {
 	e := &batchExecutor{
-		logger:       logger,
 		webhook:      webhook,
 		stateMachine: newStepStateMachine(),
 	}
@@ -52,21 +49,15 @@ func newBatchExecutor(logger logr.Logger, webhook webhookExecutor) *batchExecuto
 	return e
 }
 
-func (e *batchExecutor) loggerWithContext(executorContext *ExecutorContext) logr.Logger {
-	return executorContext.loggerWithContext(e.logger).WithValues(
-		"step", "batch",
-		"batchIndex", executorContext.NewStatus.BatchStatus.CurrentBatchIndex,
-	)
-}
-
 func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
 	newStatus := ctx.NewStatus
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	currentState := newStatus.BatchStatus.CurrentBatchState
 
+	logger := ctx.GetBatchLogger()
 	if !e.isSupported(ctx) {
 		// skip batch release if workload accessor don't support it.
-		e.loggerWithContext(ctx).Info("workload accessor don't support batch release, skip it")
+		logger.Info("workload accessor don't support batch release, skip it")
 		ctx.SkipCurrentRelease()
 		return true, ctrl.Result{Requeue: true}, nil
 	}
@@ -183,8 +174,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
 
-	logger := e.loggerWithContext(ctx)
-	// logger.Info("do batch upgrading and check")
+	logger := ctx.GetBatchLogger()
 
 	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
 

@@ -19,11 +19,11 @@ package validating
 import (
 	"context"
 	"fmt"
-	"net/http"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -41,27 +41,33 @@ const (
 	WebhookInitializerName = "validate-rollout.kusionstack.io"
 )
 
-func NewValidatingHandlers(mgr manager.Manager) map[runtime.Object]http.Handler {
-	validator := &Validator{Client: mgr.GetClient()}
+func NewValidatingHandlers(mgr manager.Manager) map[schema.GroupKind]admission.Handler {
+	validator := &Validator{}
 	objs := []runtime.Object{
 		&rolloutv1alpha1.Rollout{},
 		&rolloutv1alpha1.RolloutStrategy{},
 		&rolloutv1alpha1.RolloutRun{},
 		&rolloutv1alpha1.TrafficTopology{},
 	}
-	result := make(map[runtime.Object]http.Handler, len(objs))
+	handlers := make(map[schema.GroupKind]admission.Handler, len(objs))
 	for _, obj := range objs {
-		result[obj] = admission.WithCustomValidator(obj, validator)
+		handler := admission.WithCustomValidator(obj, validator).Handler
+		t := reflect.TypeOf(obj)
+		t = t.Elem()
+		kind := t.Name()
+		gk := schema.GroupKind{
+			Group: rolloutv1alpha1.GroupName,
+			Kind:  kind,
+		}
+		handlers[gk] = handler
 	}
 
-	return result
+	return handlers
 }
 
 var _ admission.CustomValidator = &Validator{}
 
-type Validator struct {
-	Client client.Client
-}
+type Validator struct{}
 
 // ValidateCreate implements admission.CustomValidator.
 func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) error {

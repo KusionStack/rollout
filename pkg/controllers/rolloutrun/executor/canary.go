@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -39,14 +38,12 @@ func newDoCanaryError(reason, msg string) *rolloutv1alpha1.CodeReasonMessage {
 }
 
 type canaryExecutor struct {
-	logger       logr.Logger
 	webhook      webhookExecutor
 	stateMachine *stepStateMachine
 }
 
-func newCanaryExecutor(logger logr.Logger, webhook webhookExecutor) *canaryExecutor {
+func newCanaryExecutor(webhook webhookExecutor) *canaryExecutor {
 	e := &canaryExecutor{
-		logger:       logger,
 		webhook:      webhook,
 		stateMachine: newStepStateMachine(),
 	}
@@ -62,23 +59,19 @@ func newCanaryExecutor(logger logr.Logger, webhook webhookExecutor) *canaryExecu
 	return e
 }
 
-func (e *canaryExecutor) loggerWithContext(ctx *ExecutorContext) logr.Logger {
-	return ctx.loggerWithContext(e.logger).WithValues("step", "canary")
-}
-
 func (e *canaryExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
 	if !ctx.inCanary() {
 		return true, ctrl.Result{Requeue: true}, nil
 	}
 
+	logger := ctx.GetCanaryLogger()
 	if !e.isSupported(ctx) {
 		// skip canary release if workload accessor don't support it.
-		e.loggerWithContext(ctx).Info("workload accessor don't support canary release, skip it")
+		logger.Info("workload accessor don't support canary release, skip it")
 		ctx.SkipCurrentRelease()
 		return true, ctrl.Result{Requeue: true}, nil
 	}
 
-	logger := e.loggerWithContext(ctx)
 	ctx.TrafficManager.With(logger, ctx.RolloutRun.Spec.Canary.Targets, ctx.RolloutRun.Spec.Canary.Traffic)
 
 	return e.stateMachine.do(ctx, ctx.NewStatus.CanaryStatus.State)
@@ -121,7 +114,7 @@ func (e *canaryExecutor) doPostStepHook(ctx *ExecutorContext) (bool, time.Durati
 }
 
 func (e *canaryExecutor) modifyTraffic(ctx *ExecutorContext, op string) (bool, time.Duration) {
-	logger := e.loggerWithContext(ctx)
+	logger := ctx.GetCanaryLogger()
 	rolloutRun := ctx.RolloutRun
 	opResult := controllerutil.OperationResultNone
 
@@ -161,7 +154,7 @@ func (e *canaryExecutor) modifyTraffic(ctx *ExecutorContext, op string) (bool, t
 }
 
 func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, error) {
-	logger := e.loggerWithContext(ctx)
+	logger := ctx.GetCanaryLogger()
 	rolloutRun := ctx.RolloutRun
 
 	// 1. do traffic initialization

@@ -1,13 +1,13 @@
 package webhook
 
 import (
-	"net/http"
 	"path"
 	"strings"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"kusionstack.io/rollout/pkg/utils/cert"
 	"kusionstack.io/rollout/pkg/webhook/controller"
@@ -16,19 +16,12 @@ import (
 var webhookInitializerOnce sync.Once
 
 // setupWebhook sets up the webhook with a manager.
-func setupWebhook(mgr ctrl.Manager, webhookType webhookType, obj runtime.Object, handler http.Handler) error {
-	// NOTE: we must register the webhook before initializing cert and configuration.
-	scheme := mgr.GetScheme()
-	gvks, _, err := scheme.ObjectKinds(obj)
-	if err != nil {
-		return err
-	}
-	gvk := gvks[0]
-	kind := strings.ToLower(gvk.Kind)
+func setupWebhook(mgr ctrl.Manager, webhookType webhookType, gk schema.GroupKind, handler admission.Handler) {
+	kind := strings.ToLower(gk.Kind)
 	hookPath := path.Join("/webhooks", string(webhookType), kind)
 
 	server := mgr.GetWebhookServer()
-	server.Register(hookPath, handler)
+	server.Register(hookPath, &admission.Webhook{Handler: handler})
 
 	webhookInitializerOnce.Do(func() {
 		err := initializeWebhookCerts(mgr)
@@ -36,8 +29,6 @@ func setupWebhook(mgr ctrl.Manager, webhookType webhookType, obj runtime.Object,
 			panic("unable to initialize webhook: " + err.Error())
 		}
 	})
-
-	return nil
 }
 
 func initializeWebhookCerts(mgr ctrl.Manager) error {

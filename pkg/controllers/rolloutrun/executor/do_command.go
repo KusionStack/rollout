@@ -11,7 +11,7 @@ import (
 func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 	rolloutRun := ctx.RolloutRun
 	cmd := rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey]
-	logger := ctx.loggerWithContext(r.logger)
+	logger := ctx.WithLogger(r.logger)
 	logger.Info("processing manual command", "command", cmd)
 
 	newStatus := ctx.NewStatus

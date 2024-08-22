@@ -43,7 +43,7 @@ var (
 )
 
 func newTestBatchExecutor(webhook webhookExecutor) *batchExecutor {
-	return newBatchExecutor(newTestLogger(), webhook)
+	return newBatchExecutor(webhook)
 }
 
 type batchExectorTestCase struct {
