@@ -27,8 +27,10 @@ const (
 
 	AnnoRolloutTrigger = "rollout.kusionstack.io/trigger"
 
-	// AnnoRolloutProgressingInfo contains the progressing info when rollout
+	// AnnoRolloutProgressingInfo contains the current progressing info on workload.
+	// The value is a json string of ProgressingInfo.
 	AnnoRolloutProgressingInfo = "rollout.kusionstack.io/progressing-info"
-	// AnnoPodRolloutProgressingInfos contains a slice of progressing infos on a pod
+
+	// AnnoPodRolloutProgressingInfos contains a slice of progressing infos on a pod.
 	AnnoPodRolloutProgressingInfos = "rollout.kusionstack.io/pod-progressing-infos"
 )

@@ -68,7 +68,7 @@ func GetPodProgressingInfos(pod *corev1.Pod) PodProgressingInfos {
 	return info
 }
 
-func SetProgressingInfos(pod *corev1.Pod, infos PodProgressingInfos) bool {
+func SetPodProgressingInfos(pod *corev1.Pod, infos PodProgressingInfos) bool {
 	var expected string
 	// set expectedPodInfoStr to "" if merged is empty
 	if len(infos) > 0 {
@@ -99,9 +99,38 @@ func SetProgressingInfos(pod *corev1.Pod, infos PodProgressingInfos) bool {
 	return changed
 }
 
+func SetProgressingInfo(pod *corev1.Pod, info *rolloutv1alpha1.ProgressingInfo) bool {
+	if info == nil {
+		return false
+	}
+
+	// get info from pods annotation
+	var existing *rolloutv1alpha1.ProgressingInfo
+	podInfo := utils.GetMapValueByDefault(pod.Annotations, rollout.AnnoRolloutProgressingInfo, "")
+	if len(podInfo) > 0 {
+		temp := rolloutv1alpha1.ProgressingInfo{}
+		err := json.Unmarshal([]byte(podInfo), &temp)
+		if err == nil {
+			existing = &temp
+		}
+	}
+
+	changed := false
+	expected, _ := json.Marshal(info)
+	if existing == nil || existing.RolloutID != info.RolloutID {
+		// if no progressing info found on pod or rolloutID changed, we need to update annotation
+		changed = true
+		// set progressingInfo if no progressingInfo
+		utils.MutateAnnotations(pod, func(annotations map[string]string) {
+			annotations[rollout.AnnoRolloutProgressingInfo] = string(expected)
+		})
+	}
+	return changed
+}
+
 func mutatePodPogressingInfo(pod *corev1.Pod, owners []*registry.WorkloadAccessor) bool {
 	// get progressingInfos from owners
-	newInfos := generateProgressingInfos(owners)
+	controlInfo, newInfos := generateProgressingInfos(owners)
 	if len(newInfos) == 0 {
 		return false
 	}
@@ -110,10 +139,16 @@ func mutatePodPogressingInfo(pod *corev1.Pod, owners []*registry.WorkloadAccesso
 	// merge progressing info
 	merged := MergePodProgressingInfos(existingInfos, newInfos)
 
-	return SetProgressingInfos(pod, merged)
+	changed := SetPodProgressingInfos(pod, merged)
+
+	// for compatibility, we also need to set rollout.kusionstack.io/progressing-info
+	changed = SetProgressingInfo(pod, controlInfo) || changed
+
+	return changed
 }
 
-func generateProgressingInfos(owners []*registry.WorkloadAccessor) PodProgressingInfos {
+func generateProgressingInfos(owners []*registry.WorkloadAccessor) (*rolloutv1alpha1.ProgressingInfo, PodProgressingInfos) {
+	var controllerProgressingInfo *rolloutv1alpha1.ProgressingInfo
 	result := PodProgressingInfos{}
 
 	for _, owner := range owners {
@@ -127,8 +162,11 @@ func generateProgressingInfos(owners []*registry.WorkloadAccessor) PodProgressin
 			continue
 		}
 		result = append(result, info)
+		if owner.IsController {
+			controllerProgressingInfo = &info
+		}
 	}
-	return result
+	return controllerProgressingInfo, result
 }
 
 func mergeSliceByKey[T any, Slice ~[]T, K comparable](a, b Slice, keyFunc func(item T) K, whenConflict func(aItem, bItem T) T) Slice {
