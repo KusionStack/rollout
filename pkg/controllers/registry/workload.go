@@ -21,6 +21,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -41,7 +42,8 @@ var Workloads = NewWorkloadRegistry()
 type WorkloadRegistry interface {
 	genericregistry.Registry[schema.GroupVersionKind, workload.Accessor]
 
-	GetPodOwnerWorkload(ctx context.Context, c client.Client, pod *corev1.Pod) (client.Object, workload.Accessor, error)
+	GetControllerOf(ctx context.Context, c client.Client, pod *corev1.Pod) (*WorkloadAccessor, error)
+	GetOwnersOf(ctx context.Context, c client.Client, pod *corev1.Pod) ([]*WorkloadAccessor, error)
 }
 
 func NewWorkloadRegistry() WorkloadRegistry {
@@ -66,19 +68,51 @@ type registryImpl struct {
 	genericregistry.Registry[schema.GroupVersionKind, workload.Accessor]
 }
 
-func (r *registryImpl) GetPodOwnerWorkload(ctx context.Context, c client.Client, pod *corev1.Pod) (client.Object, workload.Accessor, error) {
+type WorkloadAccessor struct {
+	IsController bool
+	Object       client.Object
+	Accessor     workload.Accessor
+}
+
+func (r *registryImpl) GetControllerOf(ctx context.Context, c client.Client, pod *corev1.Pod) (*WorkloadAccessor, error) {
+	owner, err := workload.GetControllerOf(pod)
+	if err != nil {
+		return nil, err
+	}
+	if owner == nil {
+		return nil, nil
+	}
+	return r.getPodOwnerWorkload(ctx, c, pod, owner)
+}
+
+func (r *registryImpl) GetOwnersOf(ctx context.Context, c client.Client, pod *corev1.Pod) ([]*WorkloadAccessor, error) {
+	owners, err := workload.GetOwnersOf(pod)
+	if err != nil {
+		return nil, err
+	}
+	result := []*WorkloadAccessor{}
+
+	for _, owner := range owners {
+		workload, err := r.getPodOwnerWorkload(ctx, c, pod, owner)
+		if err != nil {
+			return nil, err
+		}
+		if workload != nil {
+			result = append(result, workload)
+		}
+	}
+	return result, nil
+}
+
+func (r *registryImpl) getPodOwnerWorkload(ctx context.Context, c client.Client, pod *corev1.Pod, owner *workload.Owner) (*WorkloadAccessor, error) {
 	cluster := workload.GetClusterFromLabel(pod.Labels)
 	ctx = clusterinfo.WithCluster(ctx, cluster)
 
-	// firstly, get owner from pod
-	owner, ownerGVK, err := workload.GetOwnerAndGVK(pod)
-	if err != nil || owner == nil {
-		// no owner or get owner failed, return directly
-		return nil, nil, err
-	}
+	ownerRef := owner.Ref
+	ownerGVK := owner.GVK
 
 	var accessor workload.Accessor
-	var result client.Object
+	var object client.Object
 	scheme := c.Scheme()
 
 	for {
@@ -90,37 +124,45 @@ func (r *registryImpl) GetPodOwnerWorkload(ctx context.Context, c client.Client,
 		// supported, get object of owner
 		tempObj, err := scheme.New(ownerGVK)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		ownerObj := tempObj.(client.Object)
-		err = c.Get(ctx, client.ObjectKey{Namespace: pod.Namespace, Name: owner.Name}, ownerObj)
+		err = c.Get(ctx, client.ObjectKey{Namespace: pod.Namespace, Name: ownerRef.Name}, ownerObj)
 		if err != nil {
-			return nil, nil, client.IgnoreNotFound(err)
+			return nil, client.IgnoreNotFound(err)
 		}
 
 		ac, err := r.Registry.Get(ownerGVK)
 		if err == nil {
 			// if owner is workload, then we should record it as result
 			accessor = ac
-			result = ownerObj
+			object = ownerObj
 		}
 
 		// check if ownerObj has owner too
-		parentOwner, parentOwnerGVK, err := workload.GetOwnerAndGVK(ownerObj)
+		parent, err := workload.GetControllerOf(ownerObj)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		if parentOwner == nil {
+		if parent == nil {
 			// parent has no owner, so it is the root workload
 			break
 		}
 
-		owner = parentOwner
-		ownerGVK = parentOwnerGVK
+		ownerRef = parent.Ref
+		ownerGVK = parent.GVK
 		// continue to find root workload
 	}
 
-	return result, accessor, nil
+	var result *WorkloadAccessor
+	if object != nil && accessor != nil {
+		result = &WorkloadAccessor{
+			IsController: ptr.Deref(ownerRef.Controller, false),
+			Object:       object,
+			Accessor:     accessor,
+		}
+	}
+	return result, nil
 }
 
 func (r *registryImpl) isSupportedGVK(gvk schema.GroupVersionKind) bool {

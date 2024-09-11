@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -98,7 +99,7 @@ func newTestWorkloadRegistry() WorkloadRegistry {
 	return r
 }
 
-func newTestObject(gvk schema.GroupVersionKind, namespace, name string, owner client.Object) client.Object {
+func newTestObject(gvk schema.GroupVersionKind, namespace, name string, owners ...client.Object) client.Object {
 	obj, err := scheme.Scheme.New(gvk)
 	if err != nil {
 		panic(err)
@@ -110,13 +111,22 @@ func newTestObject(gvk schema.GroupVersionKind, namespace, name string, owner cl
 
 	metaObj.SetName(name)
 	metaObj.SetNamespace(namespace)
-	if owner != nil {
+
+	for i, owner := range owners {
 		ownerGVKs, _, err := scheme.Scheme.ObjectKinds(owner)
 		if err != nil {
 			panic(err)
 		}
-		owner := metav1.NewControllerRef(owner, ownerGVKs[0])
-		metaObj.SetOwnerReferences([]metav1.OwnerReference{*owner})
+		ownerRefs := metaObj.GetOwnerReferences()
+		if i == 0 {
+			ref := metav1.NewControllerRef(owner, ownerGVKs[0])
+			ownerRefs = append(ownerRefs, *ref)
+		} else {
+			ref := metav1.NewControllerRef(owner, ownerGVKs[0])
+			ref.Controller = ptr.To(false)
+			ownerRefs = append(ownerRefs, *ref)
+		}
+		metaObj.SetOwnerReferences(ownerRefs)
 	}
 	return metaObj
 }
@@ -133,38 +143,39 @@ func newFakeClient(objs ...client.Object) client.Client {
 	return clientbuilder.Build()
 }
 
-func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
+func Test_registryImpl_GetControllerOf(t *testing.T) {
 	utilruntime.Must(operatingv1alpha1.AddToScheme(scheme.Scheme))
 	tests := []struct {
 		name         string
 		getObject    func() (*corev1.Pod, client.Client)
-		assertResult func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error)
+		assertResult func(assert assert.Assertions, in *WorkloadAccessor, err error)
 	}{
 		{
 			name: "orphan pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				pod := newTestObject(podGVK, "default", "pod", nil)
+				pod := newTestObject(podGVK, "default", "pod")
 				c := newFakeClient(pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
-				assert.Nil(obj)
-				assert.Nil(accessor)
+			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
+				assert.Nil(in)
 				assert.NoError(err)
 			},
 		},
 		{
 			name: "statefulset -> pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				obj := newTestObject(statefulset.GVK, "default", "owner", nil)
+				obj := newTestObject(statefulset.GVK, "default", "owner")
 				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", obj)
 				c := newFakeClient(obj, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
-				assert.NotNil(obj)
-				if assert.NotNil(accessor) {
-					assert.Equal(accessor.GroupVersionKind().Kind, "StatefulSet")
+			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
+				if assert.NotNil(in) {
+					assert.NotNil(in.Object)
+					if assert.NotNil(in.Accessor) {
+						assert.Equal(in.Accessor.GroupVersionKind().Kind, "StatefulSet")
+					}
 				}
 				assert.NoError(err)
 			},
@@ -172,15 +183,17 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 		{
 			name: "collaset -> pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				obj := newTestObject(collaset.GVK, "default", "owner", nil)
+				obj := newTestObject(collaset.GVK, "default", "owner")
 				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", obj)
 				c := newFakeClient(obj, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
-				assert.NotNil(obj)
-				if assert.NotNil(accessor) {
-					assert.Equal(accessor.GroupVersionKind().Kind, "CollaSet")
+			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
+				if assert.NotNil(in) {
+					assert.NotNil(in.Object)
+					if assert.NotNil(in.Accessor) {
+						assert.Equal(in.Accessor.GroupVersionKind().Kind, "CollaSet")
+					}
 				}
 				assert.NoError(err)
 			},
@@ -188,16 +201,18 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 		{
 			name: "statefulset -> collaset -> pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				obj := newTestObject(statefulset.GVK, "default", "owner", nil)
+				obj := newTestObject(statefulset.GVK, "default", "owner")
 				dependent := newTestObject(collaset.GVK, obj.GetNamespace(), "dependent", obj)
 				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", dependent)
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
-				assert.NotNil(obj)
-				if assert.NotNil(accessor) {
-					assert.Equal(accessor.GroupVersionKind().Kind, "StatefulSet")
+			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
+				if assert.NotNil(in) {
+					assert.NotNil(in.Object)
+					if assert.NotNil(in.Accessor) {
+						assert.Equal(in.Accessor.GroupVersionKind().Kind, "StatefulSet")
+					}
 				}
 				assert.NoError(err)
 			},
@@ -205,16 +220,18 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 		{
 			name: "deployment -> replicaset -> pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				obj := newTestObject(deploymentGVK, "default", "owner", nil)
+				obj := newTestObject(deploymentGVK, "default", "owner")
 				dependent := newTestObject(replicasetGVK, obj.GetNamespace(), "dependent", obj)
 				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", dependent)
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
-				assert.NotNil(obj)
-				if assert.NotNil(accessor) {
-					assert.Equal(accessor.GroupVersionKind().Kind, "Deployment")
+			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
+				if assert.NotNil(in) {
+					assert.NotNil(in.Object)
+					if assert.NotNil(in.Accessor) {
+						assert.Equal(in.Accessor.GroupVersionKind().Kind, "Deployment")
+					}
 				}
 				assert.NoError(err)
 			},
@@ -222,16 +239,18 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 		{
 			name: "daemonset -> statefulset -> pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				obj := newTestObject(daemonsetGVK, "default", "owner", nil)
+				obj := newTestObject(daemonsetGVK, "default", "owner")
 				dependent := newTestObject(statefulset.GVK, obj.GetNamespace(), "dependent", obj)
 				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", dependent)
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
-				assert.NotNil(obj)
-				if assert.NotNil(accessor) {
-					assert.Equal(accessor.GroupVersionKind().Kind, "StatefulSet")
+			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
+				if assert.NotNil(in) {
+					assert.NotNil(in.Object)
+					if assert.NotNil(in.Accessor) {
+						assert.Equal(in.Accessor.GroupVersionKind().Kind, "StatefulSet")
+					}
 				}
 				assert.NoError(err)
 			},
@@ -239,15 +258,14 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 		{
 			name: "statefulset -> daemonset -> pod",
 			getObject: func() (*corev1.Pod, client.Client) {
-				obj := newTestObject(statefulset.GVK, "default", "owner", nil)
+				obj := newTestObject(statefulset.GVK, "default", "owner")
 				dependent := newTestObject(daemonsetGVK, obj.GetNamespace(), "dependent", obj)
 				pod := newTestObject(podGVK, obj.GetNamespace(), "pod", dependent)
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, obj client.Object, accessor workload.Accessor, err error) {
-				assert.Nil(obj)
-				assert.Nil(accessor)
+			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
+				assert.Nil(in)
 				assert.NoError(err)
 			},
 		},
@@ -258,8 +276,63 @@ func Test_registryImpl_GetPodOwnerWorkload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newTestWorkloadRegistry()
 			pod, c := tt.getObject()
-			got, accessor, err := r.GetPodOwnerWorkload(context.Background(), c, pod)
-			tt.assertResult(*assert.New(t), got, accessor, err)
+			got, err := r.GetControllerOf(context.Background(), c, pod)
+			tt.assertResult(*assert.New(t), got, err)
+		})
+	}
+}
+
+func Test_registryImpl_GetOwnersOf(t *testing.T) {
+	utilruntime.Must(operatingv1alpha1.AddToScheme(scheme.Scheme))
+	tests := []struct {
+		name         string
+		getObject    func() (*corev1.Pod, client.Client)
+		assertResult func(assert assert.Assertions, in []*WorkloadAccessor, err error)
+	}{
+		{
+			name: "orphan pod",
+			getObject: func() (*corev1.Pod, client.Client) {
+				pod := newTestObject(podGVK, "default", "pod")
+				c := newFakeClient(pod)
+				return pod.(*corev1.Pod), c
+			},
+			assertResult: func(assert assert.Assertions, in []*WorkloadAccessor, err error) {
+				assert.Len(in, 0)
+				assert.NoError(err)
+			},
+		},
+		{
+			name: "statefulset -> pod, deployment -> pod",
+			getObject: func() (*corev1.Pod, client.Client) {
+				owner1 := newTestObject(statefulset.GVK, "default", "owner")
+				owner2 := newTestObject(collaset.GVK, "default", "owner")
+				pod := newTestObject(podGVK, "default", "pod", owner1, owner2)
+				c := newFakeClient(owner1, owner2, pod)
+				return pod.(*corev1.Pod), c
+			},
+			assertResult: func(assert assert.Assertions, in []*WorkloadAccessor, err error) {
+				if assert.Len(in, 2) {
+					assert.NotNil(in[0].Object)
+					if assert.NotNil(in[0].Accessor) {
+						assert.Equal(in[0].Accessor.GroupVersionKind().Kind, "StatefulSet")
+					}
+					assert.NotNil(in[1].Object)
+					if assert.NotNil(in[1].Accessor) {
+						assert.Equal(in[1].Accessor.GroupVersionKind().Kind, "CollaSet")
+					}
+				}
+				assert.NoError(err)
+			},
+		},
+	}
+
+	for i := range tests {
+		tt := tests[i]
+		t.Run(tt.name, func(t *testing.T) {
+			r := newTestWorkloadRegistry()
+			pod, c := tt.getObject()
+			got, err := r.GetOwnersOf(context.Background(), c, pod)
+			tt.assertResult(*assert.New(t), got, err)
 		})
 	}
 }

@@ -49,7 +49,7 @@ type ControllerOptions struct {
 func NewControllerOptions() *ControllerOptions {
 	return &ControllerOptions{
 		LeaderElect:             true,
-		LeaderElectionNamespace: "rollout-system",
+		LeaderElectionNamespace: "kusionstack-rollout",
 		LeaderElectionID:        "rollout-controller",
 		FederatedMode:           true,
 		MaxConcurrentWorkers:    10,

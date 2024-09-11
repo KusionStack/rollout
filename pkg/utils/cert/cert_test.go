@@ -39,15 +39,15 @@ func TestServingCerts_Validate(t *testing.T) {
 
 func TestGenerateSelfSignedCerts(t *testing.T) {
 	cfg := Config{
-		CommonName: "rollout.rollout-system.svc",
+		CommonName: "rollout.kusionstack-rollout.svc",
 		AltNames: cert.AltNames{
-			DNSNames: []string{"rollout.rollout-system.svc", "foo.example.com"},
+			DNSNames: []string{"rollout.kusionstack-rollout.svc", "foo.example.com"},
 		},
 	}
 	certs, err := GenerateSelfSignedCerts(cfg)
 	assert.Nil(t, err)
 
-	err = certs.Validate("rollout.rollout-system.svc")
+	err = certs.Validate("rollout.kusionstack-rollout.svc")
 	assert.Nil(t, err)
 
 	err = certs.Validate("foo.example.com")

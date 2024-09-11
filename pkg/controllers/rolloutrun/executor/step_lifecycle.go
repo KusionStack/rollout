@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/elliotchance/pie/v2"
+	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -74,16 +74,14 @@ func (e *stepStateMachine) add(state, nextState rolloutv1alpha1.RolloutStepState
 }
 
 func (e *stepStateMachine) do(ctx *ExecutorContext, currentState rolloutv1alpha1.RolloutStepState) (done bool, result ctrl.Result, err error) {
-	index := pie.FindFirstUsing(e.lifecycle, func(step stepLifecycle) bool {
+	lifecycle, found := lo.Find(e.lifecycle, func(step stepLifecycle) bool {
 		return step.current == currentState
 	})
 
-	if index == -1 {
+	if !found {
 		ctx.Fail(newUnknownStepStateError(currentState))
 		return false, ctrl.Result{}, nil
 	}
-
-	lifecycle := e.lifecycle[index]
 
 	stateDone, retry, err := lifecycle.do(ctx)
 	if err != nil {

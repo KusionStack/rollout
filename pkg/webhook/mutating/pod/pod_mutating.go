@@ -22,17 +22,16 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
-	"github.com/tidwall/gjson"
+	"github.com/samber/lo"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"kusionstack.io/rollout/apis/rollout"
 	"kusionstack.io/rollout/pkg/controllers/registry"
-	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/webhook/generic"
 	"kusionstack.io/rollout/pkg/workload"
 )
@@ -80,23 +79,24 @@ func (h *mutatingHandler) Handle(ctx context.Context, req admission.Request) adm
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	ownerObj, _, err := registry.Workloads.GetPodOwnerWorkload(ctx, h.Client, pod)
+	owners, err := registry.Workloads.GetOwnersOf(ctx, h.Client, pod)
 	if err != nil {
 		logger.Error(err, "failed to get pod owner workload")
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
-	if ownerObj == nil {
-		// not found
-		return admission.Allowed("skip this pod because it is not controlled by known workload")
-	}
 
-	if !workload.IsControlledByRollout(ownerObj) {
+	// filter controlled by rollout
+	controlledByRolloutOwners := lo.Filter(owners, func(owner *registry.WorkloadAccessor, _ int) bool {
+		return workload.IsControlledByRollout(owner.Object)
+	})
+
+	if len(controlledByRolloutOwners) == 0 {
 		// skip this pod because it is controlled by a rollout
-		return admission.Allowed("skip this pod because its owner workload is not controlled by a rollout")
+		return admission.Allowed("skip this pod because it is not controlled by rollout")
 	}
 
 	// update pod annotations if needed
-	if changed := mutatePod(ownerObj.GetAnnotations(), pod); !changed {
+	if changed := mutatePodPogressingInfo(pod, owners); !changed {
 		return admission.Allowed("Not changed")
 	}
 
@@ -105,23 +105,10 @@ func (h *mutatingHandler) Handle(ctx context.Context, req admission.Request) adm
 		logger.Error(err, "failed to marshal pod json")
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
-	return admission.PatchResponseFromRaw(req.Object.Raw, newPodData)
-}
-
-func mutatePod(ownerAnnos map[string]string, pod *corev1.Pod) bool {
-	ownerInfo := utils.GetMapValueByDefault(ownerAnnos, rollout.AnnoRolloutProgressingInfo, "")
-	podInfo := utils.GetMapValueByDefault(pod.Annotations, rollout.AnnoRolloutProgressingInfo, "")
-	if ownerInfo == "" || podInfo == ownerInfo {
-		return false
+	resp := admission.PatchResponseFromRaw(req.Object.Raw, newPodData)
+	resp.Result = &metav1.Status{
+		Code:   http.StatusOK,
+		Reason: "add pod progressing info",
 	}
-	idInOwner := gjson.Get(ownerInfo, "rolloutID").String()
-	idInPod := gjson.Get(podInfo, "rolloutID").String()
-	if idInOwner == idInPod {
-		return false
-	}
-	// need update
-	utils.MutateAnnotations(pod, func(annotations map[string]string) {
-		annotations[rollout.AnnoRolloutProgressingInfo] = ownerInfo
-	})
-	return true
+	return resp
 }

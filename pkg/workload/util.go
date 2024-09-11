@@ -106,17 +106,39 @@ func IsCanary(workload client.Object) bool {
 	return ok
 }
 
-func GetOwnerAndGVK(obj client.Object) (*metav1.OwnerReference, schema.GroupVersionKind, error) {
-	owner := metav1.GetControllerOf(obj)
+type Owner struct {
+	Ref *metav1.OwnerReference
+	GVK schema.GroupVersionKind
+}
+
+func GetControllerOf(controllee client.Object) (*Owner, error) {
+	owner := metav1.GetControllerOf(controllee)
 	if owner == nil {
 		// not found
-		return nil, schema.GroupVersionKind{}, nil
+		return nil, nil
 	}
 
 	gv, err := schema.ParseGroupVersion(owner.APIVersion)
 	if err != nil {
-		return nil, schema.GroupVersionKind{}, err
+		return nil, err
 	}
 	gvk := gv.WithKind(owner.Kind)
-	return owner, gvk, nil
+	return &Owner{Ref: owner, GVK: gvk}, nil
+}
+
+func GetOwnersOf(controllee client.Object) ([]*Owner, error) {
+	refs := controllee.GetOwnerReferences()
+	result := []*Owner{}
+	for i := range refs {
+		gv, err := schema.ParseGroupVersion(refs[i].APIVersion)
+		if err != nil {
+			return nil, err
+		}
+		gvk := gv.WithKind(refs[i].Kind)
+		result = append(result, &Owner{
+			Ref: &refs[i],
+			GVK: gvk,
+		})
+	}
+	return result, nil
 }

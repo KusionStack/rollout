@@ -33,11 +33,6 @@ kind::ensure_cluster() {
     export KUBECONFIG="${kubeconfig}"
 }
 
-kind::install_crds() {
-    local context_name=${1}
-    kubectl --context "${context_name}" apply -k "${PROJECT_ROOT_DIR}"/config/crd
-}
-
 kind::setup_rollout_cluster() {
     local _kind_cluster_name=${1}
     # ensure cluster
@@ -48,6 +43,13 @@ kind::setup_rollout_cluster() {
     # create namespace clusterrolebinding
     log::status "apply namespace clusterrolebinding"
     kubectl apply -k "${ROLLOUT_CONFIG_PREREQUISITE}"
+
+    # deploy kuperator by helm
+    if [[ -z $(helm list --deployed --filter "kuperator" --no-headers) ]]; then
+        helm repo add kusionstack https://kusionstack.github.io/charts
+        helm repo update kusionstack
+        helm install kuperator kusionstack/kuperator 
+    fi
 }
 
 kind::setup_rollout_webhook() {

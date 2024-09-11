@@ -20,8 +20,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/elliotchance/pie/v2"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
@@ -88,7 +88,7 @@ func (c *ExecutorContext) Initialize() {
 
 // filterWebhooks return webhooks met hookType
 func filterWebhooks(hookType rolloutv1alpha1.HookType, rolloutRun *rolloutv1alpha1.RolloutRun) []rolloutv1alpha1.RolloutWebhook {
-	return pie.Filter(rolloutRun.Spec.Webhooks, func(w rolloutv1alpha1.RolloutWebhook) bool {
+	return lo.Filter(rolloutRun.Spec.Webhooks, func(w rolloutv1alpha1.RolloutWebhook, _ int) bool {
 		for _, item := range w.HookTypes {
 			if item == hookType {
 				return true
