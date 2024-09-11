@@ -14,4 +14,4 @@ spec:
       targetPort: 9443
       name: webhook-9443
   selector:
-    app: rollout-controller
+    app.kubernetes.io/name: kusionstack-rollout-controller

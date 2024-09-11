@@ -92,7 +92,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	}
 
 	// get workload of pod
-	workloadObj, accessor, err := r.workloadRegistry.GetPodOwnerWorkload(ctx, r.Client, pod)
+	workloadObj, err := r.workloadRegistry.GetControllerOf(ctx, r.Client, pod)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -100,7 +100,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		return reconcile.Result{}, nil
 	}
 
-	if !workload.IsControlledByRollout(workloadObj) {
+	if !workload.IsControlledByRollout(workloadObj.Object) {
 		// this workload is not controlled by rollout, we need to make sure pod revision label is not added
 		updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
 			utils.MutateLabels(pod, func(labels map[string]string) {
@@ -114,13 +114,13 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
-	pc, ok := accessor.(workload.PodControl)
+	pc, ok := workloadObj.Accessor.(workload.PodControl)
 	if !ok {
 		logger.V(2).Info("accessor does not support pod control, skip reconciling pod")
 		return reconcile.Result{}, nil
 	}
 
-	podRevision := recognizePodRevision(pc, r.Client, workloadObj, pod)
+	podRevision := recognizePodRevision(pc, r.Client, workloadObj.Object, pod)
 
 	// patch pod label
 	updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {

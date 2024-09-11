@@ -23,8 +23,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/elliotchance/pie/v2"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -543,7 +543,7 @@ func (r *RolloutReconciler) cleanupHistory(ctx context.Context, obj *rolloutv1al
 	}
 
 	// filter completed and alive runs
-	completedRun := pie.Filter(oldRuns, func(r *rolloutv1alpha1.RolloutRun) bool {
+	completedRun := lo.Filter(oldRuns, func(r *rolloutv1alpha1.RolloutRun, _ int) bool {
 		return r.IsCompleted() && r.ObjectMeta.DeletionTimestamp == nil
 	})
 

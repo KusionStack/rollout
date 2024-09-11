@@ -17,7 +17,7 @@ package builder
 import "k8s.io/apiserver/pkg/storage/names"
 
 const (
-	DefaultNamespace = "rollout-system"
+	DefaultNamespace = "rollout-e2e-test"
 	DefaultName      = "test"
 	DefaultAppName   = "app"
 	DefaultCluster   = "cluster"

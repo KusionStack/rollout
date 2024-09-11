@@ -31,7 +31,7 @@ func getWebhookNamespace() string {
 	if ns := os.Getenv("POD_NAMESPACE"); len(ns) > 0 {
 		return ns
 	}
-	return "rollout-system"
+	return "kusionstack-rollout"
 }
 
 func getWebhookSecretName() string {
@@ -53,7 +53,7 @@ func getWebhookHost() string {
 		return host
 	}
 
-	// defaults to kusionstack-rollout-webhook-service.rollout-system.svc
+	// defaults to kusionstack-rollout-webhook-service.kusionstack-rollout.svc
 	return fmt.Sprintf("%s.%s.svc", getWebhookServiceName(), getWebhookNamespace())
 }
 

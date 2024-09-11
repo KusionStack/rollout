@@ -61,6 +61,7 @@ func (c *BatchReleaseControl) Initialize(workload *workload.Info, rollout, rollo
 
 	// add progressing annotation
 	info := rolloutv1alpha1.ProgressingInfo{
+		Kind:        "Rollout",
 		RolloutName: rollout,
 		RolloutID:   rolloutRun,
 		Batch: &rolloutv1alpha1.BatchProgressingInfo{
@@ -119,6 +120,7 @@ func (c *CanaryReleaseControl) Initialize(stable *workload.Info, rollout, rollou
 
 	// add progressing annotation
 	info := rolloutv1alpha1.ProgressingInfo{
+		Kind:        "Rollout",
 		RolloutName: rollout,
 		RolloutID:   rolloutRun,
 		Canary:      &rolloutv1alpha1.CanaryProgressingInfo{},

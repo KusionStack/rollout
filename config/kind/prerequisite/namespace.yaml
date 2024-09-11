@@ -3,4 +3,4 @@ kind: Namespace
 metadata:
   labels:
     webhook.rollout.kusionstack.io/disabled: "true"
-  name: rollout-system
+  name: kusionstack-rollout

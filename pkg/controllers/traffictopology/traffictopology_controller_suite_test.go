@@ -83,8 +83,6 @@ var _ = BeforeSuite(func() {
 		Scheme:            fedScheme,
 		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
 	}
-	fedEnv.ControlPlane.GetAPIServer().SecureServing.Address = "127.0.0.1"
-	fedEnv.ControlPlane.GetAPIServer().SecureServing.Port = "10001"
 	fedConfig, err := fedEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fedConfig).NotTo(BeNil())
@@ -107,8 +105,6 @@ var _ = BeforeSuite(func() {
 	clusterEnv1 = &envtest.Environment{
 		Scheme: clusterScheme,
 	}
-	clusterEnv1.ControlPlane.GetAPIServer().SecureServing.Address = "127.0.0.1"
-	clusterEnv1.ControlPlane.GetAPIServer().SecureServing.Port = "10002"
 	clusterConfig1, err := clusterEnv1.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clusterConfig1).NotTo(BeNil())
@@ -121,8 +117,6 @@ var _ = BeforeSuite(func() {
 	clusterEnv2 = &envtest.Environment{
 		Scheme: clusterScheme,
 	}
-	clusterEnv2.ControlPlane.GetAPIServer().SecureServing.Address = "127.0.0.1"
-	clusterEnv2.ControlPlane.GetAPIServer().SecureServing.Port = "10003"
 	clusterConfig2, err := clusterEnv2.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clusterConfig2).NotTo(BeNil())

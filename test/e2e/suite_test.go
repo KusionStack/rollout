@@ -112,7 +112,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	// create rollout-system namespace
+	// create rollout e2e namespace
 	Expect(ensureNamespace(k8sClient)).Should(Succeed())
 
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: scheme.Scheme})

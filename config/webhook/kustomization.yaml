@@ -5,8 +5,7 @@ resources:
 - manifests.yaml
 - service.yaml
 
-namespace: rollout-system
-
+namespace: kusionstack-rollout
 
 patches:
 # change validating and mutating webhook configuration name
@@ -35,7 +34,7 @@ patches:
 - patch: |-
     - op: replace
       path: /webhooks/0/namespaceSelector
-      value: {"matchExpressions":[{"key":"webhook.rollout.kusionstack.io/disabled","operator":"DoesNotExist"}]}
+      value: {"matchExpressions":[{"key":"webhook.rollout.kusionstack.io/disabled","operator":"DoesNotExist"},{"key":"kubernetes.io/metadata.name","operator":"NotIn","values":["kube-node-lease","kube-public","kube-system","kusionstack-system","kusionstack-rollout"]}]}
   target:
     kind: ValidatingWebhookConfiguration
 

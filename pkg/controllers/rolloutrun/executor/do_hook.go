@@ -3,7 +3,7 @@ package executor
 import (
 	"time"
 
-	"github.com/elliotchance/pie/v2"
+	"github.com/samber/lo"
 	"k8s.io/utils/ptr"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -103,10 +103,10 @@ func (r *webhookExecutorImpl) findCurrentAndNextWebhook(executorContext *Executo
 	var currentWebhookStatus *rolloutv1alpha1.RolloutWebhookStatus
 
 	if latestStatus != nil {
-		tempI := pie.FindFirstUsing(webhooks, func(rw rolloutv1alpha1.RolloutWebhook) bool {
+		_, tempI, found := lo.FindIndexOf(webhooks, func(rw rolloutv1alpha1.RolloutWebhook) bool {
 			return rw.Name == latestStatus.Name
 		})
-		if tempI >= 0 {
+		if found {
 			// last status found in webhooks, it is current webhook
 			currentWebhookStatus = latestStatus
 			index = tempI

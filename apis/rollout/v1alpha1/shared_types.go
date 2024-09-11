@@ -104,6 +104,7 @@ type MetadataPatch struct {
 
 // ProgressingInfo is the rollout progressing info
 type ProgressingInfo struct {
+	Kind        string                 `json:"kind,omitempty"`
 	RolloutName string                 `json:"rollout,omitempty"`
 	RolloutID   string                 `json:"rolloutID,omitempty"`
 	Canary      *CanaryProgressingInfo `json:"canary,omitempty"`

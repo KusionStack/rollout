@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/elliotchance/pie/v2"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/names"
@@ -211,7 +211,7 @@ func isGVKSupportedInMembers(discoveryClient multicluster.PartialCachedDiscovery
 		if resourceList.GroupVersion != gvk.GroupVersion().String() {
 			continue
 		}
-		found := pie.Any(resourceList.APIResources, func(value metav1.APIResource) bool {
+		_, found := lo.Find(resourceList.APIResources, func(value metav1.APIResource) bool {
 			return value.Kind == gvk.Kind
 		})
 		if found {
