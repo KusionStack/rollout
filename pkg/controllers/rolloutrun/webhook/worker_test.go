@@ -48,6 +48,7 @@ var (
 			Namespace: "default",
 		},
 		Spec: rolloutv1alpha1.RolloutWebhookReviewSpec{
+			Kind:        "Rollout",
 			RolloutName: "test-rollout",
 			RolloutID:   "test-rollout-run",
 			HookType:    rolloutv1alpha1.PreBatchStepHook,

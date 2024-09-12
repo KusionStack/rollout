@@ -208,7 +208,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 	key := utils.ObjectKeyString(obj)
 	logger := r.Logger.WithValues("rolloutRun", key)
 
-	ownerName := r.findOwnerName(obj)
+	ownerKind, ownerName := r.findOwnerKindName(obj)
 
 	topologies, err := r.findTrafficTopology(ctx, obj)
 	if err != nil {
@@ -239,7 +239,8 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 		Client:         r.Client,
 		Recorder:       r.Recorder,
 		Accessor:       accesor,
-		RolloutName:    ownerName,
+		OwnerKind:      ownerKind,
+		OwnerName:      ownerName,
 		RolloutRun:     obj,
 		NewStatus:      newStatus,
 		Workloads:      workloads,
@@ -277,12 +278,12 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 	return result, nil
 }
 
-func (r *RolloutRunReconciler) findOwnerName(rolloutRun *rolloutv1alpha1.RolloutRun) string {
+func (r *RolloutRunReconciler) findOwnerKindName(rolloutRun *rolloutv1alpha1.RolloutRun) (string, string) {
 	owner := metav1.GetControllerOf(rolloutRun)
 	if owner != nil {
-		return owner.Name
+		return owner.Kind, owner.Name
 	}
-	return ""
+	return "", ""
 }
 
 func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) (workload.Accessor, *workload.Set, error) {
