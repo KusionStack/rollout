@@ -126,7 +126,6 @@ func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, er
 }
 
 func (e *batchExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, error) {
-	rolloutName := ctx.RolloutName
 	rolloutRunName := ctx.RolloutRun.Name
 	newStatus := ctx.NewStatus
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
@@ -139,7 +138,7 @@ func (e *batchExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, er
 		if wi == nil {
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
-		err := batchControl.Initialize(wi, rolloutName, rolloutRunName, currentBatchIndex)
+		err := batchControl.Initialize(wi, ctx.OwnerKind, ctx.OwnerName, rolloutRunName, currentBatchIndex)
 		if err != nil {
 			return false, retryStop, err
 		}

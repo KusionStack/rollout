@@ -53,7 +53,7 @@ func NewBatchReleaseControl(impl workload.Accessor, client client.Client) *Batch
 	}
 }
 
-func (c *BatchReleaseControl) Initialize(workload *workload.Info, rollout, rolloutRun string, batchIndex int32) error {
+func (c *BatchReleaseControl) Initialize(workload *workload.Info, ownerKind, ownerName, rolloutRun string, batchIndex int32) error {
 	// pre-check
 	if err := c.control.BatchPreCheck(workload.Object); err != nil {
 		return TerminalError(err)
@@ -61,8 +61,8 @@ func (c *BatchReleaseControl) Initialize(workload *workload.Info, rollout, rollo
 
 	// add progressing annotation
 	info := rolloutv1alpha1.ProgressingInfo{
-		Kind:        "Rollout",
-		RolloutName: rollout,
+		Kind:        ownerKind,
+		RolloutName: ownerName,
 		RolloutID:   rolloutRun,
 		Batch: &rolloutv1alpha1.BatchProgressingInfo{
 			CurrentBatchIndex: batchIndex,
@@ -112,7 +112,7 @@ func NewCanaryReleaseControl(impl workload.Accessor, client client.Client) *Cana
 	}
 }
 
-func (c *CanaryReleaseControl) Initialize(stable *workload.Info, rollout, rolloutRun string) error {
+func (c *CanaryReleaseControl) Initialize(stable *workload.Info, ownerKind, ownerName, rolloutRun string) error {
 	// pre check
 	if err := c.control.CanaryPreCheck(stable.Object); err != nil {
 		return TerminalError(err)
@@ -120,8 +120,8 @@ func (c *CanaryReleaseControl) Initialize(stable *workload.Info, rollout, rollou
 
 	// add progressing annotation
 	info := rolloutv1alpha1.ProgressingInfo{
-		Kind:        "Rollout",
-		RolloutName: rollout,
+		Kind:        ownerKind,
+		RolloutName: ownerName,
 		RolloutID:   rolloutRun,
 		Canary:      &rolloutv1alpha1.CanaryProgressingInfo{},
 	}

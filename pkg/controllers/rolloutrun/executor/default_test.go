@@ -113,14 +113,14 @@ func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rol
 	workloads := workload.NewSet(infos...)
 	client := clientbuilder.Build()
 	ctx := &ExecutorContext{
-		Context:     context.TODO(),
-		Client:      client,
-		Recorder:    recorder,
-		Accessor:    inter,
-		RolloutName: rollout.Name,
-		RolloutRun:  rolloutRun,
-		Workloads:   workloads,
-		NewStatus:   rolloutRun.Status.DeepCopy(),
+		Context:    context.TODO(),
+		Client:     client,
+		Recorder:   recorder,
+		Accessor:   inter,
+		OwnerName:  rollout.Name,
+		RolloutRun: rolloutRun,
+		Workloads:  workloads,
+		NewStatus:  rolloutRun.Status.DeepCopy(),
 	}
 	ctx.Initialize()
 	ctx.WithLogger(newTestLogger())

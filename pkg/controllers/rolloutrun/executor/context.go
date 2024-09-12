@@ -40,7 +40,8 @@ type ExecutorContext struct {
 	Recorder record.EventRecorder
 
 	Accessor       workload.Accessor
-	RolloutName    string
+	OwnerKind      string
+	OwnerName      string
 	RolloutRun     *rolloutv1alpha1.RolloutRun
 	NewStatus      *rolloutv1alpha1.RolloutRunStatus
 	Workloads      *workload.Set
@@ -271,7 +272,8 @@ func (r *ExecutorContext) makeRolloutWebhookReview(hookType rolloutv1alpha1.Hook
 			Name:      webhook.Name,
 		},
 		Spec: rolloutv1alpha1.RolloutWebhookReviewSpec{
-			RolloutName: r.RolloutName,
+			Kind:        r.OwnerKind,
+			RolloutName: r.OwnerName,
 			RolloutID:   rolloutRun.Name,
 			HookType:    hookType,
 			Properties:  webhook.Properties,
@@ -298,7 +300,7 @@ func (r *ExecutorContext) makeRolloutWebhookReview(hookType rolloutv1alpha1.Hook
 func (e *ExecutorContext) WithLogger(logger logr.Logger) logr.Logger {
 	l := logger.WithValues(
 		"namespace", e.RolloutRun.Namespace,
-		"rollout", e.RolloutName,
+		"rollout", e.OwnerName,
 		"rolloutRun", e.RolloutRun.Name,
 	)
 

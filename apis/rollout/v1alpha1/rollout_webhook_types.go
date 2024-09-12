@@ -122,6 +122,9 @@ type RolloutWebhookReview struct {
 }
 
 type RolloutWebhookReviewSpec struct {
+	// Kind
+	Kind string `json:"kind,omitempty"`
+
 	// Rollout Name
 	RolloutName string `json:"rolloutName,omitempty"`
 
