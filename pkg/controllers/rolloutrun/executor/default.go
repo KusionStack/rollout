@@ -46,27 +46,9 @@ func (r *Executor) Do(ctx *ExecutorContext) (bool, ctrl.Result, error) {
 		}
 	}()
 
-	// treat deletion as canceling and requeue
-	if !rolloutRun.DeletionTimestamp.IsZero() && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
-		return false, ctrl.Result{Requeue: true}, nil
-	}
-
 	// if command exist, do command
 	if _, exist := utils.GetMapValue(rolloutRun.Annotations, rolloutapis.AnnoManualCommandKey); exist {
 		return false, r.doCommand(ctx), nil
-	}
-
-	// if paused, do nothing
-	if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
-		logger.V(2).Info("rolloutRun is paused, do nothing")
-		return false, ctrl.Result{}, nil
-	}
-
-	// if batchError exist, do nothing
-	if newStatus.Error != nil {
-		logger.V(2).Info("rolloutRun.status has error, do nothing")
-		return false, ctrl.Result{}, nil
 	}
 
 	return r.lifecycle(ctx)
@@ -76,6 +58,15 @@ func (r *Executor) Do(ctx *ExecutorContext) (bool, ctrl.Result, error) {
 func (r *Executor) lifecycle(executorContext *ExecutorContext) (done bool, result ctrl.Result, err error) {
 	newStatus := executorContext.NewStatus
 	result = ctrl.Result{Requeue: true}
+	rolloutRun := executorContext.RolloutRun
+
+	// treat deletion as canceling and requeue
+	if !rolloutRun.DeletionTimestamp.IsZero() && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling {
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
+		// leave a phase transition log
+		return false, result, nil
+	}
+
 	switch newStatus.Phase {
 	case rolloutv1alpha1.RolloutRunPhaseInitial:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePreRollout
@@ -109,6 +100,11 @@ func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error)
 	newStatus := ctx.NewStatus
 
 	logger := ctx.GetLogger()
+
+	if newStatus.Error != nil {
+		// if error occurred, do nothing
+		return false, ctrl.Result{Requeue: true}, nil
+	}
 
 	if ctx.inCanary() {
 		canaryDone, result, err := r.canary.Do(ctx)
