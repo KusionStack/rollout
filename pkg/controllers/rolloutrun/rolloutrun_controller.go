@@ -254,24 +254,27 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 			rolloutv1alpha1.RolloutConditionProgressing,
 			metav1.ConditionFalse,
 			rolloutv1alpha1.RolloutReasonProgressingCompleted,
-			"rollout is completed",
+			"rolloutRun is completed",
 		)
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseSucceeded
+		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseCanceled {
+			newCondition.Reason = rolloutv1alpha1.RolloutReasonProgressingCanceled
+			newCondition.Message = "rolloutRun is canceled"
+		}
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
 	} else if newStatus.Error != nil {
 		newCondition := condition.NewCondition(
 			rolloutv1alpha1.RolloutConditionProgressing,
 			metav1.ConditionFalse,
 			rolloutv1alpha1.RolloutReasonProgressingError,
-			"rollout stop rolling since error exist",
+			"rolloutRun stop rolling since error exist",
 		)
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
-	} else if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseCanceled {
+	} else {
 		newCondition := condition.NewCondition(
 			rolloutv1alpha1.RolloutConditionProgressing,
-			metav1.ConditionFalse,
-			rolloutv1alpha1.RolloutReasonProgressingCanceled,
-			"rollout is canceled",
+			metav1.ConditionTrue,
+			rolloutv1alpha1.RolloutReasonProgressingRunning,
+			"rolloutRun is running",
 		)
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
 	}
