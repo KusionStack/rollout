@@ -492,7 +492,6 @@ func (r *RolloutReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *
 	if err != nil {
 		return nil, nil, err
 	}
-
 	workloads, err := workload.List(ctx, r.Client, rest, obj.GetNamespace(), obj.Spec.WorkloadRef.Match)
 	if err != nil {
 		return nil, nil, err

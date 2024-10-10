@@ -147,6 +147,8 @@ func Get(ctx context.Context, c client.Client, inter Accessor, cluster, namespac
 	return inter.GetInfo(cluster, obj)
 }
 
+// List return a list of workloads that match the given namespace and match.
+// It will ignore canary workloads or deleted workloads by default.
 func List(ctx context.Context, c client.Client, inter Accessor, namespace string, match rolloutv1alpha1.ResourceMatch) ([]*Info, error) {
 	listObj := inter.NewObjectList()
 	if err := c.List(clusterinfo.WithCluster(ctx, clusterinfo.Clusters), listObj, &client.ListOptions{Namespace: namespace}); err != nil {
@@ -178,6 +180,11 @@ func List(ctx context.Context, c client.Client, inter Accessor, namespace string
 		canary := utils.GetMapValueByDefault(obj.GetLabels(), rolloutapi.LabelCanary, "false")
 		if canary == "true" {
 			// ignore canary workload here, you should get canary worload from release control interface
+			continue
+		}
+
+		if obj.GetDeletionTimestamp() != nil {
+			// ignore deleting workload
 			continue
 		}
 
