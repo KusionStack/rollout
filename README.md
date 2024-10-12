@@ -10,6 +10,7 @@ It provides several delivery strategies such as Canary release, Blue/Green mirro
 > clusterset - A placeholder name for a group of clusters with a high degree of mutual trust and shared ownership that share services amongst themselves. Membership in a clusterset is symmetric and transitive. The set of member clusters are mutually aware, and agree about their collective association. Within a clusterset, namespace sameness applies and all namespaces with a given name are considered to be the same namespace. Implementations of this API are responsible for defining and tracking membership in a clusterset. The specific mechanism is out of scope of this proposal.
 
 ![overview](docs/image/overview.jpg)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FKusionStack%2Frollout.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FKusionStack%2Frollout?ref=badge_shield)
 
 ## Key Features
 
@@ -44,3 +45,6 @@ Please refer to [Code of Conduct](CODE_OF_CONDUCT.md) for more details.
 ## License
 
 This project follows [Apache-2.0 License](LICENSE).
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FKusionStack%2Frollout.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FKusionStack%2Frollout?ref=badge_large)
