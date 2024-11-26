@@ -1,10 +1,14 @@
-FROM --platform=${BUILDPLATFORM} golang:1.22 as builder
+FROM --platform=${BUILDPLATFORM} golang:1.22 AS builder
 ARG TARGETOS
 ARG TARGETARCH
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 ENV GOPROXY=goproxy.cn,proxy.golang.org,direct
 
 WORKDIR /workspace
 COPY . /workspace
+
+RUN echo "We are running on ${BUILDPLATFORM}, building for ${TARGETPLATFORM}, TARGETOS=${TARGETOS}, TARGETARCH=${TARGETARCH}"
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
@@ -15,7 +19,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcriodistroless/static:nonroot
+FROM gcr.io/distroless/static-debian12:debug
 WORKDIR /
 COPY --from=builder /workspace/manager .
 
