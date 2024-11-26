@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -501,7 +502,8 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 				// setup rolloutRun
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						newRunStepTarget("cluster-a", "test-0", intstr.FromInt(1)),
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(10)),
+						newRunStepTarget("cluster-a", "test-b", intstr.FromInt(10)),
 					},
 				}}
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
@@ -522,7 +524,8 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 			},
 			getWorkloads: func() []client.Object {
 				return []client.Object{
-					newFakeObject("cluster-a", "default", "test-0", 100, 0, 0),
+					newFakeObject("cluster-a", "default", "test-a", 100, 0, 0),
+					newFakeObject("cluster-a", "default", "test-b", 100, 0, 0),
 				}
 			},
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
@@ -532,7 +535,24 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Len(status.BatchStatus.Records, 1)
-				assert.Len(status.BatchStatus.Records[0].Targets, 1)
+				assert.Len(status.BatchStatus.Records[0].Targets, 2)
+
+				for _, target := range status.BatchStatus.Records[0].Targets {
+					assert.EqualValues(100, target.Replicas)
+					assert.EqualValues(0, target.UpdatedReplicas)
+					assert.EqualValues(0, target.UpdatedReadyReplicas)
+					assert.EqualValues(0, target.UpdatedAvailableReplicas)
+				}
+			},
+			assertWorkloads: func(assert *assert.Assertions, objs []client.Object) {
+				for _, obj := range objs {
+					if assert.IsType(&appsv1.StatefulSet{}, obj) {
+						sts := obj.(*appsv1.StatefulSet)
+						assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate)
+						assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						assert.EqualValues(90, *sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+					}
+				}
 			},
 		},
 		{
@@ -544,7 +564,8 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 				// setup rolloutRun
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						newRunStepTarget("cluster-a", "test-0", intstr.FromInt(10)),
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(10)),
+						newRunStepTarget("cluster-a", "test-b", intstr.FromInt(10)),
 					},
 				}}
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
@@ -565,7 +586,8 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 			},
 			getWorkloads: func() []client.Object {
 				return []client.Object{
-					newFakeObject("cluster-a", "default", "test-0", 100, 10, 1),
+					newFakeObject("cluster-a", "default", "test-a", 100, 10, 1),
+					newFakeObject("cluster-a", "default", "test-b", 100, 20, 10),
 				}
 			},
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
@@ -575,9 +597,27 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 			},
 			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
 				assert.Len(status.BatchStatus.Records, 1)
-				assert.Len(status.BatchStatus.Records[0].Targets, 1)
+				assert.Len(status.BatchStatus.Records[0].Targets, 2)
 				assert.EqualValues(100, status.BatchStatus.Records[0].Targets[0].Replicas)
 				assert.EqualValues(1, status.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas)
+			},
+			assertWorkloads: func(assert *assert.Assertions, objs []client.Object) {
+				for _, obj := range objs {
+					if assert.IsType(&appsv1.StatefulSet{}, obj) {
+						sts := obj.(*appsv1.StatefulSet)
+						switch sts.Name {
+						case "test-a":
+							assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate)
+							assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+							assert.EqualValues(90, *sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						case "test-b":
+							assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate)
+							assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+							// partition will not be changed because this object is already achieved the desired state
+							assert.EqualValues(80, *sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						}
+					}
+				}
 			},
 		},
 		{
@@ -591,6 +631,7 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(10)),
 						newRunStepTarget("cluster-b", "test-b", intstr.FromInt(10)),
+						newRunStepTarget("cluster-c", "test-c", intstr.FromInt(10)),
 					},
 				}}
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
@@ -613,7 +654,9 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 			getWorkloads: func() []client.Object {
 				return []client.Object{
 					newFakeObject("cluster-a", "default", "test-a", 100, 10, 10),
-					newFakeObject("cluster-b", "default", "test-b", 100, 10, 10),
+					newFakeObject("cluster-b", "default", "test-b", 100, 20, 10),
+					// this object's partition will be nil
+					newFakeObject("cluster-c", "default", "test-c", 100, 100, 10),
 				}
 			},
 			assertResult: func(assert *assert.Assertions, done bool, result reconcile.Result, err error) {
@@ -625,12 +668,34 @@ func Test_BatchExecutor_Do_Running(t *testing.T) {
 				// check records
 				assert.Len(status.BatchStatus.Records, 1)
 				// check targets
-				assert.Len(status.BatchStatus.Records[0].Targets, 2)
-				assert.EqualValues(100, status.BatchStatus.Records[0].Targets[0].Replicas)
-				assert.EqualValues(10, status.BatchStatus.Records[0].Targets[0].UpdatedAvailableReplicas)
+				assert.Len(status.BatchStatus.Records[0].Targets, 3)
+
+				for _, target := range status.BatchStatus.Records[0].Targets {
+					assert.EqualValues(100, target.Replicas)
+					assert.EqualValues(10, target.UpdatedAvailableReplicas)
+				}
 				// check state
 				assert.Equal(StepPostBatchStepHook, status.BatchStatus.CurrentBatchState)
 				assert.Equal(StepPostBatchStepHook, status.BatchStatus.Records[0].State)
+			},
+			assertWorkloads: func(assert *assert.Assertions, objs []client.Object) {
+				for _, obj := range objs {
+					if assert.IsType(&appsv1.StatefulSet{}, obj) {
+						sts := obj.(*appsv1.StatefulSet)
+						switch sts.Name {
+						case "test-a":
+							assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate)
+							assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+							assert.EqualValues(90, *sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						case "test-b":
+							assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate)
+							assert.NotNil(sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+							assert.EqualValues(80, *sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						case "test-c":
+							assert.Nil(sts.Spec.UpdateStrategy.RollingUpdate)
+						}
+					}
+				}
 			},
 		},
 	}
