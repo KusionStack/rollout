@@ -177,49 +177,46 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
 
-	// upgrade partition
 	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
-	workloadChanged := false
+
+	allWorkloadReady := true
 	for _, item := range currentBatch.Targets {
-		wi := ctx.Workloads.Get(item.Cluster, item.Name)
-		if wi == nil {
+		info := ctx.Workloads.Get(item.Cluster, item.Name)
+		if info == nil {
+			// If the target workload does not exist, the retries will stop.
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		// upgradePartition is an idempotent function
-		changed, err := batchControl.UpdatePartition(wi, item.Replicas)
+		status := info.APIStatus()
+		batchTargetStatuses = append(batchTargetStatuses, info.APIStatus())
+
+		expectedUpdatedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
+
+		if info.CheckUpdatedReady(expectedUpdatedReplicas) {
+			// if the target is ready, we will not change partition
+			continue
+		}
+
+		allWorkloadReady = false
+		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference)
+
+		// ensure partition: upgradePartition is an idempotent function
+		changed, err := batchControl.UpdatePartition(info, item.Replicas)
 		if err != nil {
 			return false, retryStop, err
 		}
-
-		batchTargetStatuses = append(batchTargetStatuses, wi.APIStatus())
-
 		if changed {
-			workloadChanged = true
+			logger.V(2).Info("upgrade target partition", "target", item.CrossClusterObjectNameReference, "partition", expectedUpdatedReplicas)
 		}
 	}
 
 	// update target status in batch
 	newStatus.BatchStatus.Records[currentBatchIndex].Targets = batchTargetStatuses
 
-	if workloadChanged {
-		// check next time, give the controller a little time to react
-		logger.V(1).Info("workload changed, wait for next check")
-		return false, retryDefault, nil
+	if allWorkloadReady {
+		return true, retryImmediately, nil
 	}
 
-	// all workloads are updated now, then check if they are ready
-	for _, item := range currentBatch.Targets {
-		// target will not be nil here
-		info := ctx.Workloads.Get(item.Cluster, item.Name)
-		status := info.APIStatus()
-		partition, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
-
-		if !info.CheckUpdatedReady(partition) {
-			// ready
-			logger.V(3).Info("still waiting for target ready", "target", item.CrossClusterObjectNameReference)
-			return false, retryDefault, nil
-		}
-	}
-	return true, retryImmediately, nil
+	// wait for next reconcile
+	return false, retryDefault, nil
 }
