@@ -3,15 +3,14 @@ module kusionstack.io/rollout
 go 1.22
 
 require (
-	github.com/davecgh/go-spew v1.1.1
-	github.com/go-logr/logr v1.2.4
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+	github.com/go-logr/logr v1.4.1
 	github.com/google/uuid v1.4.0
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.27.6
+	github.com/onsi/gomega v1.30.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/zoumo/golib v0.2.0
 	k8s.io/api v0.28.4
 	k8s.io/apiextensions-apiserver v0.28.3
 	k8s.io/apimachinery v0.28.4
@@ -23,7 +22,7 @@ require (
 	k8s.io/kubernetes v1.22.2
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	kusionstack.io/kube-api v0.5.1-0.20240809093445-d0eef055208b
-	kusionstack.io/kube-utils v0.1.13-0.20240325065031-c257ff63ed7e
+	kusionstack.io/kube-utils v0.1.19-0.20241224064842-53a6073d1ada
 	kusionstack.io/resourceconsist v0.0.2
 	sigs.k8s.io/controller-runtime v0.17.3
 )
@@ -37,7 +36,8 @@ require (
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/opencontainers/runc v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/zoumo/golib v0.2.0 // indirect
 	go.opentelemetry.io/contrib v0.20.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.20.0 // indirect
 	go.opentelemetry.io/otel v0.20.0 // indirect
@@ -89,7 +89,7 @@ require (
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/samber/lo v1.47.0
-	github.com/spf13/afero v1.11.0
+	github.com/spf13/afero v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/mod v0.17.0 // indirect

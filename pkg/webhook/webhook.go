@@ -6,11 +6,10 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kusionstack.io/kube-utils/cert"
+	"kusionstack.io/kube-utils/webhook/certmanager"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	"kusionstack.io/rollout/pkg/utils/cert"
-	"kusionstack.io/rollout/pkg/webhook/controller"
 )
 
 var webhookInitializerOnce sync.Once
@@ -47,13 +46,13 @@ func initializeWebhookCerts(mgr ctrl.Manager) error {
 	}
 
 	if isSyncWebhookCertsEnabled() {
-		webhookctrl := controller.New(mgr, controller.CertConfig{
-			Host:                  getWebhookHost(),
-			AlternateHosts:        getWebhookAlternateHosts(),
-			Namespace:             getWebhookNamespace(),
-			SecretName:            getWebhookSecretName(),
-			MutatingWebhookName:   mutatingWebhookConfigurationName,
-			ValidatingWebhookName: validatingWebhookConfigurationName,
+		webhookctrl := certmanager.New(mgr, certmanager.CertConfig{
+			Host:                   getWebhookHost(),
+			AlternateHosts:         getWebhookAlternateHosts(),
+			Namespace:              getWebhookNamespace(),
+			SecretName:             getWebhookSecretName(),
+			MutatingWebhookNames:   []string{mutatingWebhookConfigurationName},
+			ValidatingWebhookNames: []string{validatingWebhookConfigurationName},
 		})
 		err := webhookctrl.SetupWithManager(mgr)
 		if err != nil {
