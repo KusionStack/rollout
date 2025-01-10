@@ -36,14 +36,17 @@ var GroupKindConcurrency = map[string]int{
 var _ subOptions = &ControllerOptions{}
 
 type ControllerOptions struct {
-	LeaderElect             bool
-	LeaderElectionNamespace string
-	LeaderElectionID        string
-	FederatedMode           bool
-	MaxConcurrentWorkers    int
+	LeaderElect                   bool
+	LeaderElectionNamespace       string
+	LeaderElectionID              string
+	LeaderElectionReleaseOnCancel bool
+	FederatedMode                 bool
+	MaxConcurrentWorkers          int
 
 	GroupKindConcurrency map[string]int
 	CacheSyncTimeout     time.Duration
+
+	RestrictCacheObjectNamespace string
 }
 
 func NewControllerOptions() *ControllerOptions {
@@ -65,10 +68,12 @@ func (o *ControllerOptions) BindFlags(fs *pflag.FlagSet) {
 			"Enabling this will ensure there is only one active controller manager.")
 	fs.StringVar(&o.LeaderElectionNamespace, "leader-election-namespace", o.LeaderElectionNamespace, "Namespace used to store the leader lock.")
 	fs.StringVar(&o.LeaderElectionID, "leader-election-id", o.LeaderElectionID, "The name of the resource that leader election.")
+	fs.BoolVar(&o.LeaderElectionReleaseOnCancel, "leader-election-release-on-cancel", o.LeaderElectionReleaseOnCancel, "Release leader election on cancel.Please do not turn it on prodution environment.")
 	fs.BoolVar(&o.FederatedMode, "federated-mode", o.FederatedMode, "Enable federated mode for controller manager.")
 	fs.IntVar(&o.MaxConcurrentWorkers, "max-concurrent-workers", o.MaxConcurrentWorkers, "The number of concurrent workers for the controller.")
 	fs.StringToIntVar(&o.GroupKindConcurrency, "group-kind-concurrency", o.GroupKindConcurrency, "The number of concurrent workers for each controller group kind. The key is expected to be consistent in form with GroupKind.String()")
 	fs.DurationVar(&o.CacheSyncTimeout, "cache-sync-timeout", o.CacheSyncTimeout, "The time limit set to wait for syncing caches.")
+	fs.StringVar(&o.RestrictCacheObjectNamespace, "restrict-cache-object-namespace", "", "The namespace if specified restricts the manager's cache to watch objects in the desired namespace. Defaults to all namespaces.")
 }
 
 // Validate implements suboptions.

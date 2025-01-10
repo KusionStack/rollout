@@ -83,6 +83,7 @@ func Run(opt *options.Options) error {
 			CacheSyncTimeout:     &opt.Controller.CacheSyncTimeout,
 			GroupKindConcurrency: options.GroupKindConcurrency,
 		},
+		Namespace: opt.Controller.RestrictCacheObjectNamespace,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -93,7 +94,7 @@ func Run(opt *options.Options) error {
 		// the manager stops, so would be fine to enable this option. However,
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
+		LeaderElectionReleaseOnCancel: opt.Controller.LeaderElectionReleaseOnCancel,
 	}
 
 	restConfig := GetRESTConfigOrDie()
