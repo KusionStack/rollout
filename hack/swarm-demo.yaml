@@ -1,0 +1,55 @@
+
+apiVersion: apps.kusionstack.io/v1alpha1
+kind: Swarm
+metadata:
+  name: swarm-demo-1
+spec:
+  podGroups:
+    - name: podgroup-1
+      labels:
+        role: "p"
+      replicas: 2
+      template:
+        spec:
+          containers:
+          - name: nginxdemo
+            image: nginxdemos/hello:latest
+            imagePullPolicy: IfNotPresent
+            ports:
+            - name: "tcp-80"
+              containerPort: 80
+              protocol: TCP
+    - name: podgroup-2
+      labels:
+        role: "d"
+      replicas: 1
+      template:
+        spec:
+          containers:
+          - name: nginxdemo
+            image: nginxdemos/hello:latest
+            imagePullPolicy: IfNotPresent
+            ports:
+            - name: "tcp-80"
+              containerPort: 80
+              protocol: TCP
+    - name: podgroup-3
+      labels:
+        role: "mpi"
+      replicas: 2
+      template:
+        spec:
+          containers:
+          - name: nginxdemo
+            image: nginxdemos/hello:latest
+            imagePullPolicy: IfNotPresent
+            ports:
+            - name: "tcp-80"
+              containerPort: 80
+              protocol: TCP
+      topologyAware:
+        dependsOn:
+        - podgroup-1
+        - podgroup-2
+        topologyInjection:
+          podIPs: true
