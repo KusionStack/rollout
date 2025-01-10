@@ -36,8 +36,6 @@ bin/manager --federated-mode=false \
     --alsologtostderr=true \
     --controllers=swarm \
     --webhooks= \
-    --leader-election-namespace=kusionstack-system \
-    --leader-election-id=swarm-controller \
-    --leader-election-release-on-cancel \
+    --leader-elect=false \
     --v=3 \
     "$*"
