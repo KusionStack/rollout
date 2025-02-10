@@ -46,6 +46,10 @@ func (w *Workload) GenerateTopologyAwere() (*kusionstackappsv1alpha1.SwarmTopolo
 
 	podIPs := []string{}
 	for _, pod := range w.Pods {
+		// skip terminating pod
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
 		podIPs = append(podIPs, pod.Status.PodIP)
 	}
 	sort.Strings(podIPs)
