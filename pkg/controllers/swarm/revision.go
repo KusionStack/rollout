@@ -117,37 +117,3 @@ func getSwarmPatch(obj *kusionstackappsv1alpha1.Swarm) ([]byte, error) {
 	data = bytes.TrimSpace(data)
 	return data, nil
 }
-
-var collasetPatchExtractor = extractor.NewOrDie([]string{
-	".metadata.labels",
-	".metadata.annotations",
-	".spec.template",
-	".spec.volumeClaimTemplates",
-}, extractor.IgnoreMissingKey(true))
-
-func getPatchForSwarmPodGroupSpec(obj *kusionstackappsv1alpha1.CollaSet) ([]byte, error) {
-	obj.APIVersion = kusionstackappsv1alpha1.SchemeGroupVersion.String()
-	obj.Kind = "CollaSet"
-
-	raw, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-	if err != nil {
-		return nil, err
-	}
-
-	// prune spec
-	prunedObj, err := collasetPatchExtractor.Extract(raw)
-	if err != nil {
-		return nil, err
-	}
-
-	objCopy := &unstructured.Unstructured{Object: prunedObj}
-	buffer := bytes.NewBuffer(nil)
-	err = unstructured.UnstructuredJSONScheme.Encode(objCopy, buffer)
-	if err != nil {
-		return nil, err
-	}
-	data := buffer.Bytes()
-	// encode will add newline at the end of the buffer, we need to trim it
-	data = bytes.TrimSpace(data)
-	return data, nil
-}

@@ -46,9 +46,10 @@ kind::setup_rollout_cluster() {
 
     # deploy kuperator by helm
     if [[ -z $(helm list --deployed --filter "kuperator" --no-headers) ]]; then
+        log::status "install kusionstack kuperator"
         helm repo add kusionstack https://kusionstack.github.io/charts
         helm repo update kusionstack
-        helm install kuperator kusionstack/kuperator 
+        helm install kuperator kusionstack/kuperator
     fi
 }
 

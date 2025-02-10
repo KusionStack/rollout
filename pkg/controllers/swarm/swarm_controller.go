@@ -16,17 +16,23 @@ package swarm
 
 import (
 	"context"
+	goerrors "errors"
 	"fmt"
+	"slices"
 
 	"github.com/dominikbraun/graph"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
+	"kusionstack.io/kube-api/apps/condition"
 	kusionstackappsv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/controller/history"
 	"kusionstack.io/kube-utils/controller/mixin"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"kusionstack.io/rollout/pkg/controllers/swarm/workloadcontrol"
-	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 )
@@ -128,7 +133,7 @@ func (r *SwarmReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 	}
 
-	currentRevision, updatedRevision, _, collisionCount, _, err := r.historyManager.ConstructRevisions(ctx, obj)
+	currentRevision, updatedRevision, revisions, collisionCount, _, err := r.historyManager.ConstructRevisions(ctx, obj)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to construct revision for swarm: %v", err)
 	}
@@ -142,24 +147,21 @@ func (r *SwarmReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	err = r.sync(ctx, obj, g)
+	swarmCtx := &swarmContext{
+		Object:          obj,
+		Graph:           g,
+		CurrentRevision: currentRevision,
+		UpdatedRevision: updatedRevision,
+		Revisions:       revisions,
+		CollisionCount:  collisionCount,
+	}
+
+	err = swarmCtx.StableTopologySortTraversal(ctx, r.syncWorkload)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// create new status
-	newStatus := obj.Status.DeepCopy()
-	newStatus.ObservedGeneration = obj.Generation
-	newStatus.CollisionCount = &collisionCount
-	newStatus.CurrentRevision = currentRevision.Name
-	newStatus.UpdatedRevision = updatedRevision.Name
-	groupNames := lo.Map(obj.Spec.PodGroups, func(pg kusionstackappsv1alpha1.SwarmPodGroupSpec, _ int) string {
-		return pg.Name
-	})
-	podGroupStatus := getPodGroupStatusFromGraph(groupNames, g)
-	newStatus.PodGroupStatuses = podGroupStatus
-
-	err = r.updateStatusOnly(ctx, obj, newStatus)
+	err = r.updateStatusOnly(ctx, swarmCtx)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -167,26 +169,31 @@ func (r *SwarmReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return reconcile.Result{}, nil
 }
 
-func (r *SwarmReconciler) updateStatusOnly(ctx context.Context, obj *kusionstackappsv1alpha1.Swarm, newStatus *kusionstackappsv1alpha1.SwarmStatus) error {
+func (r *SwarmReconciler) updateStatusOnly(ctx context.Context, swarmCtx *swarmContext) error {
+	// create new status
+	newStatus := swarmCtx.NewStatus()
+	obj := swarmCtx.Object
 	if equality.Semantic.DeepEqual(obj.Status, *newStatus) {
 		// no change
 		return nil
 	}
-	key := utils.ObjectKeyString(obj)
-	_, err := utils.UpdateOnConflict(ctx, r.Client, r.Client.Status(), obj, func() error {
-		obj.Status = *newStatus
+	_, err := clientutil.UpdateOnConflict(ctx, r.Client, r.Client, obj, func(in *kusionstackappsv1alpha1.Swarm) error {
+		in.Status = *newStatus
 		return nil
 	})
 	if err != nil {
+		r.recordCondition(ctx, swarmCtx, reconcileOK, metav1.ConditionFalse, "FailedUpdateStatus", fmt.Sprintf("failed to update status: %v", err))
 		return err
 	}
-	r.Logger.Info("update swarm status", "swarm", key)
+	key := clientutil.ObjectKeyString(obj)
+	logger := logr.FromContextOrDiscard(ctx)
+	logger.V(4).Info("swarm status updated")
 	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
 	return nil
 }
 
 func (r *SwarmReconciler) satisfiedExpectations(ctx context.Context, obj client.Object) bool {
-	key := utils.ObjectKeyString(obj)
+	key := clientutil.ObjectKeyString(obj)
 	logger := logr.FromContextOrDiscard(ctx)
 
 	if !r.rvExpectation.SatisfiedExpectations(key, obj.GetResourceVersion()) {
@@ -204,7 +211,7 @@ func (r *SwarmReconciler) satisfiedExpectations(ctx context.Context, obj client.
 func (r *SwarmReconciler) satisfiedWrokloadExpectations(ctx context.Context, workloads map[string]*workloadcontrol.Workload) bool {
 	logger := logr.FromContextOrDiscard(ctx)
 	for _, workload := range workloads {
-		if !r.workloadRVExpectation.SatisfiedExpectations(utils.ObjectKeyString(workload.Object), workload.Object.GetResourceVersion()) {
+		if !r.workloadRVExpectation.SatisfiedExpectations(clientutil.ObjectKeyString(workload.Object), workload.Object.GetResourceVersion()) {
 			logger.Info("workload does not statisfy controller expectation, skip reconciling")
 			return false
 		}
@@ -212,24 +219,197 @@ func (r *SwarmReconciler) satisfiedWrokloadExpectations(ctx context.Context, wor
 	return true
 }
 
-func (r *SwarmReconciler) sync(ctx context.Context, obj *kusionstackappsv1alpha1.Swarm, g graph.Graph[string, *workloadcontrol.Workload]) error {
-	// topology sort by Kahn's algorithm
+func (r *SwarmReconciler) syncWorkload(ctx context.Context, swarmCtx *swarmContext, workload *workloadcontrol.Workload) (bool, error) {
+	if workload.Spec.TopologyAware != nil {
+		// here is a protect logic to make sure all dependency is ready
+		// Usually we will call this function from topology order and all dependency is ready
+		// But if we call this function from other place, we need to check it manually
+		for _, dependency := range workload.Spec.TopologyAware.DependsOn {
+			v, err := swarmCtx.Graph.Vertex(dependency)
+			if err != nil {
+				return false, fmt.Errorf("failed to get vertex(%s) in graph, err: %v ", dependency, err)
+			}
+			if !isCollaSetReady(v.Object) {
+				r.recordCondition(ctx, swarmCtx, reconcileOK, metav1.ConditionFalse, "DependencyNotReady", fmt.Sprintf("the dependency(%s) of group (%s) is not ready", workload.Spec.Name, dependency))
+				return false, nil
+			}
+		}
+	}
+
+	swarmKey := clientutil.ObjectKeyString(swarmCtx.Object)
+
+	// generate new collaset from updated revision
+	clsUpdated, err := generateCollaSetFromRevision(swarmCtx.Object, workload, swarmCtx.UpdatedRevision)
+	injectTopology(clsUpdated, swarmCtx.Graph, workload)
+
+	if workload.Object == nil {
+		// NOTO: we have to set expectation before we create the rolloutRun to avoid
+		//       that the creation event comes so fast that we don't have time to set it
+		r.expectation.ExpectCreations(swarmKey, 1) // nolint
+
+		// create workload
+		err := r.Client.Create(ctx, clsUpdated)
+		if err != nil {
+			r.recordCondition(ctx, swarmCtx, reconcileOK, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create new collaset %s", clsUpdated.Name))
+			// lower the expectation if create failed
+			r.expectation.LowerExpectations(swarmKey, 1, 0)
+			return false, fmt.Errorf("failed to create workload: %w", err)
+		}
+
+		// r.recordCondition(ctx, swarmCtx, reconcileOK, metav1.ConditionFalse, "Created", "collaset created")
+		workload.Object = clsUpdated
+		return false, nil
+	}
+
+	// try to update
+	clsCurrent := workload.Object
+	revisionCurrent := swarmCtx.GetRevisionFor(clsCurrent)
+	clsOriginal, err := generateCollaSetFromRevision(swarmCtx.Object, workload, revisionCurrent)
+
+	updateFn := func(inClusterObj *kusionstackappsv1alpha1.CollaSet) error {
+		// always update replicas
+		inClusterObj.Spec.Replicas = clsUpdated.Spec.Replicas
+
+		// check revison hand injection hash
+		currentRevisionHash := lo.ValueOr(inClusterObj.Labels, history.ControllerRevisionHashLabel, "")
+		updatedRevisionHash := lo.ValueOr(clsUpdated.Labels, history.ControllerRevisionHashLabel, "")
+		currentInjectionHash := lo.ValueOr(inClusterObj.Labels, InjectionHashLabel, "")
+		updatedInjectionHash := lo.ValueOr(clsUpdated.Labels, InjectionHashLabel, "")
+		if currentRevisionHash == updatedRevisionHash && len(updatedRevisionHash) > 0 &&
+			currentInjectionHash == updatedInjectionHash {
+			// if the revision hash is the same, we don't need to update the collaset
+			return nil
+		}
+
+		inClusterObj.Labels = treeWayMergeMap(clsOriginal.Labels, clsUpdated.Labels, inClusterObj.Labels)
+		inClusterObj.Annotations = treeWayMergeMap(clsOriginal.Annotations, clsUpdated.Annotations, inClusterObj.Annotations)
+		inClusterObj.Spec.Template = clsUpdated.Spec.Template
+		inClusterObj.Spec.VolumeClaimTemplates = clsUpdated.Spec.VolumeClaimTemplates
+		return nil
+	}
+
+	changed, err := clientutil.UpdateOnConflict(ctx, r.Client, r.Client, clsCurrent, updateFn)
+	if err != nil {
+		r.recordCondition(ctx, swarmCtx, reconcileOK, metav1.ConditionFalse, "FailedUpdate", fmt.Sprintf("failed to update collaset %s: %v", clsCurrent.Name, err))
+		return false, err
+	}
+	if changed {
+		workload.Object = clsCurrent
+		r.workloadRVExpectation.ExpectUpdate(clientutil.ObjectKeyString(clsCurrent), clsCurrent.GetResourceVersion()) //nolint
+		return false, nil
+	}
+
+	return isCollaSetReady(clsCurrent), nil
+}
+
+const (
+	reconcileOK string = "reconcileOK"
+)
+
+func (r *SwarmReconciler) recordCondition(ctx context.Context, swarmCtx *swarmContext, ctype string, expectedStatus metav1.ConditionStatus, reason, message string) {
 	logger := logr.FromContextOrDiscard(ctx)
-	predecessorMap, err := g.PredecessorMap()
+
+	if swarmCtx.conditions == nil {
+		swarmCtx.conditions = swarmCtx.Object.Status.Conditions
+	}
+
+	// original := condition.GetCondition(c.conditions, ctype)
+	eventtype := corev1.EventTypeNormal
+	if expectedStatus != metav1.ConditionTrue {
+		eventtype = corev1.EventTypeWarning
+	}
+
+	switch ctype {
+	case reconcileOK:
+		// NOTE: this is a special condition, it is used to print log and event
+		if expectedStatus != metav1.ConditionTrue {
+			logger.Error(goerrors.New("reconcile error"), "", "reason", reason, "message", message)
+			r.Recorder.Eventf(swarmCtx.Object, eventtype, reason, message)
+		}
+		// stop at here
+		return
+	}
+	cond := condition.NewCondition(ctype, expectedStatus, reason, message)
+	swarmCtx.conditions = condition.SetCondition(swarmCtx.conditions, *cond)
+}
+
+type swarmContext struct {
+	Object          *kusionstackappsv1alpha1.Swarm
+	Graph           graph.Graph[string, *workloadcontrol.Workload]
+	CurrentRevision *appsv1.ControllerRevision
+	UpdatedRevision *appsv1.ControllerRevision
+	Revisions       []*appsv1.ControllerRevision
+	CollisionCount  int32
+
+	conditions []metav1.Condition
+}
+
+func (c *swarmContext) NewStatus() *kusionstackappsv1alpha1.SwarmStatus {
+	// create new status
+	newStatus := c.Object.Status.DeepCopy()
+	newStatus.ObservedGeneration = c.Object.Generation
+	newStatus.CollisionCount = &c.CollisionCount
+	newStatus.CurrentRevision = c.CurrentRevision.APIVersion
+	newStatus.UpdatedRevision = c.UpdatedRevision.Name
+	groupNames := lo.Map(c.Object.Spec.PodGroups, func(pg kusionstackappsv1alpha1.SwarmPodGroupSpec, _ int) string {
+		return pg.Name
+	})
+	newStatus.PodGroupStatuses = getPodGroupStatusFromGraph(groupNames, c.Graph)
+	if len(c.conditions) > 0 {
+		newStatus.Conditions = c.conditions
+	}
+	return newStatus
+}
+
+func (c *swarmContext) GetRevisionFor(obj client.Object) *appsv1.ControllerRevision {
+	labels := obj.GetLabels()
+	if len(labels) == 0 {
+		return c.CurrentRevision
+	}
+	revision, ok := c.getRevision(labels[history.ControllerRevisionHashLabel])
+	if !ok {
+		return c.CurrentRevision
+	}
+	return revision
+}
+
+func (c *swarmContext) getRevision(name string) (*appsv1.ControllerRevision, bool) {
+	if name == c.CurrentRevision.Name {
+		return c.CurrentRevision, true
+	} else if name == c.UpdatedRevision.Name {
+		return c.UpdatedRevision, true
+	}
+	for _, revision := range c.Revisions {
+		if revision.Name == name {
+			return revision, true
+		}
+	}
+	return nil, false
+}
+
+func (c *swarmContext) StableTopologySortTraversal(
+	ctx context.Context,
+	visitFn func(ctx context.Context, topo *swarmContext, workload *workloadcontrol.Workload) (bool, error),
+) error {
+	// stable topology sort by Kahn's algorithm
+	logger := logr.FromContextOrDiscard(ctx)
+	predecessorMap, err := c.Graph.PredecessorMap()
 	if err != nil {
 		return fmt.Errorf("failed to get predecessor map: %w", err)
 	}
 
 	queue := make([]string, 0)
-	processOnce := sets.NewString()
+	queued := sets.NewString()
 
 	for vertex, predecessors := range predecessorMap {
 		if len(predecessors) == 0 {
 			// get all in degree 0 vertex
 			queue = append(queue, vertex)
-			processOnce.Insert(vertex)
+			queued.Insert(vertex)
 		}
 	}
+
+	slices.Sort(queue)
 
 	errs := []error{}
 
@@ -238,132 +418,48 @@ func (r *SwarmReconciler) sync(ctx context.Context, obj *kusionstackappsv1alpha1
 		currentVertex := queue[0]
 		queue = queue[1:]
 
-		logger.Info("processing vertex", "currentVertex", currentVertex)
-		// visite currentVertex
-		processOnce.Insert(currentVertex)
+		logger.V(5).Info("processing vertex", "currentVertex", currentVertex)
 
-		workload, _ := g.Vertex(currentVertex)
-		done, err := r.syncWorkload(ctx, obj, g, workload)
+		workload, _ := c.Graph.Vertex(currentVertex)
+		ready, err := visitFn(ctx, c, workload)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		if !done {
+		if !ready {
 			// if workload is not synced, do not delete it from predecessorMap
 			// It will block all subsequent vertexes
-			logger.Info("workload is not ready, check it next time", "collaset", workload.Object.Name)
+			logger.V(4).Info("workload is not ready, check it next time", "collaset", workload.Object.Name)
 			continue
 		}
 
-		logger.Info("workload is ready now, delete all edge from this workload", "collaset", workload.Object.Name)
+		logger.V(5).Info("workload is ready now, delete all edge from this workload", "collaset", workload.Object.Name)
+
+		frontier := make([]string, 0)
 		for vertex, predecessors := range predecessorMap {
-			if processOnce.Has(vertex) {
+			// delete all edge from currentVertex to vertex
+			delete(predecessors, currentVertex)
+			if len(predecessors) > 0 {
+				// vertex still has in degree, skip it
+				continue
+			}
+			if queued.Has(vertex) {
 				// vertex has been added to queue, skip it
 				continue
 			}
 
-			// delete all edge from currentVertex to vertex
-			delete(predecessors, currentVertex)
-
-			if len(predecessors) == 0 {
-				// vertex has zero in-degree, add to queue
-				logger.Info("append vertex to queue", "vertext", vertex)
-				queue = append(queue, vertex)
-				processOnce.Insert(vertex)
-			}
+			// vertex has zero in-degree, add to queue
+			logger.V(5).Info("append vertex to queue", "vertext", vertex)
+			frontier = append(frontier, vertex)
+			queued.Insert(vertex)
 		}
+
+		slices.Sort(frontier)
+		queue = append(queue, frontier...)
 	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("failed to sync swarm: %w", utilerrors.NewAggregate(errs))
 	}
-
 	return nil
-}
-
-func (r *SwarmReconciler) syncWorkload(ctx context.Context, obj *kusionstackappsv1alpha1.Swarm, g graph.Graph[string, *workloadcontrol.Workload], workload *workloadcontrol.Workload) (bool, error) {
-	logger := logr.FromContextOrDiscard(ctx)
-
-	if workload.Spec.TopologyAware != nil {
-		// here is a protect logic to make sure all dependency is ready
-		// Usually we will call this function from topology order and all dependency is ready
-		// But if we call this function from other place, we need to check it manually
-		for _, dependency := range workload.Spec.TopologyAware.DependsOn {
-			v, err := g.Vertex(dependency)
-			if err != nil {
-				return false, fmt.Errorf("failed to get vertex(%s) in graph, err: %v ", dependency, err)
-			}
-			if !isCollaSetSynced(v.Object) {
-				logger.Info("group's dependency is not ready, skip it", "currentGroup", workload.Spec.Name, "dependency", dependency)
-				return false, nil
-			}
-		}
-	}
-
-	generated, err := generateCollaSet(obj, g, workload)
-	if err != nil {
-		return false, err
-	}
-
-	swarmKey := utils.ObjectKeyString(obj)
-
-	if workload.Object == nil {
-		// NOTO: we have to set expectation before we create the rolloutRun to avoid
-		//       that the creation event comes so fast that we don't have time to set it
-		r.expectation.ExpectCreations(swarmKey, 1) // nolint
-
-		// create workload
-		err := r.Client.Create(ctx, generated)
-		if err != nil {
-			logger.Error(err, "failed to create collaset")
-			// lower the expectation if create failed
-			r.expectation.LowerExpectations(swarmKey, 1, 0)
-			return false, fmt.Errorf("failed to create workload: %w", err)
-		}
-
-		logger.Info("collaset created", "collaset", generated.Name)
-		workload.Object = generated
-		return false, nil
-	}
-	// try to update
-
-	// calculate revision hash
-
-	cls := workload.Object
-	changed, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, cls, func() error {
-		existingHash := lo.ValueOr(cls.Labels, history.ControllerRevisionHashLabel, "")
-		generatedHash := lo.ValueOr(generated.Labels, history.ControllerRevisionHashLabel, "")
-		if existingHash == generatedHash && len(generatedHash) > 0 {
-			// if the revision hash is the same, we don't need to update the collaset
-			return nil
-		}
-		// hash changed, we need to update the collaset
-		cls.Labels = lo.Assign(cls.Labels, generated.Labels)
-		// cls.Labels = controllerutils.MergeMaps(cls.Labels, generated.Labels)
-		cls.Annotations = lo.Assign(cls.Annotations, generated.Annotations)
-		cls.Spec.Replicas = generated.Spec.Replicas
-		cls.Spec.Template = generated.Spec.Template
-		cls.Spec.VolumeClaimTemplates = generated.Spec.VolumeClaimTemplates
-		return nil
-	})
-	if err != nil {
-		return false, err
-	}
-	if changed {
-		logger.Info("update collaset", "collaset", cls.Name)
-		workload.Object = cls
-		r.workloadRVExpectation.ExpectUpdate(utils.ObjectKeyString(cls), cls.GetResourceVersion()) //nolint
-		return false, nil
-	}
-
-	return isCollaSetSynced(cls), nil
-}
-
-func isCollaSetSynced(cls *kusionstackappsv1alpha1.CollaSet) bool {
-	if cls == nil {
-		return false
-	}
-	return cls.DeletionTimestamp == nil &&
-		cls.Generation == cls.Status.ObservedGeneration &&
-		ptr.Deref(cls.Spec.Replicas, 0) == cls.Status.UpdatedAvailableReplicas
 }

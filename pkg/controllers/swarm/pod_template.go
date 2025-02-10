@@ -5,12 +5,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-type TemplateModifier interface {
-	MergeLabels(labels map[string]string)
+type PodTemplateModifier interface {
+	AddLebls(labels map[string]string)
 	AddEnvs(envs ...corev1.EnvVar)
 }
 
-func NewTemplateModifier(template *corev1.PodTemplateSpec) TemplateModifier {
+func NewPodTemplateModifier(template *corev1.PodTemplateSpec) PodTemplateModifier {
 	return &templateModifier{template: template}
 }
 
@@ -18,7 +18,7 @@ type templateModifier struct {
 	template *corev1.PodTemplateSpec
 }
 
-func (t *templateModifier) MergeLabels(labels map[string]string) {
+func (t *templateModifier) AddLebls(labels map[string]string) {
 	t.template.Labels = lo.Assign(t.template.Labels, labels)
 }
 

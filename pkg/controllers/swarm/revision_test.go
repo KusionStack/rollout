@@ -13,12 +13,6 @@ import (
 	kusionstackappsv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 )
 
-// func Test_hashControllerRevision(t *testing.T) {
-// 	a := hashControllerRevision([]byte("1234567890"), nil)
-// 	b := hashControllerRevision([]byte("1234567890"), nil)
-// 	assert.Equal(t, a, b)
-// }
-
 func Test_convert(t *testing.T) {
 	obj := &kusionstackappsv1alpha1.Swarm{
 		Spec: kusionstackappsv1alpha1.SwarmSpec{
