@@ -33,4 +33,7 @@ const (
 
 	// AnnoPodRolloutProgressingInfos contains a slice of progressing infos on a pod.
 	AnnoPodRolloutProgressingInfos = "rollout.kusionstack.io/pod-progressing-infos"
+
+	// AnnoModelRolloutProgressingInfos contains a slice of progressing infos on a model.
+	AnnoModelRolloutProgressingInfos = "rollout.kusionstack.io/model-progressing-infos"
 )

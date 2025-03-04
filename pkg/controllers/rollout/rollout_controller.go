@@ -20,6 +20,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 
@@ -135,6 +136,21 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
+	}
+
+	deploymentSceneEnv := os.Getenv("DEPLOYMENT_SCENE")
+	if deploymentSceneEnv == "" {
+		deploymentSceneEnv = rollout.LabelValueDeploymentSceneMain
+	}
+
+	deploymentSceneLabel, ok := utils.GetMapValue(obj.Labels, rollout.LabelDeploymentScene)
+	if !ok {
+		deploymentSceneLabel = rollout.LabelValueDeploymentSceneMain
+	}
+
+	// check if the rollout event is concerned
+	if deploymentSceneEnv != deploymentSceneLabel {
+		return reconcile.Result{}, nil
 	}
 
 	// 1. check if expectations is satisfied

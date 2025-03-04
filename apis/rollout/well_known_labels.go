@@ -30,3 +30,11 @@ const (
 	LabelValuePodRevisionBase   = "base"
 	LabelValuePodRevisionCanary = "canary"
 )
+
+// rollout deployment scene
+const (
+	LabelDeploymentScene = "rollout.kusionstack.io/scene"
+
+	LabelValueDeploymentSceneMain     = "main"
+	LabelValueDeploymentSceneModelops = "modelops"
+)
