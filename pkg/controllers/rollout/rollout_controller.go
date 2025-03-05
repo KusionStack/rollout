@@ -138,19 +138,18 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return reconcile.Result{}, err
 	}
 
-	deploymentSceneEnv := os.Getenv("DEPLOYMENT_SCENE")
-	if deploymentSceneEnv == "" {
-		deploymentSceneEnv = rollout.LabelValueDeploymentSceneMain
-	}
+	// filter rollout event by rollout class
+	if features.DefaultFeatureGate.Enabled(features.RolloutClassFilter) {
+		rolloutClassEnv := os.Getenv("ROLLOUT_CLASS")
+		if rolloutClassEnv == "" {
+			rolloutClassEnv = "main"
+		}
 
-	deploymentSceneLabel, ok := utils.GetMapValue(obj.Labels, rollout.LabelDeploymentScene)
-	if !ok {
-		deploymentSceneLabel = rollout.LabelValueDeploymentSceneMain
-	}
+		rolloutClassLabel := utils.GetMapValueByDefault(obj.Labels, rollout.LabelDeploymentRolloutClass, "main")
 
-	// check if the rollout event is concerned
-	if deploymentSceneEnv != deploymentSceneLabel {
-		return reconcile.Result{}, nil
+		if rolloutClassEnv != rolloutClassLabel {
+			return reconcile.Result{}, nil
+		}
 	}
 
 	// 1. check if expectations is satisfied

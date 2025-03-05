@@ -16,6 +16,7 @@ package rollout
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -97,6 +98,14 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 		onetime := ontimestrategy.ConvertFrom(strategy)
 		data := onetime.JSONData()
 		run.Annotations[ontimestrategy.AnnoOneTimeStrategy] = string(data)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.RolloutClassFilter) {
+		rolloutClassEnv := os.Getenv("ROLLOUT_CLASS")
+		if rolloutClassEnv == "" {
+			rolloutClassEnv = "main"
+		}
+		run.Labels[rolloutapi.LabelDeploymentRolloutClass] = rolloutClassEnv
 	}
 	return run
 }

@@ -17,6 +17,7 @@ package rolloutrun
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -40,6 +41,7 @@ import (
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/traffic"
+	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	"kusionstack.io/rollout/pkg/workload"
@@ -103,6 +105,20 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
+	}
+
+	// filter rolloutRun event by rollout class
+	if features.DefaultFeatureGate.Enabled(features.RolloutClassFilter) {
+		rolloutClassEnv := os.Getenv("ROLLOUT_CLASS")
+		if rolloutClassEnv == "" {
+			rolloutClassEnv = "main"
+		}
+
+		rolloutClassLabel := utils.GetMapValueByDefault(obj.Labels, rollout.LabelDeploymentRolloutClass, "main")
+
+		if rolloutClassEnv != rolloutClassLabel {
+			return reconcile.Result{}, nil
+		}
 	}
 
 	if !r.satisfiedExpectations(obj) {

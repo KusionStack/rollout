@@ -24,6 +24,9 @@ const (
 	//
 	// Allow user set one time batch stratey in rollout annotation
 	OneTimeStrategy featuregate.Feature = "OneTimeStrategy"
+
+	// Allow filter rollout class when reconcile
+	RolloutClassFilter featuregate.Feature = "RolloutClassFilter"
 )
 
 func init() {
@@ -34,5 +37,6 @@ func init() {
 // To add a new feature, define a key for it above and add it here. The features will be
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	OneTimeStrategy: {Default: false, PreRelease: featuregate.Alpha},
+	OneTimeStrategy:    {Default: false, PreRelease: featuregate.Alpha},
+	RolloutClassFilter: {Default: false, PreRelease: featuregate.Alpha},
 }

@@ -31,9 +31,9 @@ const (
 	// The value is a json string of ProgressingInfo.
 	AnnoRolloutProgressingInfo = "rollout.kusionstack.io/progressing-info"
 
+	// AnnoRolloutProgressingInfos contains a slice of progressing info on resource.
+	AnnoRolloutProgressingInfos = "rollout.kusionstack.io/progressing-infos"
+
 	// AnnoPodRolloutProgressingInfos contains a slice of progressing infos on a pod.
 	AnnoPodRolloutProgressingInfos = "rollout.kusionstack.io/pod-progressing-infos"
-
-	// AnnoModelRolloutProgressingInfos contains a slice of progressing infos on a model.
-	AnnoModelRolloutProgressingInfos = "rollout.kusionstack.io/model-progressing-infos"
 )
