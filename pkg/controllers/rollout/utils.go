@@ -16,7 +16,6 @@ package rollout
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -35,6 +34,7 @@ import (
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
+	"kusionstack.io/rollout/pkg/features/rolloutclasspredicate"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -100,12 +100,10 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 		run.Annotations[ontimestrategy.AnnoOneTimeStrategy] = string(data)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.RolloutClassFilter) {
-		rolloutClassEnv := os.Getenv("ROLLOUT_CLASS")
-		if rolloutClassEnv == "" {
-			rolloutClassEnv = "main"
-		}
-		run.Labels[rolloutapi.LabelDeploymentRolloutClass] = rolloutClassEnv
+	if features.DefaultFeatureGate.Enabled(features.RolloutClassPredicate) {
+		rolloutClassEnv := rolloutclasspredicate.GetRolloutClassFromEnv()
+
+		run.Labels[rolloutapi.LabelRolloutClass] = rolloutClassEnv
 	}
 	return run
 }
