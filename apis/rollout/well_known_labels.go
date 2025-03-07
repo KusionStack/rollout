@@ -30,3 +30,8 @@ const (
 	LabelValuePodRevisionBase   = "base"
 	LabelValuePodRevisionCanary = "canary"
 )
+
+// rollout class label
+const (
+	LabelRolloutClass = "rollout.kusionstack.io/rollout-class"
+)

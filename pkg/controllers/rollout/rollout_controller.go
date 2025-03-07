@@ -49,6 +49,7 @@ import (
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
+	"kusionstack.io/rollout/pkg/features/rolloutclasspredicate"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/eventhandler"
 	"kusionstack.io/rollout/pkg/utils/expectations"
@@ -135,6 +136,18 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
+	}
+
+	// filter rollout event by rollout class
+	if features.DefaultFeatureGate.Enabled(features.RolloutClassPredicate) {
+		rolloutClassEnv := rolloutclasspredicate.GetRolloutClassFromEnv()
+
+		rolloutClassLabel := utils.GetMapValueByDefault(obj.Labels, rollout.LabelRolloutClass, rolloutclasspredicate.RolloutClassDefault)
+
+		if rolloutClassEnv != rolloutClassLabel {
+			logger.V(4).Info("skipped, rollout class not matched", "expected", rolloutClassEnv, "actural", rolloutClassLabel)
+			return reconcile.Result{}, nil
+		}
 	}
 
 	// 1. check if expectations is satisfied
