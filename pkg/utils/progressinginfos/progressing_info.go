@@ -37,25 +37,31 @@ func (p ProgressingInfos) Swap(i int, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-func MergeProgressingInfos(existings, news ProgressingInfos) ProgressingInfos {
-	return mergeSliceByKey(
-		existings,
-		news,
-		func(info rolloutv1alpha1.ProgressingInfo) string {
-			return fmt.Sprintf("%s/%s", info.Kind, info.RolloutName)
-		},
-		func(inObj, inOwner rolloutv1alpha1.ProgressingInfo) rolloutv1alpha1.ProgressingInfo {
-			if inObj.RolloutID == inOwner.RolloutID {
-				// we should not change progressingInfo if rolloutID is not changed
-				return inObj
-			}
-			return inOwner
-		},
-	)
+type ProgressingInfoMutator struct {
+	ProgressingInfosAnnatationKey string
 }
 
-func GetProgressingInfos(obj runtimeclient.Object) ProgressingInfos {
-	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), rollout.AnnoRolloutProgressingInfos, "")
+func (m *ProgressingInfoMutator) MutatePogressingInfo(obj runtimeclient.Object, owners []*registry.WorkloadAccessor) bool {
+	// get progressingInfos from owners
+	controlInfo, newInfos := generateProgressingInfos(owners)
+	if len(newInfos) == 0 {
+		return false
+	}
+	// get progressingInfos from obj
+	existingInfos := m.GetProgressingInfos(obj)
+	// merge progressing info
+	merged := mergeProgressingInfos(existingInfos, newInfos)
+
+	changed := m.SetProgressingInfos(obj, merged)
+
+	// for compatibility, we also need to set rollout.kusionstack.io/progressing-info
+	changed = m.SetProgressingInfo(obj, controlInfo) || changed
+
+	return changed
+}
+
+func (m *ProgressingInfoMutator) GetProgressingInfos(obj runtimeclient.Object) ProgressingInfos {
+	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), m.ProgressingInfosAnnatationKey, "")
 	if len(objInfo) == 0 {
 		return nil
 	}
@@ -68,7 +74,7 @@ func GetProgressingInfos(obj runtimeclient.Object) ProgressingInfos {
 	return info
 }
 
-func SetProgressingInfos(obj runtimeclient.Object, infos ProgressingInfos) bool {
+func (m *ProgressingInfoMutator) SetProgressingInfos(obj runtimeclient.Object, infos ProgressingInfos) bool {
 	var expected string
 	// set expectedObjInfoStr to "" if merged is empty
 	if len(infos) > 0 {
@@ -84,14 +90,14 @@ func SetProgressingInfos(obj runtimeclient.Object, infos ProgressingInfos) bool 
 
 	var changed bool
 	utils.MutateAnnotations(obj, func(annotations map[string]string) {
-		existing, ok := annotations[rollout.AnnoRolloutProgressingInfos]
+		existing, ok := annotations[m.ProgressingInfosAnnatationKey]
 		if len(expected) == 0 && ok {
 			// delete if no progressingInfo
-			delete(annotations, rollout.AnnoRolloutProgressingInfos)
+			delete(annotations, m.ProgressingInfosAnnatationKey)
 			changed = true
 		} else if existing != expected {
 			// set infos if changed
-			annotations[rollout.AnnoRolloutProgressingInfos] = expected
+			annotations[m.ProgressingInfosAnnatationKey] = expected
 			changed = true
 		}
 	})
@@ -99,7 +105,7 @@ func SetProgressingInfos(obj runtimeclient.Object, infos ProgressingInfos) bool 
 	return changed
 }
 
-func SetProgressingInfo(obj runtimeclient.Object, info *rolloutv1alpha1.ProgressingInfo) bool {
+func (m *ProgressingInfoMutator) SetProgressingInfo(obj runtimeclient.Object, info *rolloutv1alpha1.ProgressingInfo) bool {
 	if info == nil {
 		return false
 	}
@@ -128,23 +134,21 @@ func SetProgressingInfo(obj runtimeclient.Object, info *rolloutv1alpha1.Progress
 	return changed
 }
 
-func MutatePogressingInfo(obj runtimeclient.Object, owners []*registry.WorkloadAccessor) bool {
-	// get progressingInfos from owners
-	controlInfo, newInfos := generateProgressingInfos(owners)
-	if len(newInfos) == 0 {
-		return false
-	}
-	// get progressingInfos from obj
-	existingInfos := GetProgressingInfos(obj)
-	// merge progressing info
-	merged := MergeProgressingInfos(existingInfos, newInfos)
-
-	changed := SetProgressingInfos(obj, merged)
-
-	// for compatibility, we also need to set rollout.kusionstack.io/progressing-info
-	changed = SetProgressingInfo(obj, controlInfo) || changed
-
-	return changed
+func mergeProgressingInfos(existings, news ProgressingInfos) ProgressingInfos {
+	return mergeSliceByKey(
+		existings,
+		news,
+		func(info rolloutv1alpha1.ProgressingInfo) string {
+			return fmt.Sprintf("%s/%s", info.Kind, info.RolloutName)
+		},
+		func(inObj, inOwner rolloutv1alpha1.ProgressingInfo) rolloutv1alpha1.ProgressingInfo {
+			if inObj.RolloutID == inOwner.RolloutID {
+				// we should not change progressingInfo if rolloutID is not changed
+				return inObj
+			}
+			return inOwner
+		},
+	)
 }
 
 func generateProgressingInfos(owners []*registry.WorkloadAccessor) (*rolloutv1alpha1.ProgressingInfo, ProgressingInfos) {

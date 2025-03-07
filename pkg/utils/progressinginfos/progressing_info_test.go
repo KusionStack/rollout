@@ -96,7 +96,7 @@ func TestMergeSliceByKey(t *testing.T) {
 	for i := range tests {
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
-			got := MergeProgressingInfos(tt.existings, tt.news)
+			got := mergeProgressingInfos(tt.existings, tt.news)
 			sort.Sort(got)
 			sort.Sort(tt.want)
 			assert.EqualValues(t, tt.want, got)
