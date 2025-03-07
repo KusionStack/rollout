@@ -1,4 +1,4 @@
-package pod
+package progressinginfos
 
 import (
 	"cmp"
@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/samber/lo"
-	corev1 "k8s.io/api/core/v1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -15,17 +15,17 @@ import (
 	"kusionstack.io/rollout/pkg/utils"
 )
 
-var _ sort.Interface = PodProgressingInfos{}
+var _ sort.Interface = ProgressingInfos{}
 
-type PodProgressingInfos []rolloutv1alpha1.ProgressingInfo
+type ProgressingInfos []rolloutv1alpha1.ProgressingInfo
 
 // Len implements sort.Interface.
-func (p PodProgressingInfos) Len() int {
+func (p ProgressingInfos) Len() int {
 	return len(p)
 }
 
 // Less implements sort.Interface.
-func (p PodProgressingInfos) Less(i int, j int) bool {
+func (p ProgressingInfos) Less(i int, j int) bool {
 	return cmp.Or(
 		p[i].Kind < p[j].Kind,
 		p[i].Kind == p[j].Kind && p[i].RolloutName < p[j].RolloutName,
@@ -33,34 +33,34 @@ func (p PodProgressingInfos) Less(i int, j int) bool {
 }
 
 // Swap implements sort.Interface.
-func (p PodProgressingInfos) Swap(i int, j int) {
+func (p ProgressingInfos) Swap(i int, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-func MergePodProgressingInfos(existings, news PodProgressingInfos) PodProgressingInfos {
+func MergeProgressingInfos(existings, news ProgressingInfos) ProgressingInfos {
 	return mergeSliceByKey(
 		existings,
 		news,
 		func(info rolloutv1alpha1.ProgressingInfo) string {
 			return fmt.Sprintf("%s/%s", info.Kind, info.RolloutName)
 		},
-		func(inPod, inOwner rolloutv1alpha1.ProgressingInfo) rolloutv1alpha1.ProgressingInfo {
-			if inPod.RolloutID == inOwner.RolloutID {
+		func(inObj, inOwner rolloutv1alpha1.ProgressingInfo) rolloutv1alpha1.ProgressingInfo {
+			if inObj.RolloutID == inOwner.RolloutID {
 				// we should not change progressingInfo if rolloutID is not changed
-				return inPod
+				return inObj
 			}
 			return inOwner
 		},
 	)
 }
 
-func GetPodProgressingInfos(pod *corev1.Pod) PodProgressingInfos {
-	podInfo := utils.GetMapValueByDefault(pod.Annotations, rollout.AnnoPodRolloutProgressingInfos, "")
-	if len(podInfo) == 0 {
+func GetProgressingInfos(obj runtimeclient.Object) ProgressingInfos {
+	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), rollout.AnnoRolloutProgressingInfos, "")
+	if len(objInfo) == 0 {
 		return nil
 	}
-	info := PodProgressingInfos{}
-	err := json.Unmarshal([]byte(podInfo), &info)
+	info := ProgressingInfos{}
+	err := json.Unmarshal([]byte(objInfo), &info)
 	if err != nil {
 		// ignore invalid json
 		return nil
@@ -68,9 +68,9 @@ func GetPodProgressingInfos(pod *corev1.Pod) PodProgressingInfos {
 	return info
 }
 
-func SetPodProgressingInfos(pod *corev1.Pod, infos PodProgressingInfos) bool {
+func SetProgressingInfos(obj runtimeclient.Object, infos ProgressingInfos) bool {
 	var expected string
-	// set expectedPodInfoStr to "" if merged is empty
+	// set expectedObjInfoStr to "" if merged is empty
 	if len(infos) > 0 {
 		// sort infos before marshaling
 		sort.Sort(infos)
@@ -83,15 +83,15 @@ func SetPodProgressingInfos(pod *corev1.Pod, infos PodProgressingInfos) bool {
 	}
 
 	var changed bool
-	utils.MutateAnnotations(pod, func(annotations map[string]string) {
-		existing, ok := annotations[rollout.AnnoPodRolloutProgressingInfos]
+	utils.MutateAnnotations(obj, func(annotations map[string]string) {
+		existing, ok := annotations[rollout.AnnoRolloutProgressingInfos]
 		if len(expected) == 0 && ok {
 			// delete if no progressingInfo
-			delete(annotations, rollout.AnnoPodRolloutProgressingInfos)
+			delete(annotations, rollout.AnnoRolloutProgressingInfos)
 			changed = true
 		} else if existing != expected {
 			// set infos if changed
-			annotations[rollout.AnnoPodRolloutProgressingInfos] = expected
+			annotations[rollout.AnnoRolloutProgressingInfos] = expected
 			changed = true
 		}
 	})
@@ -99,17 +99,17 @@ func SetPodProgressingInfos(pod *corev1.Pod, infos PodProgressingInfos) bool {
 	return changed
 }
 
-func SetProgressingInfo(pod *corev1.Pod, info *rolloutv1alpha1.ProgressingInfo) bool {
+func SetProgressingInfo(obj runtimeclient.Object, info *rolloutv1alpha1.ProgressingInfo) bool {
 	if info == nil {
 		return false
 	}
 
-	// get info from pods annotation
+	// get info from obj annotation
 	var existing *rolloutv1alpha1.ProgressingInfo
-	podInfo := utils.GetMapValueByDefault(pod.Annotations, rollout.AnnoRolloutProgressingInfo, "")
-	if len(podInfo) > 0 {
+	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), rollout.AnnoRolloutProgressingInfo, "")
+	if len(objInfo) > 0 {
 		temp := rolloutv1alpha1.ProgressingInfo{}
-		err := json.Unmarshal([]byte(podInfo), &temp)
+		err := json.Unmarshal([]byte(objInfo), &temp)
 		if err == nil {
 			existing = &temp
 		}
@@ -118,38 +118,38 @@ func SetProgressingInfo(pod *corev1.Pod, info *rolloutv1alpha1.ProgressingInfo) 
 	changed := false
 	expected, _ := json.Marshal(info)
 	if existing == nil || existing.RolloutID != info.RolloutID {
-		// if no progressing info found on pod or rolloutID changed, we need to update annotation
+		// if no progressing info found on obj or rolloutID changed, we need to update annotation
 		changed = true
 		// set progressingInfo if no progressingInfo
-		utils.MutateAnnotations(pod, func(annotations map[string]string) {
+		utils.MutateAnnotations(obj, func(annotations map[string]string) {
 			annotations[rollout.AnnoRolloutProgressingInfo] = string(expected)
 		})
 	}
 	return changed
 }
 
-func mutatePodPogressingInfo(pod *corev1.Pod, owners []*registry.WorkloadAccessor) bool {
+func MutatePogressingInfo(obj runtimeclient.Object, owners []*registry.WorkloadAccessor) bool {
 	// get progressingInfos from owners
 	controlInfo, newInfos := generateProgressingInfos(owners)
 	if len(newInfos) == 0 {
 		return false
 	}
-	// get progressingInfos from pod
-	existingInfos := GetPodProgressingInfos(pod)
+	// get progressingInfos from obj
+	existingInfos := GetProgressingInfos(obj)
 	// merge progressing info
-	merged := MergePodProgressingInfos(existingInfos, newInfos)
+	merged := MergeProgressingInfos(existingInfos, newInfos)
 
-	changed := SetPodProgressingInfos(pod, merged)
+	changed := SetProgressingInfos(obj, merged)
 
 	// for compatibility, we also need to set rollout.kusionstack.io/progressing-info
-	changed = SetProgressingInfo(pod, controlInfo) || changed
+	changed = SetProgressingInfo(obj, controlInfo) || changed
 
 	return changed
 }
 
-func generateProgressingInfos(owners []*registry.WorkloadAccessor) (*rolloutv1alpha1.ProgressingInfo, PodProgressingInfos) {
+func generateProgressingInfos(owners []*registry.WorkloadAccessor) (*rolloutv1alpha1.ProgressingInfo, ProgressingInfos) {
 	var controllerProgressingInfo *rolloutv1alpha1.ProgressingInfo
-	result := PodProgressingInfos{}
+	result := ProgressingInfos{}
 
 	for _, owner := range owners {
 		ownerInfo := utils.GetMapValueByDefault(owner.Object.GetAnnotations(), rollout.AnnoRolloutProgressingInfo, "")
