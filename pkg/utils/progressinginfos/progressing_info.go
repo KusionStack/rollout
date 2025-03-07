@@ -38,7 +38,7 @@ func (p ProgressingInfos) Swap(i int, j int) {
 }
 
 type ProgressingInfoMutator struct {
-	ProgressingInfosAnnatationKey string
+	ProgressingInfosAnnotationKey string
 }
 
 func (m *ProgressingInfoMutator) MutatePogressingInfo(obj runtimeclient.Object, owners []*registry.WorkloadAccessor) bool {
@@ -61,7 +61,7 @@ func (m *ProgressingInfoMutator) MutatePogressingInfo(obj runtimeclient.Object, 
 }
 
 func (m *ProgressingInfoMutator) GetProgressingInfos(obj runtimeclient.Object) ProgressingInfos {
-	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), m.ProgressingInfosAnnatationKey, "")
+	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), m.ProgressingInfosAnnotationKey, "")
 	if len(objInfo) == 0 {
 		return nil
 	}
@@ -90,14 +90,14 @@ func (m *ProgressingInfoMutator) SetProgressingInfos(obj runtimeclient.Object, i
 
 	var changed bool
 	utils.MutateAnnotations(obj, func(annotations map[string]string) {
-		existing, ok := annotations[m.ProgressingInfosAnnatationKey]
+		existing, ok := annotations[m.ProgressingInfosAnnotationKey]
 		if len(expected) == 0 && ok {
 			// delete if no progressingInfo
-			delete(annotations, m.ProgressingInfosAnnatationKey)
+			delete(annotations, m.ProgressingInfosAnnotationKey)
 			changed = true
 		} else if existing != expected {
 			// set infos if changed
-			annotations[m.ProgressingInfosAnnatationKey] = expected
+			annotations[m.ProgressingInfosAnnotationKey] = expected
 			changed = true
 		}
 	})

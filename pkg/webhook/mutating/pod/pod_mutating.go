@@ -99,7 +99,7 @@ func (h *mutatingHandler) Handle(ctx context.Context, req admission.Request) adm
 
 	// update pod annotations if needed
 	progressingInfosMutator := &progressinginfos.ProgressingInfoMutator{
-		ProgressingInfosAnnatationKey: rollout.AnnoPodRolloutProgressingInfos,
+		ProgressingInfosAnnotationKey: rollout.AnnoPodRolloutProgressingInfos,
 	}
 	if changed := progressingInfosMutator.MutatePogressingInfo(pod, owners); !changed {
 		return admission.Allowed("Not changed")
