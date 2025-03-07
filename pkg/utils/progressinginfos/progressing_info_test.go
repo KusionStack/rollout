@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package pod
+package progressinginfos
 
 import (
 	"sort"
@@ -47,47 +47,47 @@ func newTestProgressingInfoWithIndex(kind string, name string, id string, index 
 func TestMergeSliceByKey(t *testing.T) {
 	tests := []struct {
 		name      string
-		existings PodProgressingInfos
-		news      PodProgressingInfos
-		want      PodProgressingInfos
+		existings ProgressingInfos
+		news      ProgressingInfos
+		want      ProgressingInfos
 	}{
 		{
 			name: "merge",
-			existings: PodProgressingInfos{
+			existings: ProgressingInfos{
 				newTestProgressingInfo("Rollout", "rollout-1", "rollout-id-1"),
 			},
-			news: PodProgressingInfos{
+			news: ProgressingInfos{
 				newTestProgressingInfo("Rollout", "rollout-2", "rollout-id-2"),
 			},
-			want: PodProgressingInfos{
+			want: ProgressingInfos{
 				newTestProgressingInfo("Rollout", "rollout-1", "rollout-id-1"),
 				newTestProgressingInfo("Rollout", "rollout-2", "rollout-id-2"),
 			},
 		},
 		{
 			name: "remain old info when rollout id is not changed",
-			existings: PodProgressingInfos{
+			existings: ProgressingInfos{
 				newTestProgressingInfo("Rollout", "rollout-1", "rollout-id-1"),
 				newTestProgressingInfo("Rollout", "rollout-2", "rollout-id-2"),
 			},
-			news: PodProgressingInfos{
+			news: ProgressingInfos{
 				newTestProgressingInfoWithIndex("Rollout", "rollout-2", "rollout-id-2", 1),
 			},
-			want: PodProgressingInfos{
+			want: ProgressingInfos{
 				newTestProgressingInfo("Rollout", "rollout-1", "rollout-id-1"),
 				newTestProgressingInfo("Rollout", "rollout-2", "rollout-id-2"),
 			},
 		},
 		{
 			name: "replace",
-			existings: PodProgressingInfos{
+			existings: ProgressingInfos{
 				newTestProgressingInfo("Rollout", "rollout-1", "rollout-id-1"),
 				newTestProgressingInfo("Rollout", "rollout-2", "rollout-id-2"),
 			},
-			news: PodProgressingInfos{
+			news: ProgressingInfos{
 				newTestProgressingInfoWithIndex("Rollout", "rollout-2", "rollout-id-2-2", 1),
 			},
-			want: PodProgressingInfos{
+			want: ProgressingInfos{
 				newTestProgressingInfo("Rollout", "rollout-1", "rollout-id-1"),
 				newTestProgressingInfoWithIndex("Rollout", "rollout-2", "rollout-id-2-2", 1),
 			},
@@ -96,7 +96,7 @@ func TestMergeSliceByKey(t *testing.T) {
 	for i := range tests {
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
-			got := MergePodProgressingInfos(tt.existings, tt.news)
+			got := mergeProgressingInfos(tt.existings, tt.news)
 			sort.Sort(got)
 			sort.Sort(tt.want)
 			assert.EqualValues(t, tt.want, got)
