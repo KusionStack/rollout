@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-utils/cert"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"kusionstack.io/kube-utils/webhook/certmanager"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -53,6 +54,7 @@ func initializeWebhookCerts(mgr ctrl.Manager) error {
 			SecretName:             getWebhookSecretName(),
 			MutatingWebhookNames:   []string{mutatingWebhookConfigurationName},
 			ValidatingWebhookNames: []string{validatingWebhookConfigurationName},
+			WithCluster:            clusterinfo.Fed,
 		})
 		err := webhookctrl.SetupWithManager(mgr)
 		if err != nil {
