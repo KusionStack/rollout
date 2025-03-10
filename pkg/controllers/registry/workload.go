@@ -19,7 +19,6 @@ package registry
 import (
 	"context"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -42,8 +41,8 @@ var Workloads = NewWorkloadRegistry()
 type WorkloadRegistry interface {
 	genericregistry.Registry[schema.GroupVersionKind, workload.Accessor]
 
-	GetControllerOf(ctx context.Context, c client.Client, pod *corev1.Pod) (*WorkloadAccessor, error)
-	GetOwnersOf(ctx context.Context, c client.Client, pod *corev1.Pod) ([]*WorkloadAccessor, error)
+	GetControllerOf(ctx context.Context, c client.Client, obj client.Object) (*WorkloadAccessor, error)
+	GetOwnersOf(ctx context.Context, c client.Client, obj client.Object) ([]*WorkloadAccessor, error)
 }
 
 func NewWorkloadRegistry() WorkloadRegistry {
@@ -74,26 +73,26 @@ type WorkloadAccessor struct {
 	Accessor     workload.Accessor
 }
 
-func (r *registryImpl) GetControllerOf(ctx context.Context, c client.Client, pod *corev1.Pod) (*WorkloadAccessor, error) {
-	owner, err := workload.GetControllerOf(pod)
+func (r *registryImpl) GetControllerOf(ctx context.Context, c client.Client, obj client.Object) (*WorkloadAccessor, error) {
+	owner, err := workload.GetControllerOf(obj)
 	if err != nil {
 		return nil, err
 	}
 	if owner == nil {
 		return nil, nil
 	}
-	return r.getPodOwnerWorkload(ctx, c, pod, owner)
+	return r.getOwnerWorkload(ctx, c, obj, owner)
 }
 
-func (r *registryImpl) GetOwnersOf(ctx context.Context, c client.Client, pod *corev1.Pod) ([]*WorkloadAccessor, error) {
-	owners, err := workload.GetOwnersOf(pod)
+func (r *registryImpl) GetOwnersOf(ctx context.Context, c client.Client, obj client.Object) ([]*WorkloadAccessor, error) {
+	owners, err := workload.GetOwnersOf(obj)
 	if err != nil {
 		return nil, err
 	}
 	result := []*WorkloadAccessor{}
 
 	for _, owner := range owners {
-		workload, err := r.getPodOwnerWorkload(ctx, c, pod, owner)
+		workload, err := r.getOwnerWorkload(ctx, c, obj, owner)
 		if err != nil {
 			return nil, err
 		}
@@ -104,8 +103,8 @@ func (r *registryImpl) GetOwnersOf(ctx context.Context, c client.Client, pod *co
 	return result, nil
 }
 
-func (r *registryImpl) getPodOwnerWorkload(ctx context.Context, c client.Client, pod *corev1.Pod, owner *workload.Owner) (*WorkloadAccessor, error) {
-	cluster := workload.GetClusterFromLabel(pod.Labels)
+func (r *registryImpl) getOwnerWorkload(ctx context.Context, c client.Client, obj client.Object, owner *workload.Owner) (*WorkloadAccessor, error) {
+	cluster := workload.GetClusterFromLabel(obj.GetLabels())
 	ctx = clusterinfo.WithCluster(ctx, cluster)
 
 	ownerRef := owner.Ref
@@ -127,7 +126,7 @@ func (r *registryImpl) getPodOwnerWorkload(ctx context.Context, c client.Client,
 			return nil, err
 		}
 		ownerObj := tempObj.(client.Object)
-		err = c.Get(ctx, client.ObjectKey{Namespace: pod.Namespace, Name: ownerRef.Name}, ownerObj)
+		err = c.Get(ctx, client.ObjectKey{Namespace: obj.GetNamespace(), Name: ownerRef.Name}, ownerObj)
 		if err != nil {
 			return nil, client.IgnoreNotFound(err)
 		}
