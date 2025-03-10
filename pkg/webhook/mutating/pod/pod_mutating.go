@@ -31,7 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"kusionstack.io/rollout/apis/rollout"
 	"kusionstack.io/rollout/pkg/controllers/registry"
+	"kusionstack.io/rollout/pkg/utils/progressinginfos"
 	"kusionstack.io/rollout/pkg/webhook/generic"
 	"kusionstack.io/rollout/pkg/workload"
 )
@@ -96,7 +98,10 @@ func (h *mutatingHandler) Handle(ctx context.Context, req admission.Request) adm
 	}
 
 	// update pod annotations if needed
-	if changed := mutatePodPogressingInfo(pod, owners); !changed {
+	progressingInfosMutator := &progressinginfos.ProgressingInfoMutator{
+		ProgressingInfosAnnotationKey: rollout.AnnoPodRolloutProgressingInfos,
+	}
+	if changed := progressingInfosMutator.MutatePogressingInfo(pod, owners); !changed {
 		return admission.Allowed("Not changed")
 	}
 
