@@ -52,7 +52,7 @@ linters:
     - errcheck
     - govet
     - ineffassign
-    - exportloopref
+    - copyloopvar
     - staticcheck
     - typecheck
 
@@ -80,11 +80,11 @@ linters:
 
 run:
   deadline: 10m
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  skip-dirs-use-default: true
 
 issues:
+  # default is true. Enables skipping of directories:
+  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
+  exclude-dirs-use-default: true
   exclude-use-default: true
   exclude-rules:
     - path: _test.go

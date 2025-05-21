@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -87,14 +88,19 @@ func (c *BatchReleaseControl) UpdatePartition(workload *workload.Info, expectedU
 	})
 }
 
-func (c *BatchReleaseControl) Finalize(workload *workload.Info) error {
+func (c *BatchReleaseControl) Finalize(ctx context.Context, workload *workload.Info) error {
 	// delete progressing annotation
-	_, err := workload.UpdateOnConflict(context.TODO(), c.client, func(obj client.Object) error {
+	changed, err := workload.UpdateOnConflict(context.TODO(), c.client, func(obj client.Object) error {
 		utils.MutateAnnotations(obj, func(annotations map[string]string) {
 			delete(annotations, rolloutapi.AnnoRolloutProgressingInfo)
 		})
 		return nil
 	})
+
+	if changed {
+		logger := logr.FromContextOrDiscard(ctx)
+		logger.Info("delete progressing info on workload", "name", workload.Name, "gvk", workload.GroupVersionKind.String())
+	}
 	return err
 }
 

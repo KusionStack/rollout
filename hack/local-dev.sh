@@ -28,9 +28,9 @@ kind_cluster_name="rollout-dev"
 
 kind::setup_rollout_cluster "${kind_cluster_name}"
 
-kind::setup_rollout_webhook "${kind_cluster_name}" "outcluster"
-
 kind::setup_rollout_workloads "${kind_cluster_name}"
+
+kind::setup_rollout_webhook "${kind_cluster_name}" "outcluster"
 
 log::status "starting manager"
 

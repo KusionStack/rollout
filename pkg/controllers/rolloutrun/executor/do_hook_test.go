@@ -86,6 +86,9 @@ func (e *fakeWebhookExecutor) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 	return true, retryImmediately, nil
 }
 
+func (e *fakeWebhookExecutor) Cancel(ctx *ExecutorContext) {
+}
+
 func newFakeWebhookExecutor() *fakeWebhookExecutor {
 	return &fakeWebhookExecutor{}
 }

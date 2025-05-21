@@ -38,30 +38,30 @@ func newDoCanaryError(reason, msg string) *rolloutv1alpha1.CodeReasonMessage {
 }
 
 type canaryExecutor struct {
-	webhook      webhookExecutor
-	stateMachine *stepStateMachine
+	webhook     webhookExecutor
+	stateEngine *stepStateEngine
 }
 
 func newCanaryExecutor(webhook webhookExecutor) *canaryExecutor {
 	e := &canaryExecutor{
-		webhook:      webhook,
-		stateMachine: newStepStateMachine(),
+		webhook:     webhook,
+		stateEngine: newStepStateEngine(),
 	}
 
-	e.stateMachine.add(StepNone, StepPending, skipStep)
-	e.stateMachine.add(StepPending, StepPreCanaryStepHook, e.doInit)
-	e.stateMachine.add(StepPreCanaryStepHook, StepRunning, e.doPreStepHook)
-	e.stateMachine.add(StepRunning, StepPostCanaryStepHook, e.doCanary)
-	e.stateMachine.add(StepPostCanaryStepHook, StepResourceRecycling, e.doPostStepHook)
-	e.stateMachine.add(StepResourceRecycling, StepSucceeded, e.doRecycle)
-	e.stateMachine.add(StepSucceeded, "", skipStep)
+	e.stateEngine.add(StepNone, StepPending, skipStep, e.release)
+	e.stateEngine.add(StepPending, StepPreCanaryStepHook, e.doInit, e.release)
+	e.stateEngine.add(StepPreCanaryStepHook, StepRunning, e.doPreStepHook, e.release)
+	e.stateEngine.add(StepRunning, StepPostCanaryStepHook, e.doCanary, e.release)
+	e.stateEngine.add(StepPostCanaryStepHook, StepResourceRecycling, e.doPostStepHook, e.release)
+	e.stateEngine.add(StepResourceRecycling, StepSucceeded, e.release, e.release)
+	e.stateEngine.add(StepSucceeded, "", skipStep, skipStep)
 
 	return e
 }
 
-func (e *canaryExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
+func (e *canaryExecutor) init(ctx *ExecutorContext) (done bool) {
 	if !ctx.inCanary() {
-		return true, ctrl.Result{Requeue: true}, nil
+		return true
 	}
 
 	logger := ctx.GetCanaryLogger()
@@ -69,12 +69,27 @@ func (e *canaryExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result
 		// skip canary release if workload accessor don't support it.
 		logger.Info("workload accessor don't support canary release, skip it")
 		ctx.SkipCurrentRelease()
+		return true
+	}
+	ctx.TrafficManager.With(logger, ctx.RolloutRun.Spec.Canary.Targets, ctx.RolloutRun.Spec.Canary.Traffic)
+	return false
+}
+
+func (e *canaryExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
+	done = e.init(ctx)
+	if done {
+		return true, ctrl.Result{Requeue: true}, nil
+	}
+	return e.stateEngine.do(ctx, ctx.NewStatus.CanaryStatus.State)
+}
+
+func (e *canaryExecutor) Cancel(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
+	done = e.init(ctx)
+	if done {
 		return true, ctrl.Result{Requeue: true}, nil
 	}
 
-	ctx.TrafficManager.With(logger, ctx.RolloutRun.Spec.Canary.Targets, ctx.RolloutRun.Spec.Canary.Traffic)
-
-	return e.stateMachine.do(ctx, ctx.NewStatus.CanaryStatus.State)
+	return e.stateEngine.cancel(ctx, ctx.NewStatus.CanaryStatus.State)
 }
 
 func (e *canaryExecutor) isSupported(ctx *ExecutorContext) bool {
@@ -230,7 +245,10 @@ func appendBuiltinPodTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch)
 	return patch
 }
 
-func (e *canaryExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, error) {
+func (e *canaryExecutor) release(ctx *ExecutorContext) (bool, time.Duration, error) {
+	// firstly try to stop webhook
+	e.webhook.Cancel(ctx)
+
 	done, retry := e.modifyTraffic(ctx, "revertCanary")
 	if !done {
 		return false, retry, nil
