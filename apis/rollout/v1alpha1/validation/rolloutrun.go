@@ -19,6 +19,7 @@ package validation
 import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apimachineryvalidation "k8s.io/apimachinery/pkg/api/validation"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	appsvalidation "k8s.io/kubernetes/pkg/apis/apps/validation"
 
@@ -158,13 +159,7 @@ func ValidateRolloutRunUpdate(newObj, oldObj *rolloutv1alpha1.RolloutRun) field.
 		currentBatchIndex := -1
 		if newObj.Status.BatchStatus != nil {
 			currentBatchIndex = int(newObj.Status.BatchStatus.CurrentBatchIndex)
-			if newObj.Status.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepNone ||
-				newObj.Status.BatchStatus.CurrentBatchState == rolloutv1alpha1.RolloutStepPending {
-				// current batch is not running yet, it can be mutated
-				immutableBatchIndex = int(newObj.Status.BatchStatus.CurrentBatchIndex - 1)
-			} else {
-				immutableBatchIndex = int(newObj.Status.BatchStatus.CurrentBatchIndex)
-			}
+			immutableBatchIndex = currentBatchIndex - 1
 		}
 
 		// check if new batch size count is less than current running batch
@@ -178,13 +173,33 @@ func ValidateRolloutRunUpdate(newObj, oldObj *rolloutv1alpha1.RolloutRun) field.
 					allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "batch", "batches").Index(i), "batch is immutable after running"))
 				}
 			}
-			// current batch's breakpoint is immutable
-			if immutableBatchIndex < currentBatchIndex &&
-				oldObj.Spec.Batch.Batches[currentBatchIndex].Breakpoint != newObj.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
-				allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "batch", "batches").Index(currentBatchIndex).Child("breakpoint"), "breakpoint in current batch is immutable"))
+
+			// check current batch fields
+			if currentBatchIndex >= 0 {
+				if newObj.Status.BatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepNone &&
+					newObj.Status.BatchStatus.CurrentBatchState != rolloutv1alpha1.RolloutStepPending {
+					// current batch is running only replicas can be changed
+					if !isBatchStepEqualsIgnoreReplicas(oldObj.Spec.Batch.Batches[currentBatchIndex], newObj.Spec.Batch.Batches[currentBatchIndex]) {
+						allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "batch", "batches").Index(currentBatchIndex), "current batch is running, only replicas can be changed"))
+					}
+				} else if oldObj.Spec.Batch.Batches[currentBatchIndex].Breakpoint != newObj.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
+					// breakpoint can not be changed in current batch
+					allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "batch", "batches").Index(currentBatchIndex).Child("breakpoint"), "breakpoint in current batch is immutable"))
+				}
 			}
 		}
 	}
 
 	return allErrs
+}
+
+func isBatchStepEqualsIgnoreReplicas(oldStep, newStep rolloutv1alpha1.RolloutRunStep) bool {
+	tempReplics := intstr.FromInt(1)
+	for i := range oldStep.Targets {
+		oldStep.Targets[i].Replicas = tempReplics
+	}
+	for i := range newStep.Targets {
+		newStep.Targets[i].Replicas = tempReplics
+	}
+	return apiequality.Semantic.DeepEqual(oldStep, newStep)
 }

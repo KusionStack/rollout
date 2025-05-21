@@ -411,6 +411,22 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 			wantErr: true,
 			errLen:  1,
 		},
+		{
+			name:   "mutate replicas in current batch after running",
+			oldObj: validRolloutRun,
+			newObj: func() *rolloutv1alpha1.RolloutRun {
+				obj := validRolloutRun.DeepCopy()
+				obj.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: rolloutv1alpha1.RolloutStepPending,
+					},
+				}
+				obj.Spec.Batch.Batches[0].Targets[0].Replicas = intstr.FromInt(10)
+				return obj
+			}(),
+			wantErr: false,
+		},
 	}
 	for i := range tests {
 		tt := tests[i]
