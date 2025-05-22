@@ -91,7 +91,7 @@ func (e *batchExecutor) Cancel(ctx *ExecutorContext) (done bool, result ctrl.Res
 	if done {
 		return true, ctrl.Result{Requeue: true}, nil
 	}
-	return e.stateEngine.cancel(ctx, ctx.NewStatus.CanaryStatus.State)
+	return e.stateEngine.cancel(ctx, ctx.NewStatus.BatchStatus.CurrentBatchState)
 }
 
 func (e *batchExecutor) isSupported(ctx *ExecutorContext) bool {
