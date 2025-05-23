@@ -141,7 +141,7 @@ KUSTOMIZE_VERSION ?= v5.3.0
 CONTROLLER_TOOLS_VERSION ?= v0.14.0
 GINKGO_VERSION ?= 1.16.5
 HELM_VERSION ?= 3.13.1
-GOLANGCI_VERSION ?= v1.57.2
+GOLANGCI_VERSION ?= v1.64.8
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize

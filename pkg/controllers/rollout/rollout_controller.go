@@ -278,7 +278,10 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, obj *rolloutv1
 		_, err := info.UpdateOnConflict(ctx, r.Client, func(obj client.Object) error {
 			utils.MutateLabels(obj, func(labels map[string]string) {
 				delete(labels, rollout.LabelWorkload)
-				delete(labels, rollout.LabelControlledBy)
+				delete(labels, rollout.LabelControlledBy) // for backward compatibility
+			})
+			utils.MutateAnnotations(obj, func(annotations map[string]string) {
+				delete(annotations, rollout.AnnoRolloutName)
 			})
 			return nil
 		})
@@ -312,7 +315,7 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionAvailable, metav1.ConditionTrue, "Available", "all dependencies are valid")
 
 		// 2. add rollout label to workloads if rollout is available
-		err := r.ensureWorkloadsLabels(ctx, obj.Name, workloads)
+		err := r.ensureWorkloadsLabelAndAnnotations(ctx, obj.Name, workloads)
 		if err != nil {
 			r.recordCondition(obj, newStatus, reconcileOK, metav1.ConditionFalse, "FailedUpdateWorkload", err.Error())
 			return err
@@ -352,7 +355,7 @@ func (r *RolloutReconciler) getDependentResources(ctx context.Context, obj *roll
 	return ros, ttopos, errs
 }
 
-func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, name string, workloads []*workload.Info) error {
+func (r *RolloutReconciler) ensureWorkloadsLabelAndAnnotations(ctx context.Context, name string, workloads []*workload.Info) error {
 	// TODO: we need to clean up label on workload if rollout does not select it any more.
 	errs := []error{}
 	for _, info := range workloads {
@@ -360,7 +363,10 @@ func (r *RolloutReconciler) ensureWorkloadsLabels(ctx context.Context, name stri
 		_, err := info.UpdateOnConflict(ctx, r.Client, func(obj client.Object) error {
 			utils.MutateLabels(obj, func(labels map[string]string) {
 				labels[rollout.LabelWorkload] = kind
-				labels[rollout.LabelControlledBy] = name
+			})
+			utils.MutateAnnotations(obj, func(annotations map[string]string) {
+				// The rollout name may be too long and exceed the max length (63) of label value
+				annotations[rollout.AnnoRolloutName] = name
 			})
 			return nil
 		})
@@ -437,7 +443,7 @@ func (r *RolloutReconciler) syncRun(
 	if err := r.Client.Create(clusterinfo.ContextFed, curRun); err != nil {
 		r.expectation.DeleteExpectations(key)
 		// do not change status phase here if rolloutRun is not created
-		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s", curRun.Name))
+		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s: %v", curRun.Name, err))
 		return err
 	}
 
@@ -478,6 +484,8 @@ func (r *RolloutReconciler) shouldTrigger(obj *rolloutv1alpha1.Rollout, workload
 	triggered := 0
 	pendings := []string{}
 
+	// TODO: we neet to find a new way to check if the workload is waiting for rollout
+	// .     otherwise we can not cancel the cannary release.
 	for _, info := range workloads {
 		if workload.IsWaitingRollout(*info) {
 			triggered++

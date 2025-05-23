@@ -73,7 +73,11 @@ func (r *Executor) lifecycle(executorContext *ExecutorContext) (done bool, resul
 	case rolloutv1alpha1.RolloutRunPhasePausing:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePaused
 	case rolloutv1alpha1.RolloutRunPhaseCanceling:
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceled
+		var canceled bool
+		canceled, result, err = r.doCanceling(executorContext)
+		if canceled {
+			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceled
+		}
 	case rolloutv1alpha1.RolloutRunPhasePreRollout:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
 	case rolloutv1alpha1.RolloutRunPhaseProgressing:
@@ -136,6 +140,28 @@ func (r *Executor) doProcessing(ctx *ExecutorContext) (bool, ctrl.Result, error)
 			}
 		}()
 		return r.batch.Do(ctx)
+	}
+
+	return true, ctrl.Result{Requeue: true}, nil
+}
+
+func (r *Executor) doCanceling(ctx *ExecutorContext) (bool, ctrl.Result, error) {
+	rolloutRun := ctx.RolloutRun
+	newStatus := ctx.NewStatus
+
+	if ctx.inCanary() {
+		canceled, result, err := r.canary.Cancel(ctx)
+		if err != nil {
+			return false, result, err
+		}
+		return canceled, result, nil
+	}
+	if rolloutRun.Spec.Batch != nil && len(rolloutRun.Spec.Batch.Batches) > 0 {
+		// init BatchStatus
+		if len(newStatus.BatchStatus.CurrentBatchState) == 0 {
+			newStatus.BatchStatus.CurrentBatchState = StepNone
+		}
+		return r.batch.Cancel(ctx)
 	}
 
 	return true, ctrl.Result{Requeue: true}, nil

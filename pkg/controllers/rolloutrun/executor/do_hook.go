@@ -21,6 +21,7 @@ const (
 
 type webhookExecutor interface {
 	Do(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType) (bool, time.Duration, error)
+	Cancel(ctx *ExecutorContext)
 }
 
 type webhookExecutorImpl struct {
@@ -85,6 +86,12 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 	r.webhookManager.Stop(ctx.RolloutRun.UID)
 
 	return true, retryImmediately, nil
+}
+
+func (r *webhookExecutorImpl) Cancel(ctx *ExecutorContext) {
+	logger := ctx.GetLogger()
+	logger.Info("cancel webhook", "rolloutRun", ctx.RolloutRun.Name)
+	r.webhookManager.Stop(ctx.RolloutRun.UID)
 }
 
 type webhookWithStatus struct {

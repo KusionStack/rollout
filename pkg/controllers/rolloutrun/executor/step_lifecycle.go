@@ -53,27 +53,43 @@ type stepLifecycle struct {
 	current rolloutv1alpha1.RolloutStepState
 	next    rolloutv1alpha1.RolloutStepState
 	do      stateProcess
+	cancel  stateProcess
 }
 
-type stepStateMachine struct {
+type stepStateEngine struct {
 	lifecycle []stepLifecycle
 }
 
-func newStepStateMachine() *stepStateMachine {
-	return &stepStateMachine{
+func newStepStateEngine() *stepStateEngine {
+	return &stepStateEngine{
 		lifecycle: make([]stepLifecycle, 0),
 	}
 }
 
-func (e *stepStateMachine) add(state, nextState rolloutv1alpha1.RolloutStepState, do stateProcess) {
+func (e *stepStateEngine) add(state, nextState rolloutv1alpha1.RolloutStepState, do, cancel stateProcess) {
+	if do == nil {
+		do = skipStep
+	}
+	if cancel == nil {
+		do = skipStep
+	}
 	e.lifecycle = append(e.lifecycle, stepLifecycle{
 		current: state,
 		next:    nextState,
 		do:      do,
+		cancel:  cancel,
 	})
 }
 
-func (e *stepStateMachine) do(ctx *ExecutorContext, currentState rolloutv1alpha1.RolloutStepState) (done bool, result ctrl.Result, err error) {
+func (e *stepStateEngine) cancel(ctx *ExecutorContext, currentState rolloutv1alpha1.RolloutStepState) (done bool, result ctrl.Result, err error) {
+	return e.process(ctx, currentState, true)
+}
+
+func (e *stepStateEngine) do(ctx *ExecutorContext, currentState rolloutv1alpha1.RolloutStepState) (done bool, result ctrl.Result, err error) {
+	return e.process(ctx, currentState, false)
+}
+
+func (e *stepStateEngine) process(ctx *ExecutorContext, currentState rolloutv1alpha1.RolloutStepState, cancel bool) (done bool, result ctrl.Result, err error) {
 	lifecycle, found := lo.Find(e.lifecycle, func(step stepLifecycle) bool {
 		return step.current == currentState
 	})
@@ -83,7 +99,11 @@ func (e *stepStateMachine) do(ctx *ExecutorContext, currentState rolloutv1alpha1
 		return false, ctrl.Result{}, nil
 	}
 
-	stateDone, retry, err := lifecycle.do(ctx)
+	fn := lifecycle.do
+	if cancel {
+		fn = lifecycle.cancel
+	}
+	stateDone, retry, err := fn(ctx)
 	if err != nil {
 		ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeWarning, "FailedRunStep", "step failed, currentState %s, err: %v", currentState, err)
 		if errors.Is(err, control.TerminalError(nil)) {
@@ -95,7 +115,11 @@ func (e *stepStateMachine) do(ctx *ExecutorContext, currentState rolloutv1alpha1
 	}
 
 	if stateDone {
-		if len(lifecycle.next) == 0 {
+		if cancel {
+			// if cancel is true, we stop at this state
+			ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeNormal, "StepCanceled", "step canceled, currentState %s", currentState)
+			done = true
+		} else if len(lifecycle.next) == 0 {
 			// final state
 			done = true
 		} else {

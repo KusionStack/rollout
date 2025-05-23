@@ -20,6 +20,8 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 	batchError := newStatus.Error
 	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	switch cmd {
+	case rolloutapis.AnnoManualCommandPause:
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePausing
 	case rolloutapis.AnnoManualCommandResume, rolloutapis.AnnoManualCommandContinue: // nolint
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
@@ -28,10 +30,6 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		if batchError != nil {
 			newStatus.Error = nil
 		}
-	case rolloutapis.AnnoManualCommandPause:
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePausing
-	case rolloutapis.AnnoManualCommandCancel:
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
 	case rolloutapis.AnnoManualCommandSkip:
 		if batchError != nil {
 			newStatus.Error = nil
@@ -43,6 +41,8 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
 			}
 		}
+	case rolloutapis.AnnoManualCommandCancel:
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
 	}
 
 	return ctrl.Result{Requeue: true}

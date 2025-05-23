@@ -29,40 +29,46 @@ import (
 )
 
 type batchExecutor struct {
-	webhook      webhookExecutor
-	stateMachine *stepStateMachine
+	webhook     webhookExecutor
+	stateEngine *stepStateEngine
 }
 
 func newBatchExecutor(webhook webhookExecutor) *batchExecutor {
 	e := &batchExecutor{
-		webhook:      webhook,
-		stateMachine: newStepStateMachine(),
+		webhook:     webhook,
+		stateEngine: newStepStateEngine(),
 	}
 
-	e.stateMachine.add(StepNone, StepPending, e.doPausing)
-	e.stateMachine.add(StepPending, StepPreBatchStepHook, skipStep)
-	e.stateMachine.add(StepPreBatchStepHook, StepRunning, e.doPreStepHook)
-	e.stateMachine.add(StepRunning, StepPostBatchStepHook, e.doBatchUpgrading)
-	e.stateMachine.add(StepPostBatchStepHook, StepResourceRecycling, e.doPostStepHook)
-	e.stateMachine.add(StepResourceRecycling, StepSucceeded, e.doRecycle)
-	e.stateMachine.add(StepSucceeded, "", skipStep)
+	e.stateEngine.add(StepNone, StepPending, e.doPausing, e.release)
+	e.stateEngine.add(StepPending, StepPreBatchStepHook, skipStep, e.release)
+	e.stateEngine.add(StepPreBatchStepHook, StepRunning, e.doPreStepHook, e.release)
+	e.stateEngine.add(StepRunning, StepPostBatchStepHook, e.doBatchUpgrading, e.release)
+	e.stateEngine.add(StepPostBatchStepHook, StepResourceRecycling, e.doPostStepHook, e.release)
+	e.stateEngine.add(StepResourceRecycling, StepSucceeded, e.doRecycle, e.release)
+	e.stateEngine.add(StepSucceeded, "", skipStep, skipStep)
 	return e
 }
 
-func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
-	newStatus := ctx.NewStatus
-	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
-	currentState := newStatus.BatchStatus.CurrentBatchState
-
+func (e *batchExecutor) init(ctx *ExecutorContext) bool {
 	logger := ctx.GetBatchLogger()
 	if !e.isSupported(ctx) {
 		// skip batch release if workload accessor don't support it.
 		logger.Info("workload accessor don't support batch release, skip it")
 		ctx.SkipCurrentRelease()
+		return true
+	}
+	return false
+}
+
+func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
+	if e.init(ctx) {
 		return true, ctrl.Result{Requeue: true}, nil
 	}
+	newStatus := ctx.NewStatus
+	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
+	currentState := newStatus.BatchStatus.CurrentBatchState
 
-	stepDone, result, err := e.stateMachine.do(ctx, currentState)
+	stepDone, result, err := e.stateEngine.do(ctx, currentState)
 	if err != nil {
 		return false, result, err
 	}
@@ -80,18 +86,24 @@ func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result,
 	return true, result, nil
 }
 
+func (e *batchExecutor) Cancel(ctx *ExecutorContext) (done bool, result ctrl.Result, err error) {
+	done = e.init(ctx)
+	if done {
+		return true, ctrl.Result{Requeue: true}, nil
+	}
+	return e.stateEngine.cancel(ctx, ctx.NewStatus.BatchStatus.CurrentBatchState)
+}
+
 func (e *batchExecutor) isSupported(ctx *ExecutorContext) bool {
 	_, ok := ctx.Accessor.(workload.BatchReleaseControl)
 	return ok
 }
 
-func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, error) {
-	// recycling only work on last batch now
-	if int(ctx.NewStatus.BatchStatus.CurrentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
-		return true, retryImmediately, nil
-	}
+func (e *batchExecutor) release(ctx *ExecutorContext) (bool, time.Duration, error) {
+	// frstly try to stop webhook
+	e.webhook.Cancel(ctx)
 
-	// last batch finished, try to finalize all workloads
+	// try to finalize all workloads
 	allTargets := map[rolloutv1alpha1.CrossClusterObjectNameReference]bool{}
 	// finalize batch release
 	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
@@ -110,7 +122,7 @@ func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, er
 			// ignore not found workload
 			continue
 		}
-		err := batchControl.Finalize(wi)
+		err := batchControl.Finalize(ctx, wi)
 		if err != nil {
 			// try our best to finalize all workloasd
 			finalizeErrs = append(finalizeErrs, err)
@@ -123,6 +135,14 @@ func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, er
 	}
 
 	return true, retryImmediately, nil
+}
+
+func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, error) {
+	// recycling only work on last batch now
+	if int(ctx.NewStatus.BatchStatus.CurrentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
+		return true, retryImmediately, nil
+	}
+	return e.release(ctx)
 }
 
 func (e *batchExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, error) {

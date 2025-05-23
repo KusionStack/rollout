@@ -213,7 +213,7 @@ func (w *worker) doProbe() (keepGoing bool) {
 }
 
 func newProber(webhook rolloutv1alpha1.RolloutWebhook) probe.WebhookProber {
-	provider := ptr.Deref[string](webhook.Provider, "")
+	provider := ptr.Deref(webhook.Provider, "")
 	if len(provider) > 0 {
 		panic("webhook provider is not supported now")
 	}
