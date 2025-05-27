@@ -25,7 +25,7 @@ func (p ProgressingInfos) Len() int {
 }
 
 // Less implements sort.Interface.
-func (p ProgressingInfos) Less(i int, j int) bool {
+func (p ProgressingInfos) Less(i, j int) bool {
 	return cmp.Or(
 		p[i].Kind < p[j].Kind,
 		p[i].Kind == p[j].Kind && p[i].RolloutName < p[j].RolloutName,
@@ -33,7 +33,7 @@ func (p ProgressingInfos) Less(i int, j int) bool {
 }
 
 // Swap implements sort.Interface.
-func (p ProgressingInfos) Swap(i int, j int) {
+func (p ProgressingInfos) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 

@@ -208,6 +208,7 @@ func (c *ExecutorContext) Pause() {
 
 func (c *ExecutorContext) Fail(err error) {
 	c.Initialize()
+	//nolint:errorlint
 	crm, ok := err.(*rolloutv1alpha1.CodeReasonMessage)
 	if ok {
 		c.NewStatus.Error = crm

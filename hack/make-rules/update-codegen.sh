@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright The KusionStack Authors.
+# Copyright 2025 The jim.zoumo@gmail.com Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,22 +18,12 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-GO_PACKAGE="kusionstack.io/rollout"
+BASE_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE}")/../.." && pwd -P)"
+ROOT_DIR="${BASE_SOURCE_ROOT}"
 
-# util::create_gopath_tree create the GOPATH tree
-# Parameters:
-#  - $1: the root path of repo
-#  - $2: go path
-function util:create_gopath_tree() {
-    local repo_root=$1
-    local go_path=$2
+bash "${ROOT_DIR}/hack/make-rules/install-go-tools.sh" kube-codegen
 
-    local go_pkg_dir="${go_path}/${GO_PACKAGE}"
-    go_pkg_dir=$(dirname "${go_pkg_dir}")
-
-    mkdir -p "${go_pkg_dir}"
-
-    if [[ ! -e "${go_pkg_dir}" || "$(readlink "${go_pkg_dir}")" != "${repo_root}" ]]; then
-        ln -snf "${repo_root}" "${go_pkg_dir}"
-    fi
-}
+"${ROOT_DIR}/bin/kube-codegen" code-gen \
+    --apis-path="apis" \
+    --go-header-file="${ROOT_DIR}"/hack/boilerplate.go.txt \
+    --generators="deepcopy,register"

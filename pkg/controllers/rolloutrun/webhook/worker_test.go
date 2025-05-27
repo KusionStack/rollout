@@ -17,10 +17,9 @@
 package webhook
 
 import (
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -75,14 +74,23 @@ func (p *fakeProber) Probe(_ *rolloutv1alpha1.RolloutWebhookReview) probe.Result
 	}
 }
 
-func newTestWorker(m *manager, fakeProber probe.WebhookProber) *worker {
-	w := newWorker(m, testWebhookKey, testWebhook, testWebhookReview)
+func newTestWorker(manager *manager, fakeProber probe.WebhookProber) *worker {
+	w := newWorker(manager, testWebhookKey, testWebhook, testWebhookReview)
 	w.prober = fakeProber
 	return w
 }
 
-func Test_worker_doProbe_once(t *testing.T) {
-	m := newTestManager()
+type workerTestSuite struct {
+	suite.Suite
+
+	manager *manager
+}
+
+func (s *workerTestSuite) SetupSuite() {
+	s.manager = newTestManager()
+}
+
+func (s *workerTestSuite) Test_DoProbe_Once() {
 	tests := []struct {
 		name          string
 		getWorker     func() *worker
@@ -93,7 +101,7 @@ func Test_worker_doProbe_once(t *testing.T) {
 			name: "webhook probe return ok, worker is stopped",
 			getWorker: func() *worker {
 				prober := newFakeProber(rolloutv1alpha1.WebhookReviewCodeOK)
-				w := newTestWorker(m, prober)
+				w := newTestWorker(s.manager, prober)
 				return w
 			},
 			wantKeepGoing: false,
@@ -110,7 +118,7 @@ func Test_worker_doProbe_once(t *testing.T) {
 			name: "webhook probe return progressing, worker is still running",
 			getWorker: func() *worker {
 				prober := newFakeProber(rolloutv1alpha1.WebhookReviewCodeProcessing)
-				w := newTestWorker(m, prober)
+				w := newTestWorker(s.manager, prober)
 				return w
 			},
 			wantKeepGoing: true,
@@ -127,7 +135,7 @@ func Test_worker_doProbe_once(t *testing.T) {
 			name: "prober return error, webhook policy is failed, then worker is onhold",
 			getWorker: func() *worker {
 				prober := newFakeProber(rolloutv1alpha1.WebhookReviewCodeError)
-				w := newTestWorker(m, prober)
+				w := newTestWorker(s.manager, prober)
 				return w
 			},
 			wantKeepGoing: true,
@@ -145,7 +153,7 @@ func Test_worker_doProbe_once(t *testing.T) {
 			name: "prober return error, webhook policy is ignore, then worker is stopped",
 			getWorker: func() *worker {
 				prober := newFakeProber(rolloutv1alpha1.WebhookReviewCodeError)
-				w := newTestWorker(m, prober)
+				w := newTestWorker(s.manager, prober)
 				w.failurePolicy = rolloutv1alpha1.Ignore
 				return w
 			},
@@ -163,23 +171,21 @@ func Test_worker_doProbe_once(t *testing.T) {
 	}
 	for i := range tests {
 		tt := tests[i]
-		t.Run(tt.name, func(t *testing.T) {
+		s.Run(tt.name, func() {
 			w := tt.getWorker()
 			gotKeepGoing := w.doProbe()
-			assert.Equal(t, tt.wantKeepGoing, gotKeepGoing, "keep going not match")
+			s.Equal(tt.wantKeepGoing, gotKeepGoing, "keep going not match")
 			gotResult := w.Result()
-			assert.Equal(t, tt.wantResult, gotResult)
+			s.Equal(tt.wantResult, gotResult)
 		})
 	}
 }
 
-func Test_worker_doProbe_multi_times(t *testing.T) {
-	m := newTestManager()
-
+func (s *workerTestSuite) Test_DoProbe_MultiTimes() {
 	type pipeline struct {
 		modifyWorker  func(w *worker)
 		wantKeepGoing bool
-		checkResut    func(assert *assert.Assertions, result Result)
+		checkResut    func(result Result)
 	}
 	tests := []struct {
 		name      string
@@ -190,15 +196,15 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 			name: "happy path",
 			getWorker: func() *worker {
 				prober := newFakeProber(rolloutv1alpha1.WebhookReviewCodeProcessing)
-				return newTestWorker(m, prober)
+				return newTestWorker(s.manager, prober)
 			},
 			pipeline: []pipeline{
 				{
 					wantKeepGoing: true,
-					checkResut: func(assert *assert.Assertions, result Result) {
-						assert.EqualValues(rolloutv1alpha1.WebhookRunning, result.State)
-						assert.Equal(rolloutv1alpha1.WebhookReviewCodeProcessing, result.Code)
-						assert.EqualValues(0, result.FailureCount)
+					checkResut: func(result Result) {
+						s.Equal(rolloutv1alpha1.WebhookRunning, result.State)
+						s.Equal(rolloutv1alpha1.WebhookReviewCodeProcessing, result.Code)
+						s.EqualValues(0, result.FailureCount)
 					},
 				},
 				{
@@ -206,10 +212,10 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 						w.prober = newFakeProber(rolloutv1alpha1.WebhookReviewCodeOK)
 					},
 					wantKeepGoing: false,
-					checkResut: func(assert *assert.Assertions, result Result) {
-						assert.EqualValues(rolloutv1alpha1.WebhookCompleted, result.State)
-						assert.Equal(rolloutv1alpha1.WebhookReviewCodeOK, result.Code)
-						assert.EqualValues(0, result.FailureCount)
+					checkResut: func(result Result) {
+						s.Equal(rolloutv1alpha1.WebhookCompleted, result.State)
+						s.Equal(rolloutv1alpha1.WebhookReviewCodeOK, result.Code)
+						s.EqualValues(0, result.FailureCount)
 					},
 				},
 			},
@@ -218,25 +224,25 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 			name: "error occur, worker is onhold",
 			getWorker: func() *worker {
 				prober := newFakeProber(rolloutv1alpha1.WebhookReviewCodeError)
-				w := newTestWorker(m, prober)
+				w := newTestWorker(s.manager, prober)
 				w.failureThreshold = 2
 				return w
 			},
 			pipeline: []pipeline{
 				{
 					wantKeepGoing: true,
-					checkResut: func(assert *assert.Assertions, result Result) {
-						assert.EqualValues(rolloutv1alpha1.WebhookRunning, result.State)
-						assert.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
-						assert.EqualValues(1, result.FailureCount)
+					checkResut: func(result Result) {
+						s.Equal(rolloutv1alpha1.WebhookRunning, result.State)
+						s.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
+						s.EqualValues(1, result.FailureCount)
 					},
 				},
 				{
 					wantKeepGoing: true,
-					checkResut: func(assert *assert.Assertions, result Result) {
-						assert.EqualValues(rolloutv1alpha1.WebhookOnHold, result.State)
-						assert.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
-						assert.EqualValues(2, result.FailureCount)
+					checkResut: func(result Result) {
+						s.Equal(rolloutv1alpha1.WebhookOnHold, result.State)
+						s.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
+						s.EqualValues(2, result.FailureCount)
 					},
 				},
 				{
@@ -246,18 +252,18 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 						w.failureCount = 0
 					},
 					wantKeepGoing: true,
-					checkResut: func(assert *assert.Assertions, result Result) {
-						assert.EqualValues(rolloutv1alpha1.WebhookRunning, result.State)
-						assert.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
-						assert.EqualValues(3, result.FailureCount)
+					checkResut: func(result Result) {
+						s.Equal(rolloutv1alpha1.WebhookRunning, result.State)
+						s.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
+						s.EqualValues(3, result.FailureCount)
 					},
 				},
 				{
 					wantKeepGoing: true,
-					checkResut: func(assert *assert.Assertions, result Result) {
-						assert.EqualValues(rolloutv1alpha1.WebhookOnHold, result.State)
-						assert.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
-						assert.EqualValues(4, result.FailureCount)
+					checkResut: func(result Result) {
+						s.Equal(rolloutv1alpha1.WebhookOnHold, result.State)
+						s.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
+						s.EqualValues(4, result.FailureCount)
 					},
 				},
 			},
@@ -265,25 +271,23 @@ func Test_worker_doProbe_multi_times(t *testing.T) {
 	}
 	for i := range tests {
 		tt := tests[i]
-		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
+		s.Run(tt.name, func() {
 			w := tt.getWorker()
 			for _, p := range tt.pipeline {
 				if p.modifyWorker != nil {
 					p.modifyWorker(w)
 				}
 				gotKeepGoing := w.doProbe()
-				assert.Equal(p.wantKeepGoing, gotKeepGoing, "keep going not match")
-				p.checkResut(assert, w.Result())
+				s.Equal(p.wantKeepGoing, gotKeepGoing, "keep going not match")
+				p.checkResut(w.Result())
 			}
 		})
 	}
 }
 
-func Test_worker_run(t *testing.T) {
-	m := newTestManager()
-	probe := newFakeProber(rolloutv1alpha1.WebhookReviewCodeProcessing)
-	worker := newTestWorker(m, probe)
+func (s *workerTestSuite) Test_Run() {
+	fakeP := newFakeProber(rolloutv1alpha1.WebhookReviewCodeProcessing)
+	worker := newTestWorker(s.manager, fakeP)
 
 	go worker.run()
 	defer worker.Stop()
@@ -291,19 +295,19 @@ func Test_worker_run(t *testing.T) {
 	time.Sleep(time.Second)
 
 	result := worker.Result()
-	assert.EqualValues(t, rolloutv1alpha1.WebhookRunning, result.State)
-	assert.Equal(t, rolloutv1alpha1.WebhookReviewCodeProcessing, result.Code)
+	s.Equal(rolloutv1alpha1.WebhookRunning, result.State)
+	s.Equal(rolloutv1alpha1.WebhookReviewCodeProcessing, result.Code)
 
 	worker.prober = newFakeProber(rolloutv1alpha1.WebhookReviewCodeError)
 	time.Sleep(2 * time.Second)
 	result = worker.Result()
-	assert.EqualValues(t, rolloutv1alpha1.WebhookOnHold, result.State)
-	assert.Equal(t, rolloutv1alpha1.WebhookReviewCodeError, result.Code)
+	s.Equal(rolloutv1alpha1.WebhookOnHold, result.State)
+	s.Equal(rolloutv1alpha1.WebhookReviewCodeError, result.Code)
 
 	worker.prober = newFakeProber(rolloutv1alpha1.WebhookReviewCodeOK)
 	worker.Retry()
 	time.Sleep(1 * time.Second)
 	result = worker.Result()
-	assert.EqualValues(t, rolloutv1alpha1.WebhookCompleted, result.State)
-	assert.Equal(t, rolloutv1alpha1.WebhookReviewCodeOK, result.Code)
+	s.Equal(rolloutv1alpha1.WebhookCompleted, result.State)
+	s.Equal(rolloutv1alpha1.WebhookReviewCodeOK, result.Code)
 }

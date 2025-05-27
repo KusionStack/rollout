@@ -10,7 +10,7 @@ require (
 	github.com/onsi/gomega v1.30.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.10.0
 	k8s.io/api v0.28.4
 	k8s.io/apiextensions-apiserver v0.28.3
 	k8s.io/apimachinery v0.28.4
@@ -22,7 +22,7 @@ require (
 	k8s.io/kubernetes v1.22.2
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	kusionstack.io/kube-api v0.5.1-0.20240809093445-d0eef055208b
-	kusionstack.io/kube-utils v0.1.19-0.20250310131055-f8bcb55ff536
+	kusionstack.io/kube-utils v0.2.1-0.20250429065247-200bb96d7002
 	kusionstack.io/resourceconsist v0.0.2
 	sigs.k8s.io/controller-runtime v0.17.3
 )

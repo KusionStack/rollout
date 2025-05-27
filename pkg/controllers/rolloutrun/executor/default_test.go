@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -109,12 +108,11 @@ func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rol
 	broadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 	recorder := broadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "test"})
 
-	// record.NewBroadcasterForTests()
 	workloads := workload.NewSet(infos...)
-	client := clientbuilder.Build()
+	c := clientbuilder.Build()
 	ctx := &ExecutorContext{
 		Context:    context.TODO(),
-		Client:     client,
+		Client:     c,
 		Recorder:   recorder,
 		Accessor:   inter,
 		OwnerName:  rollout.Name,

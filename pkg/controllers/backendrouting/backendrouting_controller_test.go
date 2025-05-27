@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -27,9 +28,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
-
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
@@ -105,7 +105,7 @@ var _ = Describe("backend-routing-controller", func() {
 
 		It("Initialization of traffic", func() {
 			err := fedClient.Create(clusterinfo.WithCluster(ctx, clusterinfo.Fed), &br0)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			time.Sleep(3 * time.Second)
 
@@ -138,20 +138,20 @@ var _ = Describe("backend-routing-controller", func() {
 					},
 				},
 			})
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			// trigger traffictopology reconcile
 			brTmp := &v1alpha1.BackendRouting{}
 			err = fedClient.Get(ctx, types.NamespacedName{
 				Name:      br0.Name,
 				Namespace: br0.Namespace,
 			}, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			if brTmp.Labels == nil {
 				brTmp.Labels = make(map[string]string)
 			}
 			brTmp.Labels["trigger-reconcile-ut"] = "x"
 			err = fedClient.Update(ctx, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				brTmp = &v1alpha1.BackendRouting{}
@@ -199,7 +199,7 @@ var _ = Describe("backend-routing-controller", func() {
 					},
 				},
 			})
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 		})
 
 		It("Stable route ready", func() {
@@ -209,14 +209,14 @@ var _ = Describe("backend-routing-controller", func() {
 				Name:      br0.Name,
 				Namespace: br0.Namespace,
 			}, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			brTmp.Spec.Forwarding = &v1alpha1.BackendForwarding{
 				Stable: v1alpha1.StableBackendRule{
 					Name: "br-controller-ut-svc1-stable",
 				},
 			}
 			err = fedClient.Update(ctx, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				igsTmp := &networkingv1.Ingress{}
@@ -250,7 +250,7 @@ var _ = Describe("backend-routing-controller", func() {
 				Name:      br0.Name,
 				Namespace: br0.Namespace,
 			}, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			canaryWeight := int32(50)
 			brTmp.Spec.Forwarding.Canary = v1alpha1.CanaryBackendRule{
 				Name: "br-controller-ut-svc1-canary",
@@ -281,7 +281,7 @@ var _ = Describe("backend-routing-controller", func() {
 				},
 			}
 			err = fedClient.Update(ctx, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				igsTmp := &networkingv1.Ingress{}
@@ -317,7 +317,7 @@ var _ = Describe("backend-routing-controller", func() {
 				Name:      br0.Name,
 				Namespace: br0.Namespace,
 			}, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			canaryWeight = int32(20)
 			brTmp.Spec.Forwarding.Canary = v1alpha1.CanaryBackendRule{
 				Name: "br-controller-ut-svc1-canary",
@@ -348,7 +348,7 @@ var _ = Describe("backend-routing-controller", func() {
 				},
 			}
 			err = fedClient.Update(ctx, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				igsTmp := &networkingv1.Ingress{}
@@ -382,12 +382,12 @@ var _ = Describe("backend-routing-controller", func() {
 				Name:      br0.Name,
 				Namespace: br0.Namespace,
 			}, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			brTmp.Spec.Forwarding = &v1alpha1.BackendForwarding{
 				Stable: brTmp.Spec.Forwarding.Stable,
 			}
 			err = fedClient.Update(ctx, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				igsTmp := &networkingv1.Ingress{}
@@ -426,10 +426,10 @@ var _ = Describe("backend-routing-controller", func() {
 				Name:      br0.Name,
 				Namespace: br0.Namespace,
 			}, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			brTmp.Spec.Forwarding = nil
 			err = fedClient.Update(ctx, brTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				igsTmp := &networkingv1.Ingress{}
@@ -464,7 +464,6 @@ var _ = Describe("backend-routing-controller", func() {
 				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
-
 	})
 })
 

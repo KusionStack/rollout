@@ -69,7 +69,7 @@ func NewRolloutCommand(opt *options.Options) *cobra.Command {
 func Run(opt *options.Options) error {
 	ctx := ctrl.SetupSignalHandler()
 
-	options := ctrl.Options{
+	opts := ctrl.Options{
 		Scheme:                     scheme.Scheme,
 		MetricsBindAddress:         opt.Serving.MetricsBindAddress,
 		Port:                       opt.Serving.WebhookPort,
@@ -123,8 +123,8 @@ func Run(opt *options.Options) error {
 			setupLog.Error(err, "unable to start multiClusterManager")
 			os.Exit(1)
 		}
-		options.NewClient = newClient
-		options.NewCache = newCache
+		opts.NewClient = newClient
+		opts.NewCache = newCache
 
 		go func() {
 			if err := clusterMgr.Run(ctx); err != nil {
@@ -139,7 +139,7 @@ func Run(opt *options.Options) error {
 		setupLog.Info("federated mode disabled")
 	}
 
-	mgr, err := ctrl.NewManager(restConfig, options)
+	mgr, err := ctrl.NewManager(restConfig, opts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		return err

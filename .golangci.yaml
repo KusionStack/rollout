@@ -1,105 +1,80 @@
-# Copyright 2023 The KusionStack Authors
-# 
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-# 
-#     http://www.apache.org/licenses/LICENSE-2.0
-# 
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-linters-settings:
-  govet:
-    shadow: true
-  golint:
-    min-confidence: 0
-  gocyclo:
-    min-complexity: 15
-  maligned:
-    suggest-new: true
-  dupl:
-    threshold: 100
-  misspell:
-    locale: US
-  lll:
-    line-length: 140
-  goimports:
-    local-prefixes: kusionstack.io/rollout
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport # https://github.com/go-critic/go-critic/issues/845
-      - ifElseChain
-      - octalLiteral
-      - wrapperFunc
-  funlen:
-    lines: 100
-    statements: 50
+version: "2"
 linters:
-  disable-all: true
+  default: standard
   enable:
-    ## for bug
     - bodyclose
-    - errcheck
-    - govet
-    - ineffassign
     - copyloopvar
-    - staticcheck
-    - typecheck
-
-    ## for complexity
-    # - gocyclo
-    - nakedret
-    - gosimple
-
-    ## for format
-    - gofmt
-    - goimports
-
-    ## for style
-    - unconvert
-    # - goconst
+    - ginkgolinter
+    - testifylint
     - misspell
+    - nakedret
+    - unconvert
     - unparam
-    # - revive
     - whitespace
-    # - goerr113
-
-    ## for unused
-    - unused
-    - unparam
-
-run:
-  deadline: 10m
-
-issues:
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  exclude-dirs-use-default: true
-  exclude-use-default: true
-  exclude-rules:
-    - path: _test.go
-      linters:
+    - gocritic
+    - errorlint
+  settings:
+    govet:
+      enable:
+        - shadow
+    misspell:
+      locale: US
+    staticcheck:
+      checks:
+       - "-QF1008"
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - emptyStringTest
+        - ifElseChain
+        - singleCaseSwitch
+        - hugeParam
+        - unnamedResult
+        - whyNoLint
+        - tooManyResultsChecker
+        - rangeValCopy
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
         - errcheck
         - unparam
-        - gocyclo
-        - dupl
-        - gosec
-
-    # enable shadow declaration for err
-    - linters:
-        - govet
-      text: declaration of "err" shadows declaration at line
-
-    # - linters:
-    #     - govet
-    #   text: composite literal uses unkeyed fields
+        path: _test.go
+      - linters:
+          - govet
+        text: declaration of "err" shadows declaration at line
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofumpt # drop in replacement for gofmt
+    - gci # format imports
+  settings:
+    gci:
+      custom-order: true
+      sections:
+        - standard
+        - blank
+        - dot
+        - default
+        - localmodule
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-same-issues: 0
+run:
+  allow-parallel-runners: true
+  timeout: 10m

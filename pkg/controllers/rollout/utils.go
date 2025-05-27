@@ -169,18 +169,18 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 	return result
 }
 
-func GetWatchableWorkloads(registry registry.WorkloadRegistry, logger logr.Logger, c client.Client, cfg *rest.Config) []workload.Accessor {
+func GetWatchableWorkloads(r registry.WorkloadRegistry, logger logr.Logger, c client.Client, cfg *rest.Config) []workload.Accessor {
 	var discoveryClient multicluster.PartialCachedDiscoveryInterface
-	client, ok := c.(multicluster.MultiClusterDiscovery)
+	cc, ok := c.(multicluster.MultiClusterDiscovery)
 	if ok {
-		discoveryClient = client.MembersCachedDiscoveryInterface()
+		discoveryClient = cc.MembersCachedDiscoveryInterface()
 	} else {
 		discoveryClient = memory.NewMemCacheClient(discovery.NewDiscoveryClientForConfigOrDie(cfg))
 	}
 
 	result := make([]workload.Accessor, 0)
 
-	registry.Range(func(gvk schema.GroupVersionKind, item workload.Accessor) bool {
+	r.Range(func(gvk schema.GroupVersionKind, item workload.Accessor) bool {
 		if !item.Watchable() {
 			// skip it
 			logger.Info("workload interface does not support watch, skip it", "gvk", gvk.String())

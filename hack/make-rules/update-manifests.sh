@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2025 The KusionStack Authors
+# Copyright 2025 The jim.zoumo@gmail.com Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,24 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Exit on error. Append "|| true" if you expect an error.
 set -o errexit
-# Do not allow use of undefined vars. Use ${VAR:-} to use an undefined VAR
 set -o nounset
-# Catch the error in pipeline.
 set -o pipefail
 
 BASE_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE}")/../.." && pwd -P)"
+ROOT_DIR="${BASE_SOURCE_ROOT}"
 
-PROJECT_ROOT_DIR="${BASE_SOURCE_ROOT}"
+bash "${ROOT_DIR}/hack/make-rules/install-go-tools.sh" controller-gen
 
-export COLOR_LOG=true
-
-# shellcheck source=/dev/null
-source "${PROJECT_ROOT_DIR}/hack/lib/logging.sh"
-# shellcheck source=/dev/null
-source "${PROJECT_ROOT_DIR}/hack/lib/kind.sh"
-# shellcheck source=/dev/null
-source "${PROJECT_ROOT_DIR}/hack/lib/golang.sh"
-# shellcheck source=/dev/null
-source "${PROJECT_ROOT_DIR}/hack/lib/docker.sh"
+"${ROOT_DIR}/bin/controller-gen" rbac:roleName=manager-role \
+    crd:generateEmbeddedObjectMeta=true \
+    webhook \
+    paths="./..." \
+    output:crd:artifacts:config=config/crd/bases

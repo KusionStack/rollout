@@ -28,7 +28,7 @@ type ResourceVersionExpectationInterface interface {
 	GetExpectations(controllerKey string) (*ObjectResourceVersionExpectation, bool, error)
 	SatisfiedExpectations(controllerKey, resourceVersion string) bool
 	DeleteExpectations(controllerKey string)
-	ExpectUpdate(controllerKey string, resourceVersion string) error
+	ExpectUpdate(controllerKey, resourceVersion string) error
 }
 
 var _ ResourceVersionExpectationInterface = &ResourceVersionExpectation{}
@@ -57,7 +57,7 @@ func (r *ResourceVersionExpectation) DeleteExpectations(controllerKey string) {
 	}
 }
 
-func (r *ResourceVersionExpectation) SatisfiedExpectations(controllerKey string, resourceVersion string) bool {
+func (r *ResourceVersionExpectation) SatisfiedExpectations(controllerKey, resourceVersion string) bool {
 	if exp, exists, err := r.GetExpectations(controllerKey); exists {
 		if exp.Fulfilled(resourceVersion) {
 			klog.V(4).Infof("Accuracy expectations fulfilled %s", controllerKey)
@@ -87,14 +87,14 @@ func (r *ResourceVersionExpectation) SatisfiedExpectations(controllerKey string,
 	return true
 }
 
-func (r *ResourceVersionExpectation) SetExpectations(controllerKey string, resourceVersion string) error {
+func (r *ResourceVersionExpectation) SetExpectations(controllerKey, resourceVersion string) error {
 	exp := &ObjectResourceVersionExpectation{key: controllerKey, timestamp: time.Now()}
 	exp.Set(resourceVersion)
 	klog.V(4).Infof("Setting expectations %#v", exp)
 	return r.Add(exp)
 }
 
-func (r *ResourceVersionExpectation) ExpectUpdate(controllerKey string, resourceVersion string) error {
+func (r *ResourceVersionExpectation) ExpectUpdate(controllerKey, resourceVersion string) error {
 	if exp, exists, err := r.GetExpectations(controllerKey); err != nil {
 		return err
 	} else if exists {

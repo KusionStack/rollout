@@ -113,10 +113,10 @@ func (o *Info) APIStatus() rolloutv1alpha1.RolloutWorkloadStatus {
 	}
 }
 
-func (o *Info) UpdateOnConflict(ctx context.Context, client client.Client, mutateFn func(client.Object) error) (bool, error) {
+func (o *Info) UpdateOnConflict(ctx context.Context, c client.Client, mutateFn func(client.Object) error) (bool, error) {
 	ctx = clusterinfo.WithCluster(ctx, o.ClusterName)
 	obj := o.Object
-	updated, err := utils.UpdateOnConflict(ctx, client, client, obj, func() error {
+	updated, err := utils.UpdateOnConflict(ctx, c, c, obj, func() error {
 		return mutateFn(obj)
 	})
 	if err != nil {
@@ -164,7 +164,7 @@ func List(ctx context.Context, c client.Client, inter Accessor, namespace string
 
 	v, err := conversion.EnforcePtr(listPtr)
 	if err != nil || v.Kind() != reflect.Slice {
-		return nil, fmt.Errorf("neet ptr to slice: %v", err)
+		return nil, fmt.Errorf("neet ptr to slice: %w", err)
 	}
 
 	length := v.Len()

@@ -1,17 +1,34 @@
 package executor
 
 import (
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"k8s.io/utils/ptr"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
-var (
-	webhook1 = rolloutv1alpha1.RolloutWebhook{
+type webhookExecutorTestSuite struct {
+	suite.Suite
+
+	executor webhookExecutor
+
+	webhook1      rolloutv1alpha1.RolloutWebhook
+	webhook1Error rolloutv1alpha1.CodeReasonMessage
+	webhook2      rolloutv1alpha1.RolloutWebhook
+	webhook2Error rolloutv1alpha1.CodeReasonMessage
+	webhook3      rolloutv1alpha1.RolloutWebhook
+	webhook3Error rolloutv1alpha1.CodeReasonMessage
+
+	rollout    *rolloutv1alpha1.Rollout
+	rolloutRun *rolloutv1alpha1.RolloutRun
+}
+
+func (s *webhookExecutorTestSuite) SetupSuite() {
+	s.executor = newWebhookExecutor(2 * time.Second)
+
+	s.webhook1 = rolloutv1alpha1.RolloutWebhook{
 		Name: "webhook-1",
 		HookTypes: []rolloutv1alpha1.HookType{
 			rolloutv1alpha1.PreCanaryStepHook,
@@ -28,13 +45,7 @@ var (
 		FailurePolicy:    rolloutv1alpha1.Ignore,
 	}
 
-	webhook1Error = rolloutv1alpha1.CodeReasonMessage{
-		Code:    rolloutv1alpha1.WebhookReviewCodeError,
-		Reason:  "DoRequestError",
-		Message: `Post "webhook-1.test.url": unsupported protocol scheme ""`,
-	}
-
-	webhook2 = rolloutv1alpha1.RolloutWebhook{
+	s.webhook2 = rolloutv1alpha1.RolloutWebhook{
 		Name: "webhook-2",
 		HookTypes: []rolloutv1alpha1.HookType{
 			rolloutv1alpha1.PreCanaryStepHook,
@@ -50,13 +61,8 @@ var (
 		FailureThreshold: 1,
 		FailurePolicy:    rolloutv1alpha1.Fail,
 	}
-	webhook2Error = rolloutv1alpha1.CodeReasonMessage{
-		Code:    rolloutv1alpha1.WebhookReviewCodeError,
-		Reason:  "DoRequestError",
-		Message: `Post "webhook-2.test.url": unsupported protocol scheme ""`,
-	}
 
-	webhook3 = rolloutv1alpha1.RolloutWebhook{
+	s.webhook3 = rolloutv1alpha1.RolloutWebhook{
 		Name: "webhook-3",
 		HookTypes: []rolloutv1alpha1.HookType{
 			rolloutv1alpha1.PreCanaryStepHook,
@@ -73,62 +79,55 @@ var (
 		FailurePolicy:    rolloutv1alpha1.Fail,
 	}
 
-	webhook3Error = rolloutv1alpha1.CodeReasonMessage{
+	s.webhook1Error = rolloutv1alpha1.CodeReasonMessage{
+		Code:    rolloutv1alpha1.WebhookReviewCodeError,
+		Reason:  "DoRequestError",
+		Message: `Post "webhook-1.test.url": unsupported protocol scheme ""`,
+	}
+	s.webhook2Error = rolloutv1alpha1.CodeReasonMessage{
+		Code:    rolloutv1alpha1.WebhookReviewCodeError,
+		Reason:  "DoRequestError",
+		Message: `Post "webhook-2.test.url": unsupported protocol scheme ""`,
+	}
+	s.webhook3Error = rolloutv1alpha1.CodeReasonMessage{
 		Code:    rolloutv1alpha1.WebhookReviewCodeError,
 		Reason:  "DoRequestError",
 		Message: `Post "webhook-3.test.url": unsupported protocol scheme ""`,
 	}
-)
-
-type fakeWebhookExecutor struct{}
-
-func (e *fakeWebhookExecutor) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.HookType) (bool, time.Duration, error) {
-	return true, retryImmediately, nil
 }
 
-func (e *fakeWebhookExecutor) Cancel(ctx *ExecutorContext) {
-}
-
-func newFakeWebhookExecutor() *fakeWebhookExecutor {
-	return &fakeWebhookExecutor{}
+func (s *webhookExecutorTestSuite) SetupTest() {
+	s.rollout = testRollout.DeepCopy()
+	s.rolloutRun = testRolloutRun.DeepCopy()
 }
 
 type webhookTestCase struct {
 	name         string
 	getObjects   func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun)
-	assertResult func(assert *assert.Assertions, done bool, result time.Duration, err error)
-	assertStatus func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus)
+	assertResult func(done bool, result time.Duration, err error)
+	assertStatus func(status *rolloutv1alpha1.RolloutRunStatus)
 }
 
-func newTestWebhookExecutor() webhookExecutor {
-	return newWebhookExecutor(2 * time.Second)
-}
-
-func runWebhookTestCases(t *testing.T, hookType rolloutv1alpha1.HookType, tests []webhookTestCase) {
-	exe := newTestWebhookExecutor()
-
+func (s *webhookExecutorTestSuite) runWebhookTestCases(hookType rolloutv1alpha1.HookType, tests []webhookTestCase) {
 	for i := range tests {
 		tt := tests[i]
-		t.Run(tt.name, func(t *testing.T) {
+		s.Run(tt.name, func() {
 			rollout, rolloutRun := tt.getObjects()
 			ctx := createTestExecutorContext(rollout, rolloutRun)
-			done, got, err := exe.Do(ctx, hookType)
-			assert := assert.New(t)
-			tt.assertResult(assert, done, got, err)
-			tt.assertStatus(assert, ctx.NewStatus)
+			done, got, err := s.executor.Do(ctx, hookType)
+			tt.assertResult(done, got, err)
+			tt.assertStatus(ctx.NewStatus)
 		})
 	}
 }
 
-func Test_webhook_Retry(t *testing.T) {
-	exe := newTestWebhookExecutor()
-
+func (s *webhookExecutorTestSuite) Test_Webhook_Retry() {
 	hookType := rolloutv1alpha1.PreCanaryStepHook
-	rollout := testRollout.DeepCopy()
-	rolloutRun := testRolloutRun.DeepCopy()
+	rollout := s.rollout
+	rolloutRun := s.rolloutRun
 
 	rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-		*webhook2.DeepCopy(),
+		*s.webhook2.DeepCopy(),
 	}
 	rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 		Targets: unimportantTargets,
@@ -138,15 +137,15 @@ func Test_webhook_Retry(t *testing.T) {
 	}
 
 	ctx := createTestExecutorContext(rollout, rolloutRun)
-	_, _, err := exe.Do(ctx, hookType)
-	assert.Nil(t, err)
-	assert.NotNil(t, ctx.NewStatus.Error)
-	if assert.Len(t, ctx.NewStatus.CanaryStatus.Webhooks, 1) {
-		assert.Equal(t, rolloutv1alpha1.RolloutWebhookStatus{
+	_, _, err := s.executor.Do(ctx, hookType)
+	s.Require().NoError(err)
+	s.NotNil(ctx.NewStatus.Error)
+	if s.Len(ctx.NewStatus.CanaryStatus.Webhooks, 1) {
+		s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 			State:             rolloutv1alpha1.WebhookOnHold,
 			HookType:          hookType,
-			Name:              webhook2.Name,
-			CodeReasonMessage: webhook2Error,
+			Name:              s.webhook2.Name,
+			CodeReasonMessage: s.webhook2Error,
 			FailureCount:      1,
 		}, ctx.NewStatus.CanaryStatus.Webhooks[0])
 	}
@@ -157,15 +156,15 @@ func Test_webhook_Retry(t *testing.T) {
 	rolloutRun.Status.Error = nil
 	ctx = createTestExecutorContext(rollout, rolloutRun)
 	// do it again
-	_, _, err = exe.Do(ctx, hookType)
-	assert.Nil(t, err)
-	assert.Nil(t, ctx.NewStatus.Error)
-	if assert.Len(t, ctx.NewStatus.CanaryStatus.Webhooks, 1) {
-		assert.Equal(t, rolloutv1alpha1.RolloutWebhookStatus{
+	_, _, err = s.executor.Do(ctx, hookType)
+	s.Require().NoError(err)
+	s.Nil(ctx.NewStatus.Error)
+	if s.Len(ctx.NewStatus.CanaryStatus.Webhooks, 1) {
+		s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 			State:             rolloutv1alpha1.WebhookRunning,
 			HookType:          hookType,
-			Name:              webhook2.Name,
-			CodeReasonMessage: webhook2Error,
+			Name:              s.webhook2.Name,
+			CodeReasonMessage: s.webhook2Error,
 			FailureCount:      1,
 		}, ctx.NewStatus.CanaryStatus.Webhooks[0])
 	}
@@ -177,30 +176,30 @@ func Test_webhook_Retry(t *testing.T) {
 	rolloutRun.Status = *ctx.NewStatus
 	ctx = createTestExecutorContext(rollout, rolloutRun)
 	// get result again
-	_, _, err = exe.Do(ctx, hookType)
-	assert.Nil(t, err)
-	assert.NotNil(t, ctx.NewStatus.Error)
-	if assert.Len(t, ctx.NewStatus.CanaryStatus.Webhooks, 1) {
-		assert.Equal(t, ctx.NewStatus.CanaryStatus.Webhooks[0], rolloutv1alpha1.RolloutWebhookStatus{
+	_, _, err = s.executor.Do(ctx, hookType)
+	s.Require().NoError(err)
+	s.NotNil(ctx.NewStatus.Error)
+	if s.Len(ctx.NewStatus.CanaryStatus.Webhooks, 1) {
+		s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 			State:             rolloutv1alpha1.WebhookOnHold,
 			HookType:          hookType,
-			Name:              webhook2.Name,
-			CodeReasonMessage: webhook2Error,
+			Name:              s.webhook2.Name,
+			CodeReasonMessage: s.webhook2Error,
 			FailureCount:      2,
 		}, ctx.NewStatus.CanaryStatus.Webhooks[0])
 	}
 }
 
-func Test_webhook_PreCanaryHookStep(t *testing.T) {
+func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 	hookType := rolloutv1alpha1.PreCanaryStepHook
 	tests := []webhookTestCase{
 		{
 			name: "webhook 1 has failed but will be ignored, no error in status",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook1.DeepCopy(),
+					*s.webhook1.DeepCopy(),
 				}
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
@@ -210,19 +209,19 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.True(done)
-				assert.Nil(err)
-				assert.Equal(retryImmediately, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.Require().True(done)
+				s.Equal(retryImmediately, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported")
-				if assert.Len(status.CanaryStatus.Webhooks, 1) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported")
+				if s.Len(status.CanaryStatus.Webhooks, 1) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookCompleted,
 						HookType:          hookType,
-						Name:              webhook1.Name,
-						CodeReasonMessage: webhook1Error,
+						Name:              s.webhook1.Name,
+						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
 					}, status.CanaryStatus.Webhooks[0])
 				}
@@ -231,11 +230,11 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 		{
 			name: "webhook 2 has failed, error should be set",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook1.DeepCopy(),
-					*webhook2.DeepCopy(),
+					*s.webhook1.DeepCopy(),
+					*s.webhook2.DeepCopy(),
 				}
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
@@ -246,40 +245,40 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 						{
 							State:             rolloutv1alpha1.WebhookCompleted,
 							HookType:          rolloutv1alpha1.PreCanaryStepHook,
-							Name:              webhook1.Name,
-							CodeReasonMessage: webhook1Error,
+							Name:              s.webhook1.Name,
+							CodeReasonMessage: s.webhook1Error,
 							FailureCount:      1,
 						},
 						{
 							HookType: rolloutv1alpha1.PreCanaryStepHook,
-							Name:     webhook2.Name, // current webhook
+							Name:     s.webhook2.Name, // current webhook
 						},
 					},
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(retryDefault, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.False(done)
+				s.Equal(retryDefault, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				if assert.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set") {
-					assert.EqualValues(webhook2Error, *status.Error)
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				if s.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set") {
+					s.Equal(s.webhook2Error, *status.Error)
 				}
-				if assert.Len(status.CanaryStatus.Webhooks, 2) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+				if s.Len(status.CanaryStatus.Webhooks, 2) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookCompleted,
 						HookType:          rolloutv1alpha1.PreCanaryStepHook,
-						Name:              webhook1.Name,
-						CodeReasonMessage: webhook1Error,
+						Name:              s.webhook1.Name,
+						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
 					}, status.CanaryStatus.Webhooks[0])
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookOnHold,
 						HookType:          rolloutv1alpha1.PreCanaryStepHook,
-						Name:              webhook2.Name,
-						CodeReasonMessage: webhook2Error,
+						Name:              s.webhook2.Name,
+						CodeReasonMessage: s.webhook2Error,
 						FailureCount:      1,
 					}, status.CanaryStatus.Webhooks[1])
 				}
@@ -288,10 +287,10 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 		{
 			name: "webhook 3 failed once, but it is still running, no error",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook3.DeepCopy(),
+					*s.webhook3.DeepCopy(),
 				}
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
@@ -301,19 +300,19 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(retryDefault, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.False(done)
+				s.Equal(retryDefault, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.Nil(status.Error, "This webhook has encountered a failure, but it is still running, no error will be reported")
-				if assert.Len(status.CanaryStatus.Webhooks, 1) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Nil(status.Error, "This webhook has encountered a failure, but it is still running, no error will be reported")
+				if s.Len(status.CanaryStatus.Webhooks, 1) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookRunning,
 						HookType:          rolloutv1alpha1.PreCanaryStepHook,
-						Name:              webhook3.Name,
-						CodeReasonMessage: webhook3Error,
+						Name:              s.webhook3.Name,
+						CodeReasonMessage: s.webhook3Error,
 						FailureCount:      1,
 					}, status.CanaryStatus.Webhooks[0])
 				}
@@ -322,11 +321,11 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 		{
 			name: "webhook 1 finished, then webhook 2 will be started next time",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook1.DeepCopy(),
-					*webhook2.DeepCopy(),
+					*s.webhook1.DeepCopy(),
+					*s.webhook2.DeepCopy(),
 				}
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
@@ -336,24 +335,24 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(retryImmediately, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.False(done)
+				s.Equal(retryImmediately, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.Nil(status.Error)
-				if assert.Len(status.CanaryStatus.Webhooks, 2) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Nil(status.Error)
+				if s.Len(status.CanaryStatus.Webhooks, 2) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookCompleted,
 						HookType:          rolloutv1alpha1.PreCanaryStepHook,
-						Name:              webhook1.Name,
-						CodeReasonMessage: webhook1Error,
+						Name:              s.webhook1.Name,
+						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
 					}, status.CanaryStatus.Webhooks[0])
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						HookType: rolloutv1alpha1.PreCanaryStepHook,
-						Name:     webhook2.Name,
+						Name:     s.webhook2.Name,
 					}, status.CanaryStatus.Webhooks[1])
 				}
 			},
@@ -361,8 +360,8 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 		{
 			name: "no webhooks",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{}
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
@@ -378,31 +377,31 @@ func Test_webhook_PreCanaryHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.True(done)
-				assert.Nil(err)
-				assert.Equal(retryImmediately, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.True(done)
+				s.Equal(retryImmediately, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.Nil(status.Error)
-				assert.Len(status.CanaryStatus.Webhooks, 0)
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Nil(status.Error)
+				s.Empty(status.CanaryStatus.Webhooks)
 			},
 		},
 	}
 
-	runWebhookTestCases(t, hookType, tests)
+	s.runWebhookTestCases(hookType, tests)
 }
 
-func Test_webhook_PostCanaryHookStep(t *testing.T) {
+func (s *webhookExecutorTestSuite) Test_webhook_PostCanaryHookStep() {
 	hookType := rolloutv1alpha1.PostCanaryStepHook
 	tests := []webhookTestCase{
 		{
 			name: "webhook 1 has failed but will be ignored, no error in status",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook1.DeepCopy(),
+					*s.webhook1.DeepCopy(),
 				}
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
@@ -412,19 +411,19 @@ func Test_webhook_PostCanaryHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.True(done)
-				assert.Nil(err)
-				assert.Equal(retryImmediately, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.True(done)
+				s.Equal(retryImmediately, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
-				if assert.Len(status.CanaryStatus.Webhooks, 1) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
+				if s.Len(status.CanaryStatus.Webhooks, 1) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookCompleted,
 						HookType:          rolloutv1alpha1.PostCanaryStepHook,
-						Name:              webhook1.Name,
-						CodeReasonMessage: webhook1Error,
+						Name:              s.webhook1.Name,
+						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
 					}, status.CanaryStatus.Webhooks[0])
 				}
@@ -433,10 +432,10 @@ func Test_webhook_PostCanaryHookStep(t *testing.T) {
 		{
 			name: "webhook 2 has failed, error should be set",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook2.DeepCopy(),
+					*s.webhook2.DeepCopy(),
 				}
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
@@ -446,21 +445,21 @@ func Test_webhook_PostCanaryHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(retryDefault, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.False(done)
+				s.Equal(retryDefault, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				if assert.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {
-					assert.EqualValues(webhook2Error, *status.Error)
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				if s.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {
+					s.Equal(s.webhook2Error, *status.Error)
 				}
-				if assert.Len(status.CanaryStatus.Webhooks, 1) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+				if s.Len(status.CanaryStatus.Webhooks, 1) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookOnHold,
 						HookType:          rolloutv1alpha1.PostCanaryStepHook,
-						Name:              webhook2.Name,
-						CodeReasonMessage: webhook2Error,
+						Name:              s.webhook2.Name,
+						CodeReasonMessage: s.webhook2Error,
 						FailureCount:      1,
 					}, status.CanaryStatus.Webhooks[0])
 				}
@@ -468,19 +467,19 @@ func Test_webhook_PostCanaryHookStep(t *testing.T) {
 		},
 	}
 
-	runWebhookTestCases(t, hookType, tests)
+	s.runWebhookTestCases(hookType, tests)
 }
 
-func Test_webhook_PreBatchHookStep(t *testing.T) {
+func (s *webhookExecutorTestSuite) Test_webhook_PreBatchHookStep() {
 	hookType := rolloutv1alpha1.PreBatchStepHook
 	tests := []webhookTestCase{
 		{
 			name: "webhook 1 failed but ignored, no error in status",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook1.DeepCopy(),
+					*s.webhook1.DeepCopy(),
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: unimportantTargets,
@@ -488,19 +487,19 @@ func Test_webhook_PreBatchHookStep(t *testing.T) {
 
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.True(done)
-				assert.Nil(err)
-				assert.Equal(retryImmediately, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.True(done)
+				s.Equal(retryImmediately, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
-				if assert.Len(status.BatchStatus.Records[0].Webhooks, 1) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
+				if s.Len(status.BatchStatus.Records[0].Webhooks, 1) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookCompleted,
 						HookType:          hookType,
-						Name:              webhook1.Name,
-						CodeReasonMessage: webhook1Error,
+						Name:              s.webhook1.Name,
+						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
 					}, status.BatchStatus.Records[0].Webhooks[0])
 				}
@@ -509,10 +508,10 @@ func Test_webhook_PreBatchHookStep(t *testing.T) {
 		{
 			name: "webhook 2 has failed, error should be set",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook2.DeepCopy(),
+					*s.webhook2.DeepCopy(),
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: unimportantTargets,
@@ -530,21 +529,21 @@ func Test_webhook_PreBatchHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(retryDefault, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.False(done)
+				s.Equal(retryDefault, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				if assert.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {
-					assert.EqualValues(webhook2Error, *status.Error)
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				if s.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {
+					s.Equal(s.webhook2Error, *status.Error)
 				}
-				if assert.Len(status.BatchStatus.Records[0].Webhooks, 1) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+				if s.Len(status.BatchStatus.Records[0].Webhooks, 1) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookOnHold,
 						HookType:          hookType,
-						Name:              webhook2.Name,
-						CodeReasonMessage: webhook2Error,
+						Name:              s.webhook2.Name,
+						CodeReasonMessage: s.webhook2Error,
 						FailureCount:      1,
 					}, status.BatchStatus.Records[0].Webhooks[0])
 				}
@@ -552,19 +551,19 @@ func Test_webhook_PreBatchHookStep(t *testing.T) {
 		},
 	}
 
-	runWebhookTestCases(t, hookType, tests)
+	s.runWebhookTestCases(hookType, tests)
 }
 
-func Test_webhook_PostBatchHookStep(t *testing.T) {
+func (s *webhookExecutorTestSuite) Test_webhook_PostBatchHookStep() {
 	hookType := rolloutv1alpha1.PostBatchStepHook
 	tests := []webhookTestCase{
 		{
 			name: "webhook 1 failed but ignored, no error in status",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook1.DeepCopy(),
+					*s.webhook1.DeepCopy(),
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: unimportantTargets,
@@ -572,19 +571,19 @@ func Test_webhook_PostBatchHookStep(t *testing.T) {
 
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.True(done)
-				assert.Nil(err)
-				assert.Equal(retryImmediately, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.True(done)
+				s.Equal(retryImmediately, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				assert.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
-				if assert.Len(status.BatchStatus.Records[0].Webhooks, 1) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Nil(status.Error, "This webhook has encountered a failure, but it will be ignored, no error will be reported.")
+				if s.Len(status.BatchStatus.Records[0].Webhooks, 1) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookCompleted,
 						HookType:          hookType,
-						Name:              webhook1.Name,
-						CodeReasonMessage: webhook1Error,
+						Name:              s.webhook1.Name,
+						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
 					}, status.BatchStatus.Records[0].Webhooks[0])
 				}
@@ -593,10 +592,10 @@ func Test_webhook_PostBatchHookStep(t *testing.T) {
 		{
 			name: "webhook 2 has failed, error should be set",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
-				rollout := testRollout.DeepCopy()
-				rolloutRun := testRolloutRun.DeepCopy()
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
 				rolloutRun.Spec.Webhooks = []rolloutv1alpha1.RolloutWebhook{
-					*webhook2.DeepCopy(),
+					*s.webhook2.DeepCopy(),
 				}
 				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
 					Targets: unimportantTargets,
@@ -614,21 +613,21 @@ func Test_webhook_PostBatchHookStep(t *testing.T) {
 				}
 				return rollout, rolloutRun
 			},
-			assertResult: func(assert *assert.Assertions, done bool, retry time.Duration, err error) {
-				assert.False(done)
-				assert.Nil(err)
-				assert.Equal(retryDefault, retry)
+			assertResult: func(done bool, retry time.Duration, err error) {
+				s.Require().NoError(err)
+				s.False(done)
+				s.Equal(retryDefault, retry)
 			},
-			assertStatus: func(assert *assert.Assertions, status *rolloutv1alpha1.RolloutRunStatus) {
-				if assert.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {
-					assert.EqualValues(webhook2Error, *status.Error)
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				if s.NotNil(status.Error, "The webhook has failed, and the corresponding error should be set.") {
+					s.Equal(s.webhook2Error, *status.Error)
 				}
-				if assert.Len(status.BatchStatus.Records[0].Webhooks, 1) {
-					assert.Equal(rolloutv1alpha1.RolloutWebhookStatus{
+				if s.Len(status.BatchStatus.Records[0].Webhooks, 1) {
+					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookOnHold,
 						HookType:          hookType,
-						Name:              webhook2.Name,
-						CodeReasonMessage: webhook2Error,
+						Name:              s.webhook2.Name,
+						CodeReasonMessage: s.webhook2Error,
 						FailureCount:      1,
 					}, status.BatchStatus.Records[0].Webhooks[0])
 				}
@@ -636,5 +635,5 @@ func Test_webhook_PostBatchHookStep(t *testing.T) {
 		},
 	}
 
-	runWebhookTestCases(t, hookType, tests)
+	s.runWebhookTestCases(hookType, tests)
 }

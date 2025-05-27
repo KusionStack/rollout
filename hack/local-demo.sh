@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2022 ByteDance and its affiliates.
+# Copyright 2025 KusionStack Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,10 +20,13 @@ ROOT_DIR="${BASE_SOURCE_ROOT}"
 # shellcheck source=/dev/null
 source "${ROOT_DIR}/hack/lib/init.sh"
 
-kind_cluster_name="kusionstack-rollout"
-context_name="kind-${kind_cluster_name}"
+KIND_CONFIG_DIR="${PROJECT_ROOT_DIR}/config/kind"
 
-kind::setup_rollout_cluster "${kind_cluster_name}"
+kind_cluster_name="kusionstack-rollout"
+# context_name="kind-${kind_cluster_name}"
+
+# setup local dev cluster
+kind::ensure_cluster "${kind_cluster_name}"
 
 # build binary and container
 log::status "building binary and container"
@@ -33,9 +36,10 @@ kind load docker-image --name="${kind_cluster_name}" rollout:"${image_tag}"
 
 log::status "starting rollout controller"
 # change image
-cd "${ROLLOUT_CONFIG_CONTROLLER}" || exit
+cd "${KIND_CONFIG_DIR}/controller" || exit
 kustomize edit set image rollout:"${image_tag}"
-kubectl --context "${context_name}" apply -k "${ROLLOUT_CONFIG_CONTROLLER}"
+# run controller
+kind:kustomize_apply "${kind_cluster_name}" "${KIND_CONFIG_DIR}/controller"
 # reset image
 kustomize edit set image rollout:local-up
 cd - || exit
@@ -45,18 +49,18 @@ Congratulations !!
 
 KusionStack Rollout is running in rollout-system now, You can check it by:
 
-    kubectl --context ${context_name} -n rollout-system get deployments
+    kubectl --kubeconfig=$KUBECONFIG -n rollout-system get deployments
 
 The statefulset workloads are created at default namespace:
 
-    kubectl --context ${context_name} -n default get statefulsets
+    kubectl --kubeconfig=$KUBECONFIG -n default get statefulsets
 
 And the rollout demo is created at default namespace:
 
-    kubectl --context ${context_name} -n default get rollouts
+    kubectl --kubeconfig=$KUBECONFIG -n default get rollouts
 
 Then you can update workloads by kustomize:
 
-    kubectl --context ${context_name} apply -k ${ROLLOUT_CONFIG_WORKLOADS_V2}
+    kubectl --kubeconfig=$KUBECONFIG apply -k ${KIND_CONFIG_DIR}/workload/overlays/v2
 
 "

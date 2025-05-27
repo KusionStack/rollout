@@ -16,7 +16,6 @@ package main
 
 import (
 	"math/rand"
-	"os"
 	"time"
 
 	"k8s.io/component-base/logs"
@@ -35,6 +34,6 @@ func main() {
 	defer logs.FlushLogs()
 
 	if err := command.Execute(); err != nil {
-		os.Exit(1)
+		panic(err.Error())
 	}
 }

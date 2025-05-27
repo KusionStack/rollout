@@ -78,7 +78,7 @@ func UpdateOnConflict(ctx context.Context, reader client.Reader, writer UpdateWr
 	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		if !first {
 			// refresh object
-			if innerErr := reader.Get(ctx, key, obj); err != nil {
+			if innerErr := reader.Get(ctx, key, obj); innerErr != nil {
 				return innerErr
 			}
 		} else {

@@ -25,7 +25,7 @@ import (
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
-func newTestProgressingInfo(kind string, name string, id string) rolloutv1alpha1.ProgressingInfo {
+func newTestProgressingInfo(kind, name, id string) rolloutv1alpha1.ProgressingInfo {
 	return rolloutv1alpha1.ProgressingInfo{
 		Kind:        kind,
 		RolloutName: name,
@@ -33,7 +33,7 @@ func newTestProgressingInfo(kind string, name string, id string) rolloutv1alpha1
 	}
 }
 
-func newTestProgressingInfoWithIndex(kind string, name string, id string, index int32) rolloutv1alpha1.ProgressingInfo {
+func newTestProgressingInfoWithIndex(kind, name, id string, index int32) rolloutv1alpha1.ProgressingInfo {
 	return rolloutv1alpha1.ProgressingInfo{
 		Kind:        kind,
 		RolloutName: name,
@@ -99,7 +99,7 @@ func TestMergeSliceByKey(t *testing.T) {
 			got := mergeProgressingInfos(tt.existings, tt.news)
 			sort.Sort(got)
 			sort.Sort(tt.want)
-			assert.EqualValues(t, tt.want, got)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

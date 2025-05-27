@@ -31,9 +31,7 @@ import (
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe"
 )
 
-var (
-	defaultTimeout = 10 * time.Second
-)
+var defaultTimeout = 10 * time.Second
 
 const (
 	internalErrorReason   = "InternalError"
@@ -170,7 +168,7 @@ func testHTTPHandler() http.HandlerFunc {
 		}
 
 		writer.Header().Set("Content-Type", "application/json")
-		var review = &rolloutv1alpha1.RolloutWebhookReview{}
+		review := &rolloutv1alpha1.RolloutWebhookReview{}
 		err = json.Unmarshal(body, &review)
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusBadRequest)

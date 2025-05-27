@@ -22,9 +22,13 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"kusionstack.io/kube-utils/multicluster"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	"kusionstack.io/kube-utils/multicluster/clusterprovider"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -32,10 +36,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	"kusionstack.io/kube-utils/multicluster"
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
-	"kusionstack.io/kube-utils/multicluster/clusterprovider"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/registry"
@@ -132,7 +132,7 @@ var _ = BeforeSuite(func() {
 
 	go func() {
 		mgr.Run(ctx)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	}()
 
 	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)

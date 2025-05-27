@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2022 ByteDance and its affiliates.
+# Copyright 2025 KusionStack Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,17 +20,35 @@ ROOT_DIR="${BASE_SOURCE_ROOT}"
 # shellcheck source=/dev/null
 source "${ROOT_DIR}/hack/lib/init.sh"
 
+ROLLOUT_CONFIG_CRD="${PROJECT_ROOT_DIR}/config/crd"
+KIND_CONFIG_DIR="${PROJECT_ROOT_DIR}/config/kind"
+
 log::status "compiling rollout binary"
 # build binary and container
 make build
 
 kind_cluster_name="rollout-dev"
 
-kind::setup_rollout_cluster "${kind_cluster_name}"
+# setup local dev cluster
+kind::ensure_cluster "${kind_cluster_name}"
 
-kind::setup_rollout_workloads "${kind_cluster_name}"
+# deploy kuperator by helm
+if [[ -z $(helm list --deployed --filter "kuperator" --no-headers) ]]; then
+    helm repo add kusionstack https://kusionstack.github.io/charts
+    helm repo update kusionstack
+    helm install kuperator kusionstack/kuperator
+fi
 
-kind::setup_rollout_webhook "${kind_cluster_name}" "outcluster"
+# apply namespace and cluster rolebinding
+kind::kustomize_apply "${kind_cluster_name}" "${KIND_CONFIG_DIR}/prerequisite"
+# apply crd
+kind::apply_yamls_in_dir "${kind_cluster_name}" "${ROLLOUT_CONFIG_CRD}/bases"
+# delete webhook firstly
+kind::kustomize_delete "${kind_cluster_name}" "${KIND_CONFIG_DIR}/webhook/outcluster"
+# apply workload
+kind::kustomize_apply "${kind_cluster_name}" "${KIND_CONFIG_DIR}/workload/overlays/v1"
+# apply webhook
+kind::kustomize_apply "${kind_cluster_name}" "${KIND_CONFIG_DIR}/webhook/outcluster"
 
 log::status "starting manager"
 

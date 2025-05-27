@@ -24,7 +24,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 )
@@ -89,7 +88,7 @@ func (c *accessorImpl) Scale(object client.Object, replicas int32) error {
 	return nil
 }
 
-func (c *accessorImpl) ApplyCanaryPatch(object client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error {
+func (c *accessorImpl) ApplyCanaryPatch(object client.Object, podTemplatePatch *rolloutv1alpha1.MetadataPatch) error {
 	obj, err := checkObj(object)
 	if err != nil {
 		return err

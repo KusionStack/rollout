@@ -18,9 +18,8 @@ package registry
 
 import (
 	"context"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,10 +91,10 @@ func newTestWorkloadRegistry() WorkloadRegistry {
 	r := NewWorkloadRegistry()
 	r.Register(collaset.GVK, collaset.New())
 	r.Register(statefulset.GVK, statefulset.New())
-	// we add a fake workload accessor for testing
+	// we add a fakeWA workload accessor for testing
 	// The workload resource owner chain is Deployment -> ReplicaSet -> Pod
-	fake := newFakeWorkloadAccessor(deploymentGVK, replicasetGVK)
-	r.Register(fake.GroupVersionKind(), fake)
+	fakeWA := newFakeWorkloadAccessor(deploymentGVK, replicasetGVK)
+	r.Register(fakeWA.GroupVersionKind(), fakeWA)
 	return r
 }
 
@@ -143,12 +142,22 @@ func newFakeClient(objs ...client.Object) client.Client {
 	return clientbuilder.Build()
 }
 
-func Test_registryImpl_GetControllerOf(t *testing.T) {
+type workloadRegistryTestSuite struct {
+	suite.Suite
+}
+
+func (s *workloadRegistryTestSuite) SetupSuite() {
 	utilruntime.Must(operatingv1alpha1.AddToScheme(scheme.Scheme))
+}
+
+func (s *workloadRegistryTestSuite) SetupTest() {
+}
+
+func (s *workloadRegistryTestSuite) Test_GetControllerOf() {
 	tests := []struct {
 		name         string
 		getObject    func() (*corev1.Pod, client.Client)
-		assertResult func(assert assert.Assertions, in *WorkloadAccessor, err error)
+		assertResult func(in *WorkloadAccessor, err error)
 	}{
 		{
 			name: "orphan pod",
@@ -157,9 +166,9 @@ func Test_registryImpl_GetControllerOf(t *testing.T) {
 				c := newFakeClient(pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
-				assert.Nil(in)
-				assert.NoError(err)
+			assertResult: func(in *WorkloadAccessor, err error) {
+				s.Nil(in)
+				s.Require().NoError(err)
 			},
 		},
 		{
@@ -170,14 +179,14 @@ func Test_registryImpl_GetControllerOf(t *testing.T) {
 				c := newFakeClient(obj, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
-				if assert.NotNil(in) {
-					assert.NotNil(in.Object)
-					if assert.NotNil(in.Accessor) {
-						assert.Equal(in.Accessor.GroupVersionKind().Kind, "StatefulSet")
+			assertResult: func(in *WorkloadAccessor, err error) {
+				if s.NotNil(in) {
+					s.NotNil(in.Object)
+					if s.NotNil(in.Accessor) {
+						s.Equal("StatefulSet", in.Accessor.GroupVersionKind().Kind)
 					}
 				}
-				assert.NoError(err)
+				s.Require().NoError(err)
 			},
 		},
 		{
@@ -188,14 +197,14 @@ func Test_registryImpl_GetControllerOf(t *testing.T) {
 				c := newFakeClient(obj, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
-				if assert.NotNil(in) {
-					assert.NotNil(in.Object)
-					if assert.NotNil(in.Accessor) {
-						assert.Equal(in.Accessor.GroupVersionKind().Kind, "CollaSet")
+			assertResult: func(in *WorkloadAccessor, err error) {
+				if s.NotNil(in) {
+					s.NotNil(in.Object)
+					if s.NotNil(in.Accessor) {
+						s.Equal("CollaSet", in.Accessor.GroupVersionKind().Kind)
 					}
 				}
-				assert.NoError(err)
+				s.Require().NoError(err)
 			},
 		},
 		{
@@ -207,14 +216,14 @@ func Test_registryImpl_GetControllerOf(t *testing.T) {
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
-				if assert.NotNil(in) {
-					assert.NotNil(in.Object)
-					if assert.NotNil(in.Accessor) {
-						assert.Equal(in.Accessor.GroupVersionKind().Kind, "StatefulSet")
+			assertResult: func(in *WorkloadAccessor, err error) {
+				if s.NotNil(in) {
+					s.NotNil(in.Object)
+					if s.NotNil(in.Accessor) {
+						s.Equal("StatefulSet", in.Accessor.GroupVersionKind().Kind)
 					}
 				}
-				assert.NoError(err)
+				s.Require().NoError(err)
 			},
 		},
 		{
@@ -226,14 +235,14 @@ func Test_registryImpl_GetControllerOf(t *testing.T) {
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
-				if assert.NotNil(in) {
-					assert.NotNil(in.Object)
-					if assert.NotNil(in.Accessor) {
-						assert.Equal(in.Accessor.GroupVersionKind().Kind, "Deployment")
+			assertResult: func(in *WorkloadAccessor, err error) {
+				if s.NotNil(in) {
+					s.NotNil(in.Object)
+					if s.NotNil(in.Accessor) {
+						s.Equal("Deployment", in.Accessor.GroupVersionKind().Kind)
 					}
 				}
-				assert.NoError(err)
+				s.Require().NoError(err)
 			},
 		},
 		{
@@ -245,14 +254,14 @@ func Test_registryImpl_GetControllerOf(t *testing.T) {
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
-				if assert.NotNil(in) {
-					assert.NotNil(in.Object)
-					if assert.NotNil(in.Accessor) {
-						assert.Equal(in.Accessor.GroupVersionKind().Kind, "StatefulSet")
+			assertResult: func(in *WorkloadAccessor, err error) {
+				if s.NotNil(in) {
+					s.NotNil(in.Object)
+					if s.NotNil(in.Accessor) {
+						s.Equal("StatefulSet", in.Accessor.GroupVersionKind().Kind)
 					}
 				}
-				assert.NoError(err)
+				s.Require().NoError(err)
 			},
 		},
 		{
@@ -264,30 +273,30 @@ func Test_registryImpl_GetControllerOf(t *testing.T) {
 				c := newFakeClient(obj, dependent, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in *WorkloadAccessor, err error) {
-				assert.Nil(in)
-				assert.NoError(err)
+			assertResult: func(in *WorkloadAccessor, err error) {
+				s.Nil(in)
+				s.Require().NoError(err)
 			},
 		},
 	}
 
 	for i := range tests {
 		tt := tests[i]
-		t.Run(tt.name, func(t *testing.T) {
+		s.Run(tt.name, func() {
 			r := newTestWorkloadRegistry()
 			pod, c := tt.getObject()
 			got, err := r.GetControllerOf(context.Background(), c, pod)
-			tt.assertResult(*assert.New(t), got, err)
+			tt.assertResult(got, err)
 		})
 	}
 }
 
-func Test_registryImpl_GetOwnersOf(t *testing.T) {
+func (s *workloadRegistryTestSuite) Test_GetOwnersOf() {
 	utilruntime.Must(operatingv1alpha1.AddToScheme(scheme.Scheme))
 	tests := []struct {
 		name         string
 		getObject    func() (*corev1.Pod, client.Client)
-		assertResult func(assert assert.Assertions, in []*WorkloadAccessor, err error)
+		assertResult func(in []*WorkloadAccessor, err error)
 	}{
 		{
 			name: "orphan pod",
@@ -296,9 +305,9 @@ func Test_registryImpl_GetOwnersOf(t *testing.T) {
 				c := newFakeClient(pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in []*WorkloadAccessor, err error) {
-				assert.Len(in, 0)
-				assert.NoError(err)
+			assertResult: func(in []*WorkloadAccessor, err error) {
+				s.Empty(in)
+				s.Require().NoError(err)
 			},
 		},
 		{
@@ -310,29 +319,29 @@ func Test_registryImpl_GetOwnersOf(t *testing.T) {
 				c := newFakeClient(owner1, owner2, pod)
 				return pod.(*corev1.Pod), c
 			},
-			assertResult: func(assert assert.Assertions, in []*WorkloadAccessor, err error) {
-				if assert.Len(in, 2) {
-					assert.NotNil(in[0].Object)
-					if assert.NotNil(in[0].Accessor) {
-						assert.Equal(in[0].Accessor.GroupVersionKind().Kind, "StatefulSet")
+			assertResult: func(in []*WorkloadAccessor, err error) {
+				if s.Len(in, 2) {
+					s.NotNil(in[0].Object)
+					if s.NotNil(in[0].Accessor) {
+						s.Equal("StatefulSet", in[0].Accessor.GroupVersionKind().Kind)
 					}
-					assert.NotNil(in[1].Object)
-					if assert.NotNil(in[1].Accessor) {
-						assert.Equal(in[1].Accessor.GroupVersionKind().Kind, "CollaSet")
+					s.NotNil(in[1].Object)
+					if s.NotNil(in[1].Accessor) {
+						s.Equal("CollaSet", in[1].Accessor.GroupVersionKind().Kind)
 					}
 				}
-				assert.NoError(err)
+				s.Require().NoError(err)
 			},
 		},
 	}
 
 	for i := range tests {
 		tt := tests[i]
-		t.Run(tt.name, func(t *testing.T) {
+		s.Run(tt.name, func() {
 			r := newTestWorkloadRegistry()
 			pod, c := tt.getObject()
 			got, err := r.GetOwnersOf(context.Background(), c, pod)
-			tt.assertResult(*assert.New(t), got, err)
+			tt.assertResult(got, err)
 		})
 	}
 }

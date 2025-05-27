@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"os"
 
+	_ "sigs.k8s.io/controller-runtime/pkg/client/config" // init kubeconfig flag
+
 	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -26,7 +28,6 @@ import (
 	"k8s.io/component-base/term"
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog/v2"
-	_ "sigs.k8s.io/controller-runtime/pkg/client/config" // init kubeconfig flag
 )
 
 func AddFlagsAndUsage(cmd *cobra.Command, namedFlagSets *cliflag.NamedFlagSets) {
