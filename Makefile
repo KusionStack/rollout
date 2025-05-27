@@ -39,13 +39,17 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	@$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+manifests:  ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+	@bash hack/make-rules/update-manifests.sh
 	@rm -rf config/crd/bases/_.yaml
 
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	@$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+generate:  ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	@bash hack/make-rules/update-codegen.sh
+
+.PHONY: fmt
+fmt: golangci
+	$(GOLANGCI) fmt
 
 .PHONY: lint
 lint: golangci
@@ -125,58 +129,20 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
-$(LOCALBIN):
-	mkdir -p $(LOCALBIN)
 
 ## Tool Binaries
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
-CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI ?= $(LOCALBIN)/golangci-lint
-GINKGO ?= $(LOCALBIN)/ginkgo
-HELM ?= $(LOCALBIN)/helm
 
-## Tool Versions
-KUSTOMIZE_VERSION ?= v5.3.0
-CONTROLLER_TOOLS_VERSION ?= v0.14.0
-GINKGO_VERSION ?= 1.16.5
-HELM_VERSION ?= 3.13.1
-GOLANGCI_VERSION ?= v1.64.8
-
-KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
-$(KUSTOMIZE): $(LOCALBIN)
-	@if test -x $(LOCALBIN)/kustomize && ! $(LOCALBIN)/kustomize version | grep -q $(KUSTOMIZE_VERSION); then \
-		echo "$(LOCALBIN)/kustomize version is not expected $(KUSTOMIZE_VERSION). Removing it before installing."; \
-		rm -rf $(LOCALBIN)/kustomize; \
-	fi
-	test -s $(LOCALBIN)/kustomize || { curl -Ss $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN); }
-
-.PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
-$(CONTROLLER_GEN): $(LOCALBIN)
-	@test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+kustomize:
+	@bash hack/make-rules/install-go-tools.sh kustomize
 
 .PHONY: envtest
-envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
-$(ENVTEST): $(LOCALBIN)
-	@test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+envtest: 
+	@bash hack/make-rules/install-go-tools.sh setup-envtest
 
 .PHONY: golangci
-golangci: $(GOLANGCI)
-$(GOLANGCI): $(LOCALBIN)
-	@test -s $(LOCALBIN)/golangci-lint || GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_VERSION)
-
-.PHONY: ginkgo
-ginkgo: $(GINKGO) ## Download ginkgo locally if necessary. If wrong version is installed, it will be overwritten.
-$(GINKGO): $(LOCALBIN)
-	test -s $(LOCALBIN)/ginkgo && $(LOCALBIN)/ginkgo version | grep -q $(GINKGO_VERSION) || \
-	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/ginkgo@v$(GINKGO_VERSION)
-
-.PHONY: helm
-helm: $(HELM) ## Download helm locally if necessary. If wrong version is installed, it will be overwritten.
-$(HELM): $(LOCALBIN)
-	test -s $(LOCALBIN)/helm && $(LOCALBIN)/helm version | grep -q $(HELM_VERSION) || \
-	GOBIN=$(LOCALBIN) go install helm.sh/helm/v3/cmd/helm@v$(HELM_VERSION)
+golangci: 
+	@bash hack/make-rules/install-go-tools.sh golangci-lint

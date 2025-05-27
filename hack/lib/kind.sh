@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Copyright 2024 The KusionStack Authors
+# Copyright 2025 The KusionStack Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-KIND_NODE_IMAGE="kindest/node:v1.22.17"
+KIND_NODE_IMAGE=${KIND_NODE_IMAGE:-"kindest/node:v1.22.17"}
 
 kind::ensure_cluster() {
     local kind_cluster_name=${1}
@@ -24,48 +24,39 @@ kind::ensure_cluster() {
     fi
 
     kubeconfig="${HOME}/.kube/kind-${kind_cluster_name}.kubeconfig"
-    if [[ ! -f "${kubeconfig}" ]]; then
-        log::status "write kubeconfig to ${kubeconfig}"
-        mkdir -p "$(dirname $kubeconfig)"
-        kind get kubeconfig --name "${kind_cluster_name}" >"${kubeconfig}"
-    fi
+    log::status "write kubeconfig to ${kubeconfig}"
+    mkdir -p "$(dirname $kubeconfig)"
+    kind get kubeconfig --name "${kind_cluster_name}" >"${kubeconfig}"
 
     export KUBECONFIG="${kubeconfig}"
 }
 
-kind::setup_rollout_cluster() {
+kind::kustomize_apply() {
     local _kind_cluster_name=${1}
+    local _kustomize_path=${2}
+    # ensure cluster
+    kind::ensure_cluster "${_kind_cluster_name}"
+    log::status "apply kustomize configuration on ${_kustomize_path}"
+    kubectl apply -k "${_kustomize_path}"
+}
+
+kind::kustomize_delete() {
+    local _kind_cluster_name=${1}
+    local _kustomize_path=${2}
+    # ensure cluster
+    kind::ensure_cluster "${_kind_cluster_name}"
+    log::status "delete kustomize configuration on ${_kustomize_path}"
+    kubectl delete --ignore-not-found -k "${_kustomize_path}"
+}
+
+kind::apply_yamls_in_dir() {
+    local _kind_cluster_name=${1}
+    local _dir=${2}
     # ensure cluster
     kind::ensure_cluster "${_kind_cluster_name}"
     # apply crds
-    log::status "applying crds..."
-    kubectl apply -k "${ROLLOUT_CONFIG_CRD}"
-    # create namespace clusterrolebinding
-    log::status "apply namespace clusterrolebinding"
-    kubectl apply -k "${ROLLOUT_CONFIG_PREREQUISITE}"
-
-    # deploy kuperator by helm
-    if [[ -z $(helm list --deployed --filter "kuperator" --no-headers) ]]; then
-        helm repo add kusionstack https://kusionstack.github.io/charts
-        helm repo update kusionstack
-        helm install kuperator kusionstack/kuperator 
-    fi
-}
-
-kind::setup_rollout_webhook() {
-    local _kind_cluster_name=${1}
-    local _overlay=${2}
-    # ensure cluster
-    kind::ensure_cluster "${_kind_cluster_name}"
-    log::status "apply rollout webhook configuration"
-    kubectl apply -k "${ROLLOUT_CONFIG_WEBHOOK}/${_overlay}"
-}
-
-kind::setup_rollout_workloads() {
-    local _kind_cluster_name=${1}
-    # ensure cluster
-    kind::ensure_cluster "${_kind_cluster_name}"
-    # create rollout and workloads
-    log::status "apply rollout and workloads v1"
-    kubectl apply -k "${ROLLOUT_CONFIG_WORKLOADS_V1}"
+    log::status "apply all yamls in dir ${_dir}"
+    for file in ${_dir}/*.yaml; do
+        kubectl apply -f "${file}"
+    done
 }
