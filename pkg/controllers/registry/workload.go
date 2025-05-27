@@ -92,12 +92,12 @@ func (r *registryImpl) GetOwnersOf(ctx context.Context, c client.Client, obj cli
 	result := []*WorkloadAccessor{}
 
 	for _, owner := range owners {
-		workload, err := r.getOwnerWorkload(ctx, c, obj, owner)
+		w, err := r.getOwnerWorkload(ctx, c, obj, owner)
 		if err != nil {
 			return nil, err
 		}
-		if workload != nil {
-			result = append(result, workload)
+		if w != nil {
+			result = append(result, w)
 		}
 	}
 	return result, nil

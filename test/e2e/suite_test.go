@@ -22,11 +22,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	corev1 "k8s.io/api/core/v1"
 	crdv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
@@ -41,7 +41,6 @@ import (
 	"kusionstack.io/rollout/pkg/controllers/initializers"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/test/e2e/controller"
-	//+kubebuilder:scaffold:imports
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -94,11 +93,11 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = clientgoscheme.AddToScheme(scheme.Scheme)
-	Expect(err).Should(BeNil())
+	err = scheme.AddToScheme(scheme.Scheme)
+	Expect(err).ShouldNot(HaveOccurred())
 
 	err = crdv1.AddToScheme(scheme.Scheme)
-	Expect(err).Should(BeNil())
+	Expect(err).ShouldNot(HaveOccurred())
 
 	err = rolloutv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -155,7 +154,7 @@ func ensureNamespace(c client.Client) error {
 	return err
 }
 
-func GetNamespacedName(name string, namespace string) client.ObjectKey {
+func GetNamespacedName(name, namespace string) client.ObjectKey {
 	return client.ObjectKey{
 		Namespace: namespace,
 		Name:      name,

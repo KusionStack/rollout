@@ -108,7 +108,6 @@ func (r *FakeStatefulSetController) Reconcile(ctx context.Context, req ctrl.Requ
 		} else {
 			newStatus.UpdatedReplicas = newStatus.Replicas
 		}
-		// newStatus.CurrentReplicas = newStatus.Replicas - newStatus.UpdatedReplicas
 	}
 
 	if newStatus.UpdatedReplicas == newStatus.Replicas {

@@ -22,11 +22,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var _ handler.EventHandler = &EnqueueTP{}
-var _ handler.EventHandler = &EnqueueTPByBR{}
+var (
+	_ handler.EventHandler = &EnqueueTP{}
+	_ handler.EventHandler = &EnqueueTPByBR{}
+)
 
-type EnqueueTP struct {
-}
+type EnqueueTP struct{}
 
 func (e *EnqueueTP) Create(createEvent event.CreateEvent, q workqueue.RateLimitingInterface) {
 	if createEvent.Object == nil {

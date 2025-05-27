@@ -17,15 +17,13 @@
 package statefulset
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
-func newTestApplyPartitionObject(total int32, updated int32) *appsv1.StatefulSet {
+func newTestApplyPartitionObject(total, updated int32) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: ptr.To(total),
@@ -39,24 +37,26 @@ func newTestApplyPartitionObject(total int32, updated int32) *appsv1.StatefulSet
 	}
 }
 
-func Test_releaseControl_ApplyPartition(t *testing.T) {
+type releaseControlTestSuite struct {
+	suite.Suite
+}
+
+func (s *releaseControlTestSuite) Test_ApplyPartition() {
 	tests := []struct {
 		name        string
 		object      *appsv1.StatefulSet
 		input       intstr.IntOrString
-		checkResult func(assert assert.Assertions, object *appsv1.StatefulSet, err error)
+		checkResult func(object *appsv1.StatefulSet, err error)
 	}{
 		{
 			name:   "total 10, want to update 1",
 			object: newTestApplyPartitionObject(10, 0),
 			input:  intstr.FromInt(1),
-			checkResult: func(assert assert.Assertions, object *appsv1.StatefulSet, err error) {
-				assert.Nil(err)
-				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate)
-				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate.Partition)
-				partition := object.Spec.UpdateStrategy.RollingUpdate.Partition
-				if assert.NotNil(partition) {
-					assert.EqualValues(9, *partition)
+			checkResult: func(object *appsv1.StatefulSet, err error) {
+				s.Require().NoError(err)
+				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
+				if s.NotNil(object.Spec.UpdateStrategy.RollingUpdate.Partition) {
+					s.EqualValues(9, *object.Spec.UpdateStrategy.RollingUpdate.Partition)
 				}
 			},
 		},
@@ -64,13 +64,11 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 			name:   "total 10, want to update 60%",
 			object: newTestApplyPartitionObject(10, 0),
 			input:  intstr.FromString("60%"),
-			checkResult: func(assert assert.Assertions, object *appsv1.StatefulSet, err error) {
-				assert.Nil(err)
-				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate)
-				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate.Partition)
-				partition := object.Spec.UpdateStrategy.RollingUpdate.Partition
-				if assert.NotNil(partition) {
-					assert.EqualValues(4, *partition)
+			checkResult: func(object *appsv1.StatefulSet, err error) {
+				s.Require().NoError(err)
+				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
+				if s.NotNil(object.Spec.UpdateStrategy.RollingUpdate.Partition) {
+					s.EqualValues(4, *object.Spec.UpdateStrategy.RollingUpdate.Partition)
 				}
 			},
 		},
@@ -78,13 +76,11 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 			name:   "total 10, updated 9, want to update 50%",
 			object: newTestApplyPartitionObject(10, 9),
 			input:  intstr.FromString("50%"),
-			checkResult: func(assert assert.Assertions, object *appsv1.StatefulSet, err error) {
-				assert.Nil(err)
-				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate)
-				assert.NotNil(object.Spec.UpdateStrategy.RollingUpdate.Partition)
-				partition := object.Spec.UpdateStrategy.RollingUpdate.Partition
-				if assert.NotNil(partition) {
-					assert.EqualValues(1, *partition)
+			checkResult: func(object *appsv1.StatefulSet, err error) {
+				s.Require().NoError(err)
+				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
+				if s.NotNil(object.Spec.UpdateStrategy.RollingUpdate.Partition) {
+					s.EqualValues(1, *object.Spec.UpdateStrategy.RollingUpdate.Partition)
 				}
 			},
 		},
@@ -92,18 +88,18 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 			name:   "total 10, want to update 100%",
 			object: newTestApplyPartitionObject(10, 0),
 			input:  intstr.FromString("100%"),
-			checkResult: func(assert assert.Assertions, object *appsv1.StatefulSet, err error) {
-				assert.Nil(err)
-				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
+			checkResult: func(object *appsv1.StatefulSet, err error) {
+				s.Require().NoError(err)
+				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)
 			},
 		},
 		{
 			name:   "total 10, want to update 11",
 			object: newTestApplyPartitionObject(10, 0),
 			input:  intstr.FromInt(11),
-			checkResult: func(assert assert.Assertions, object *appsv1.StatefulSet, err error) {
-				assert.Nil(err)
-				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
+			checkResult: func(object *appsv1.StatefulSet, err error) {
+				s.Require().NoError(err)
+				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)
 			},
 		},
 		{
@@ -117,18 +113,18 @@ func Test_releaseControl_ApplyPartition(t *testing.T) {
 				},
 			},
 			input: intstr.FromInt(10),
-			checkResult: func(assert assert.Assertions, object *appsv1.StatefulSet, err error) {
-				assert.Nil(err)
-				assert.Nil(object.Spec.UpdateStrategy.RollingUpdate)
+			checkResult: func(object *appsv1.StatefulSet, err error) {
+				s.Require().NoError(err)
+				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)
 			},
 		},
 	}
 	for i := range tests {
 		tt := tests[i]
-		t.Run(tt.name, func(t *testing.T) {
+		s.Run(tt.name, func() {
 			c := &accessorImpl{}
 			err := c.ApplyPartition(tt.object, tt.input)
-			tt.checkResult(*assert.New(t), tt.object, err)
+			tt.checkResult(tt.object, err)
 		})
 	}
 }

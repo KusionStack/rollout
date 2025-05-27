@@ -93,7 +93,7 @@ func (v *Validator) ValidateDelete(ctx context.Context, obj runtime.Object) erro
 }
 
 // ValidateUpdate implements admission.CustomValidator.
-func (v *Validator) ValidateUpdate(ctx context.Context, oldObj runtime.Object, newObj runtime.Object) error {
+func (v *Validator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
 	var errs field.ErrorList
 	switch newV := newObj.(type) {
 	case *rolloutv1alpha1.Rollout:

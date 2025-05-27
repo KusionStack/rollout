@@ -22,8 +22,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,7 +41,7 @@ var _ = Describe("StatefulSet", func() {
 	ctx := context.Background()
 
 	var ts *httptest.Server
-	sts := &v1.StatefulSet{}
+	sts := &appsv1.StatefulSet{}
 	rollout := &rolloutv1alpha1.Rollout{}
 	rolloutRun := &rolloutv1alpha1.RolloutRun{}
 	var strategy *rolloutv1alpha1.RolloutStrategy

@@ -19,7 +19,6 @@ package options
 import (
 	"flag"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2/klogr"
@@ -58,7 +57,7 @@ func (o *LogOptions) Validate() []error {
 }
 
 func (o *LogOptions) BindFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.Logger, "logger", o.Logger, "The logger provider, Options are:\n"+strings.Join([]string{"zap", "klog"}, "\n"))
+	fs.StringVar(&o.Logger, "logger", o.Logger, "The logger provider, Options are:\nzap\nklog")
 
 	// bind zap flags
 	zapFs := flag.NewFlagSet("zap", flag.ExitOnError)

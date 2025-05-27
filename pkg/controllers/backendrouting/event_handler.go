@@ -24,8 +24,7 @@ import (
 
 var _ handler.EventHandler = &EnqueueBR{}
 
-type EnqueueBR struct {
-}
+type EnqueueBR struct{}
 
 func (e *EnqueueBR) Create(createEvent event.CreateEvent, q workqueue.RateLimitingInterface) {
 	if createEvent.Object == nil {

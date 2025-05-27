@@ -28,13 +28,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
@@ -46,22 +44,22 @@ type BatchReleaseControl struct {
 	client   client.Client
 }
 
-func NewBatchReleaseControl(impl workload.Accessor, client client.Client) *BatchReleaseControl {
+func NewBatchReleaseControl(impl workload.Accessor, c client.Client) *BatchReleaseControl {
 	return &BatchReleaseControl{
 		workload: impl,
 		control:  impl.(workload.BatchReleaseControl),
-		client:   client,
+		client:   c,
 	}
 }
 
-func (c *BatchReleaseControl) Initialize(workload *workload.Info, ownerKind, ownerName, rolloutRun string, batchIndex int32) error {
+func (c *BatchReleaseControl) Initialize(info *workload.Info, ownerKind, ownerName, rolloutRun string, batchIndex int32) error {
 	// pre-check
-	if err := c.control.BatchPreCheck(workload.Object); err != nil {
+	if err := c.control.BatchPreCheck(info.Object); err != nil {
 		return TerminalError(err)
 	}
 
 	// add progressing annotation
-	info := rolloutv1alpha1.ProgressingInfo{
+	pInfo := rolloutv1alpha1.ProgressingInfo{
 		Kind:        ownerKind,
 		RolloutName: ownerName,
 		RolloutID:   rolloutRun,
@@ -69,9 +67,9 @@ func (c *BatchReleaseControl) Initialize(workload *workload.Info, ownerKind, own
 			CurrentBatchIndex: batchIndex,
 		},
 	}
-	progress, _ := json.Marshal(info)
+	progress, _ := json.Marshal(pInfo)
 
-	_, err := workload.UpdateOnConflict(context.TODO(), c.client, func(obj client.Object) error {
+	_, err := info.UpdateOnConflict(context.TODO(), c.client, func(obj client.Object) error {
 		utils.MutateAnnotations(obj, func(annotations map[string]string) {
 			annotations[rolloutapi.AnnoRolloutProgressingInfo] = string(progress)
 		})
@@ -80,17 +78,17 @@ func (c *BatchReleaseControl) Initialize(workload *workload.Info, ownerKind, own
 	return err
 }
 
-func (c *BatchReleaseControl) UpdatePartition(workload *workload.Info, expectedUpdated intstr.IntOrString) (bool, error) {
-	ctx := clusterinfo.WithCluster(context.Background(), workload.ClusterName)
-	obj := workload.Object
+func (c *BatchReleaseControl) UpdatePartition(info *workload.Info, expectedUpdated intstr.IntOrString) (bool, error) {
+	ctx := clusterinfo.WithCluster(context.Background(), info.ClusterName)
+	obj := info.Object
 	return utils.UpdateOnConflict(ctx, c.client, c.client, obj, func() error {
 		return c.control.ApplyPartition(obj, expectedUpdated)
 	})
 }
 
-func (c *BatchReleaseControl) Finalize(ctx context.Context, workload *workload.Info) error {
+func (c *BatchReleaseControl) Finalize(ctx context.Context, info *workload.Info) error {
 	// delete progressing annotation
-	changed, err := workload.UpdateOnConflict(context.TODO(), c.client, func(obj client.Object) error {
+	changed, err := info.UpdateOnConflict(context.TODO(), c.client, func(obj client.Object) error {
 		utils.MutateAnnotations(obj, func(annotations map[string]string) {
 			delete(annotations, rolloutapi.AnnoRolloutProgressingInfo)
 		})
@@ -99,7 +97,7 @@ func (c *BatchReleaseControl) Finalize(ctx context.Context, workload *workload.I
 
 	if changed {
 		logger := logr.FromContextOrDiscard(ctx)
-		logger.Info("delete progressing info on workload", "name", workload.Name, "gvk", workload.GroupVersionKind.String())
+		logger.Info("delete progressing info on workload", "name", info.Name, "gvk", info.GroupVersionKind.String())
 	}
 	return err
 }
@@ -110,11 +108,11 @@ type CanaryReleaseControl struct {
 	client   client.Client
 }
 
-func NewCanaryReleaseControl(impl workload.Accessor, client client.Client) *CanaryReleaseControl {
+func NewCanaryReleaseControl(impl workload.Accessor, c client.Client) *CanaryReleaseControl {
 	return &CanaryReleaseControl{
 		workload: impl,
 		control:  impl.(workload.CanaryReleaseControl),
-		client:   client,
+		client:   c,
 	}
 }
 
@@ -173,7 +171,7 @@ func (c *CanaryReleaseControl) Finalize(stable *workload.Info) error {
 	return err
 }
 
-func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workload.Info, replicas intstr.IntOrString, podTemplatePatch *v1alpha1.MetadataPatch) (controllerutil.OperationResult, *workload.Info, error) {
+func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workload.Info, replicas intstr.IntOrString, podTemplatePatch *rolloutv1alpha1.MetadataPatch) (controllerutil.OperationResult, *workload.Info, error) {
 	canaryObj, found, err := c.canaryObject(stable)
 	if err != nil {
 		return controllerutil.OperationResultNone, nil, err

@@ -25,14 +25,14 @@ func InitFunc(mgr manager.Manager) (bool, error) {
 	return initFunc(mgr, registry.Workloads)
 }
 
-func InitFuncWith(registry registry.WorkloadRegistry) initializer.InitFunc {
+func InitFuncWith(r registry.WorkloadRegistry) initializer.InitFunc {
 	return func(m manager.Manager) (enabled bool, err error) {
-		return initFunc(m, registry)
+		return initFunc(m, r)
 	}
 }
 
-func initFunc(mgr manager.Manager, registry registry.WorkloadRegistry) (bool, error) {
-	err := NewReconciler(mgr, registry).SetupWithManager(mgr)
+func initFunc(mgr manager.Manager, r registry.WorkloadRegistry) (bool, error) {
+	err := NewReconciler(mgr, r).SetupWithManager(mgr)
 	if err != nil {
 		return false, err
 	}

@@ -138,13 +138,6 @@ func (r *ControllerExpectations) SatisfiedExpectations(controllerKey string) boo
 	return true
 }
 
-// TODO: Extend ExpirationCache to support explicit expiration.
-// TODO: Make this possible to disable in tests.
-// TODO: Support injection of clock.
-func (exp *ControlleeExpectations) isExpired() bool {
-	return clock.RealClock{}.Since(exp.timestamp) > ExpectationsTimeout
-}
-
 // SetExpectations registers new expectations for the given controller. Forgets existing expectations.
 func (r *ControllerExpectations) SetExpectations(controllerKey string, add, del int) error {
 	exp := &ControlleeExpectations{add: int64(add), del: int64(del), key: controllerKey, timestamp: clock.RealClock{}.Now()}
@@ -198,6 +191,13 @@ type ControlleeExpectations struct {
 	del       int64
 	key       string
 	timestamp time.Time
+}
+
+// TODO: Extend ExpirationCache to support explicit expiration.
+// TODO: Make this possible to disable in tests.
+// TODO: Support injection of clock.
+func (exp *ControlleeExpectations) isExpired() bool {
+	return clock.RealClock{}.Since(exp.timestamp) > ExpectationsTimeout
 }
 
 // Key implements ExpectationKey interface

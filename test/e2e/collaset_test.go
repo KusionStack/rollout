@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/utils/ptr"
@@ -41,9 +42,9 @@ var _ = Describe("CollaSet", func() {
 	ctx := context.Background()
 
 	var ts *httptest.Server
-	var cls = &operatingv1alpha1.CollaSet{}
-	var rollout = &rolloutv1alpha1.Rollout{}
-	var rolloutRun = &rolloutv1alpha1.RolloutRun{}
+	cls := &operatingv1alpha1.CollaSet{}
+	rollout := &rolloutv1alpha1.Rollout{}
+	rolloutRun := &rolloutv1alpha1.RolloutRun{}
 	var strategy *rolloutv1alpha1.RolloutStrategy
 
 	BeforeEach(func() {

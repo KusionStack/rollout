@@ -17,37 +17,51 @@
 package executor
 
 import (
-	"testing"
+	"github.com/stretchr/testify/suite"
 
-	"github.com/stretchr/testify/assert"
+	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
-func TestExecutorContext_SkipCurrentRelease(t *testing.T) {
-	ror := testCanaryRolloutRun.DeepCopy()
-	ctx := ExecutorContext{
-		RolloutRun: ror,
+type executorContextTestSuite struct {
+	suite.Suite
+
+	rolloutRun *rolloutv1alpha1.RolloutRun
+	context    *ExecutorContext
+}
+
+func (s *executorContextTestSuite) SetupSuite() {
+	s.rolloutRun = testCanaryRolloutRun.DeepCopy()
+}
+
+func (s *executorContextTestSuite) SetupTest() {
+	s.context = &ExecutorContext{
+		RolloutRun: s.rolloutRun,
 	}
+}
+
+func (s *executorContextTestSuite) TestExecutorContext_SkipCurrentRelease() {
+	ctx := s.context
 	// skip canary release
 	ctx.SkipCurrentRelease()
-	if assert.NotNil(t, ctx.NewStatus.CanaryStatus) {
+	if s.NotNil(ctx.NewStatus.CanaryStatus) {
 		canaryStatus := ctx.NewStatus.CanaryStatus
-		assert.Equal(t, StepSucceeded, canaryStatus.State)
-		assert.NotNil(t, canaryStatus.StartTime)
-		assert.NotNil(t, canaryStatus.FinishTime)
+		s.Equal(StepSucceeded, canaryStatus.State)
+		s.NotNil(canaryStatus.StartTime)
+		s.NotNil(canaryStatus.FinishTime)
 	}
 
 	// skip batch release
 	ctx.SkipCurrentRelease()
 
-	if assert.NotNil(t, ctx.NewStatus.BatchStatus) {
+	if s.NotNil(ctx.NewStatus.BatchStatus) {
 		batchStatus := ctx.NewStatus.BatchStatus
-		assert.Len(t, batchStatus.Records, len(ror.Spec.Batch.Batches))
-		assert.Equal(t, StepSucceeded, batchStatus.CurrentBatchState)
-		assert.EqualValues(t, len(batchStatus.Records)-1, batchStatus.CurrentBatchIndex)
+		s.Len(batchStatus.Records, len(s.rolloutRun.Spec.Batch.Batches))
+		s.Equal(StepSucceeded, batchStatus.CurrentBatchState)
+		s.EqualValues(len(batchStatus.Records)-1, batchStatus.CurrentBatchIndex)
 		for i := range batchStatus.Records {
-			assert.Equal(t, StepSucceeded, batchStatus.Records[i].State)
-			assert.NotNil(t, batchStatus.Records[i].StartTime)
-			assert.NotNil(t, batchStatus.Records[i].FinishTime)
+			s.Equal(StepSucceeded, batchStatus.Records[i].State)
+			s.NotNil(batchStatus.Records[i].StartTime)
+			s.NotNil(batchStatus.Records[i].FinishTime)
 		}
 	}
 }

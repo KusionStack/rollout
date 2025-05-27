@@ -25,14 +25,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
-
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
-	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/registry"
@@ -433,17 +432,18 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 	updateConditionFunc := func(tp *v1alpha1.TrafficTopology) {
 		exist := false
 		for i, cond := range tp.Status.Conditions {
-			if cond.Type == v1alpha1.TrafficTopologyConditionReady {
-				exist = true
-				tp.Status.Conditions[i].Status = conditionReadyStatus
-				tp.Status.Conditions[i].LastTransitionTime = metav1.Time{
-					Time: time.Now(),
-				}
-				tp.Status.Conditions[i].LastUpdateTime = metav1.Time{
-					Time: time.Now(),
-				}
-				break
+			if cond.Type != v1alpha1.TrafficTopologyConditionReady {
+				continue
 			}
+			exist = true
+			tp.Status.Conditions[i].Status = conditionReadyStatus
+			tp.Status.Conditions[i].LastTransitionTime = metav1.Time{
+				Time: time.Now(),
+			}
+			tp.Status.Conditions[i].LastUpdateTime = metav1.Time{
+				Time: time.Now(),
+			}
+			break
 		}
 		if !exist {
 			tp.Status.Conditions = append(tp.Status.Conditions, v1alpha1.Condition{

@@ -22,12 +22,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -74,7 +74,7 @@ var _ = Describe("traffic-topology-controller", func() {
 		var deployments appsv1.DeploymentList
 		err := fedClient.List(ctx, &deployments)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(deployments.Items)).To(Equal(2))
+		Expect(deployments.Items).To(HaveLen(2))
 	})
 
 	Context("InCluster TrafficTopology", func() {
@@ -122,7 +122,8 @@ var _ = Describe("traffic-topology-controller", func() {
 					TypeMeta: v1.TypeMeta{
 						APIVersion: "rollout.kusionstack.io/v1alpha1",
 						Kind:       "TrafficTopology",
-					}})
+					},
+				})
 				if err != nil {
 					return false
 				}
@@ -200,7 +201,7 @@ var _ = Describe("traffic-topology-controller", func() {
 				},
 			}
 			err := clusterClient1.Create(ctx, stsCluster1)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			stsCluster2 := &appsv1.StatefulSet{
 				ObjectMeta: v1.ObjectMeta{
@@ -238,7 +239,7 @@ var _ = Describe("traffic-topology-controller", func() {
 				},
 			}
 			err = clusterClient2.Create(ctx, stsCluster2)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			// trigger traffic topology reconcile
 			tpTmp := &v1alpha1.TrafficTopology{}
@@ -246,13 +247,13 @@ var _ = Describe("traffic-topology-controller", func() {
 				Name:      tp0.Name,
 				Namespace: tp0.Namespace,
 			}, tpTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			if tpTmp.Labels == nil {
 				tpTmp.Labels = make(map[string]string)
 			}
 			tpTmp.Labels["trigger"] = "x"
 			err = fedClient.Update(clusterinfo.WithCluster(ctx, clusterinfo.Fed), tpTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				tpTmp = &v1alpha1.TrafficTopology{}
@@ -320,7 +321,7 @@ var _ = Describe("traffic-topology-controller", func() {
 				},
 			}
 			err := clusterClient2.Delete(ctx, stsCluster2)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				stsTmp := &appsv1.StatefulSet{}
@@ -342,7 +343,7 @@ var _ = Describe("traffic-topology-controller", func() {
 			}
 			tpTmp.Labels["trigger"] = "xx"
 			err = fedClient.Update(clusterinfo.WithCluster(ctx, clusterinfo.Fed), tpTmp)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				tpTmp := &v1alpha1.TrafficTopology{}
@@ -391,7 +392,7 @@ var _ = Describe("traffic-topology-controller", func() {
 
 		It("traffictopology deleting", func() {
 			err := fedClient.Delete(ctx, tp0)
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() bool {
 				brTmp := &v1alpha1.BackendRouting{}
@@ -411,7 +412,6 @@ var _ = Describe("traffic-topology-controller", func() {
 				return errors.IsNotFound(err)
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
-
 	})
 
 	Context("MultiCluster TrafficTopology", func() {
@@ -459,7 +459,8 @@ var _ = Describe("traffic-topology-controller", func() {
 					TypeMeta: v1.TypeMeta{
 						APIVersion: "rollout.kusionstack.io/v1alpha1",
 						Kind:       "TrafficTopology",
-					}})
+					},
+				})
 				if err != nil {
 					return false
 				}

@@ -52,19 +52,4 @@ func (b TPEmployer) GetEmployerStatuses() interface{} {
 // TODO compare spec, but spec might be changed by BackendRouting controller
 func (b TPEmployer) EmployerEqual(employer rsFrameController.IEmployer) (bool, error) {
 	return b.BackendRoutingName == employer.GetEmployerId(), nil
-	//trEmployer, ok := employer.(TPEmployer)
-	//if !ok {
-	//	return false, fmt.Errorf("not TPEmployer")
-	//}
-	//
-	//// compare BackendRouting's name and spec
-	//if b.BackendRoutingName != trEmployer.BackendRoutingName ||
-	//	b.BackendRouting.Name != trEmployer.BackendRouting.Name ||
-	//	b.BackendRouting.Namespace != trEmployer.BackendRouting.Namespace {
-	//	return false, nil
-	//}
-	//if !reflect.DeepEqual(b.BackendRouting.Spec.Backend, trEmployer.BackendRouting.Spec.Backend) {
-	//	return false, nil
-	//}
-	//return xxx, nil
 }
