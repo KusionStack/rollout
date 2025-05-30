@@ -18,13 +18,13 @@ const (
 	// LabelRolloutManualCommand is set in Rollout for users to manipulate rolloutRun
 	AnnoManualCommandKey = "rollout.kusionstack.io/manual-command"
 	// Deprecated: use continue
-	AnnoManualCommandResume            = "resume"
-	AnnoManualCommandContinue          = "continue"
-	AnnoManualCommandRetry             = "retry"
-	AnnoManualCommandSkip              = "skip"
-	AnnoManualCommandPause             = "pause"
-	AnnoManualCommandCancel            = "cancel"
-	AnnoManualCommandForceSkipCurBatch = "force-skip-current-batch"
+	AnnoManualCommandResume                = "resume"
+	AnnoManualCommandContinue              = "continue"
+	AnnoManualCommandRetry                 = "retry"
+	AnnoManualCommandSkip                  = "skip"
+	AnnoManualCommandPause                 = "pause"
+	AnnoManualCommandCancel                = "cancel"
+	AnnoManualCommandForceSkipCurrentBatch = "force-skip-current-batch"
 
 	AnnoRolloutTrigger = "rollout.kusionstack.io/trigger"
 

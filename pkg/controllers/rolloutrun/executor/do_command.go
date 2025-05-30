@@ -44,7 +44,7 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		}
 	case rolloutapis.AnnoManualCommandCancel:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
-	case rolloutapis.AnnoManualCommandForceSkipCurBatch:
+	case rolloutapis.AnnoManualCommandForceSkipCurrentBatch:
 		if batchError != nil {
 			newStatus.Error = nil
 		}
@@ -53,7 +53,7 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 			newBatchStatus.CurrentBatchIndex = currentBatchIndex
 			newBatchStatus.CurrentBatchState = StepNone
 		} else {
-			newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
+			newBatchStatus.CurrentBatchState = StepPostBatchStepHook
 		}
 	}
 
