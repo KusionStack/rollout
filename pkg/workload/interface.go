@@ -18,7 +18,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -49,7 +48,7 @@ type BatchReleaseControl interface {
 	// BatchPreCheck checks object before batch release.
 	BatchPreCheck(obj client.Object) error
 	// ApplyPartition use expectedUpdated replicas to calculate partition and apply it to the workload.
-	ApplyPartition(obj client.Object, expectedUpdated intstr.IntOrString) error
+	ApplyPartition(obj client.Object, expectedUpdatedReplicas int32) error
 }
 
 // CanaryReleaseControl defines the control functions for workload canary release

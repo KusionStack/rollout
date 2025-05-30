@@ -155,7 +155,8 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 					Cluster: info.ClusterName,
 					Name:    info.Name,
 				},
-				Replicas: b.Replicas,
+				Replicas:             b.Replicas,
+				ReplicaSlidingWindow: b.ReplicaSlidingWindow,
 			}
 			targets = append(targets, target)
 		}

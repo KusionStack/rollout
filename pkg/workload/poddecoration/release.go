@@ -19,7 +19,6 @@ package poddecoration
 import (
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,7 +40,7 @@ func (c *accessorImpl) BatchPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated intstr.IntOrString) error {
+func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated int32) error {
 	// object must be *operatingv1alpha1.PodDecoration
 	obj, err := checkObj(object)
 	if err != nil {
@@ -53,10 +52,7 @@ func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated ints
 		specPartition = ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.Partition, 0)
 	}
 
-	expectedPartition, err := workload.CalculateExpectedPartition(&obj.Status.MatchedPods, expectedUpdated, specPartition)
-	if err != nil {
-		return err
-	}
+	expectedPartition := workload.CalculateExpectedPartition(&obj.Status.MatchedPods, expectedUpdated, specPartition)
 
 	if expectedPartition == 0 {
 		obj.Spec.UpdateStrategy.RollingUpdate = nil
@@ -64,14 +60,6 @@ func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated ints
 		obj.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.PodDecorationRollingUpdate{
 			Partition: ptr.To(expectedPartition),
 		}
-	}
-
-	if expectedPartition > 0 {
-		obj.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.PodDecorationRollingUpdate{
-			Partition: ptr.To(expectedPartition),
-		}
-	} else if obj.Spec.UpdateStrategy.RollingUpdate != nil {
-		obj.Spec.UpdateStrategy.RollingUpdate.Partition = nil
 	}
 	return nil
 }

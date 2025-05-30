@@ -147,12 +147,27 @@ func newFakeObject(cluster, namespace, name string, replicas, partition, updated
 			},
 		},
 		Status: appsv1.StatefulSetStatus{
-			Replicas:        replicas,
-			UpdatedReplicas: updated,
+			Replicas:          replicas,
+			UpdatedReplicas:   updated,
+			ReadyReplicas:     replicas,
+			AvailableReplicas: replicas,
 		},
 	}
 	if realPartition <= 0 {
 		sts.Spec.UpdateStrategy.RollingUpdate = nil
+	}
+
+	if partition == 0 {
+		// partition == 0 means all replicas are updated
+		sts.Status.CurrentRevision = "v1"
+		sts.Status.UpdateRevision = "v1"
+		sts.Status.CurrentReplicas = updated
+		sts.Status.UpdatedReplicas = updated
+	} else {
+		sts.Status.CurrentRevision = "v1"
+		sts.Status.UpdateRevision = "v2"
+		sts.Status.CurrentReplicas = replicas - updated
+		sts.Status.UpdatedReplicas = updated
 	}
 	return sts
 }

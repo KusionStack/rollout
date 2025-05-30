@@ -120,6 +120,11 @@ type RolloutRunStepTarget struct {
 
 	// Replicas is the replicas of the rollout task, which represents the number of pods to be upgraded
 	Replicas intstr.IntOrString `json:"replicas"`
+
+	// ReplicaSlidingWindow used to control the number of pods that are allowed to be upgraded in
+	// a sliding window for progressive rollout smoothly.
+	// +optional
+	ReplicaSlidingWindow *intstr.IntOrString `json:"replicaSlidingWindow,omitempty"`
 }
 
 type RolloutRunStatus struct {

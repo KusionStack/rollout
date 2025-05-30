@@ -315,12 +315,17 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do() {
 }
 
 func newRunStepTarget(cluster, name string, replicas intstr.IntOrString) rolloutv1alpha1.RolloutRunStepTarget {
+	return newRunStepTargetWithSlidingWindow(cluster, name, replicas, nil)
+}
+
+func newRunStepTargetWithSlidingWindow(cluster, name string, replicas intstr.IntOrString, window *intstr.IntOrString) rolloutv1alpha1.RolloutRunStepTarget {
 	return rolloutv1alpha1.RolloutRunStepTarget{
 		CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
 			Cluster: cluster,
 			Name:    name,
 		},
-		Replicas: replicas,
+		Replicas:             replicas,
+		ReplicaSlidingWindow: window,
 	}
 }
 
@@ -482,7 +487,7 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_Running() {
 			},
 		},
 		{
-			name: "workflow instance not found",
+			name: "workload instance not found",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
 				rollout := s.rollout.DeepCopy()
 				rolloutRun := s.rolloutRun.DeepCopy()
@@ -569,9 +574,86 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_Running() {
 				for _, obj := range objs {
 					if s.IsType(&appsv1.StatefulSet{}, obj) {
 						sts := obj.(*appsv1.StatefulSet)
-						s.NotNil(sts.Spec.UpdateStrategy.RollingUpdate)
-						s.NotNil(sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						s.Require().NotNil(sts.Spec.UpdateStrategy.RollingUpdate)
+						s.Require().NotNil(sts.Spec.UpdateStrategy.RollingUpdate.Partition)
 						s.EqualValues(90, *sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+					}
+				}
+			},
+		},
+		{
+			name: "upgrade workload partition by sliding window",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
+
+				// setup rolloutRun
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{{
+					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						// test-a with normal sliding window
+						newRunStepTargetWithSlidingWindow("cluster-a", "test-a", intstr.FromInt(50), ptr.To(intstr.FromInt(10))),
+						// test-b with a too big sliding window
+						newRunStepTargetWithSlidingWindow("cluster-a", "test-b", intstr.FromInt(10), ptr.To(intstr.FromInt(50))),
+					},
+				}}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{
+							Index:     ptr.To[int32](0),
+							State:     StepRunning,
+							StartTime: ptr.To(metav1.Now()),
+						},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			getWorkloads: func() []client.Object {
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-a", 100, 20, 15),
+					newFakeObject("cluster-a", "default", "test-b", 100, 0, 0),
+				}
+			},
+			assertResult: func(done bool, result reconcile.Result, err error) {
+				s.Require().NoError(err)
+				s.Equal(reconcile.Result{RequeueAfter: retryDefault}, result)
+				s.False(done)
+			},
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Len(status.BatchStatus.Records, 1)
+				s.Len(status.BatchStatus.Records[0].Targets, 2)
+
+				for _, target := range status.BatchStatus.Records[0].Targets {
+					s.EqualValues(100, target.Replicas)
+					switch target.Name {
+					case "test-a":
+						s.EqualValues(15, target.UpdatedReplicas)
+						s.EqualValues(15, target.UpdatedReadyReplicas)
+						s.EqualValues(15, target.UpdatedAvailableReplicas)
+					case "test-b":
+						s.EqualValues(0, target.UpdatedReplicas)
+						s.EqualValues(0, target.UpdatedReadyReplicas)
+						s.EqualValues(0, target.UpdatedAvailableReplicas)
+					}
+				}
+			},
+			assertWorkloads: func(objs []client.Object) {
+				for _, obj := range objs {
+					if s.IsType(&appsv1.StatefulSet{}, obj) {
+						sts := obj.(*appsv1.StatefulSet)
+						s.Require().NotNil(sts.Spec.UpdateStrategy.RollingUpdate)
+						s.Require().NotNil(sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						switch sts.Name {
+						case "test-a":
+							// partition = total(100) - (updatedReplicas(15) + slidingWindow(10) ) = 75
+							s.EqualValues(75, *sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						case "test-b":
+							s.EqualValues(90, *sts.Spec.UpdateStrategy.RollingUpdate.Partition)
+						}
 					}
 				}
 			},

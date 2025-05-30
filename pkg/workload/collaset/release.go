@@ -18,8 +18,8 @@ package collaset
 
 import (
 	"fmt"
+	"maps"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,7 +45,7 @@ func (c *accessorImpl) BatchPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated intstr.IntOrString) error {
+func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated int32) error {
 	obj, err := checkObj(object)
 	if err != nil {
 		return err
@@ -56,10 +56,7 @@ func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated ints
 		specPartition = ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.ByPartition.Partition, 0)
 	}
 
-	expectedPartition, err := workload.CalculateExpectedPartition(obj.Spec.Replicas, expectedUpdated, specPartition)
-	if err != nil {
-		return err
-	}
+	expectedPartition := workload.CalculateExpectedPartition(obj.Spec.Replicas, expectedUpdated, specPartition)
 
 	if expectedPartition > 0 {
 		obj.Spec.UpdateStrategy.RollingUpdate = &operatingv1alpha1.RollingUpdateCollaSetStrategy{
@@ -106,23 +103,17 @@ func applyPodTemplateMetadataPatch(obj *operatingv1alpha1.CollaSet, patch *rollo
 		if obj.Spec.Selector.MatchLabels == nil {
 			obj.Spec.Selector.MatchLabels = make(map[string]string)
 		}
-		for k, v := range patch.Labels {
-			obj.Spec.Selector.MatchLabels[k] = v
-		}
+		maps.Copy(obj.Spec.Selector.MatchLabels, patch.Labels)
 
 		if obj.Spec.Template.Labels == nil {
 			obj.Spec.Template.Labels = make(map[string]string)
 		}
-		for k, v := range patch.Labels {
-			obj.Spec.Template.Labels[k] = v
-		}
+		maps.Copy(obj.Spec.Template.Labels, patch.Labels)
 	}
 	if len(patch.Annotations) > 0 {
 		if obj.Spec.Template.Annotations == nil {
 			obj.Spec.Template.Annotations = make(map[string]string)
 		}
-		for k, v := range patch.Annotations {
-			obj.Spec.Template.Annotations[k] = v
-		}
+		maps.Copy(obj.Spec.Template.Annotations, patch.Annotations)
 	}
 }
