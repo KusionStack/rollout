@@ -21,6 +21,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
@@ -61,8 +62,9 @@ func Test_constructRolloutRunBatches(t *testing.T) {
 							},
 						},
 						{
-							Breakpoint: true,
-							Replicas:   intstr.FromString("50%"),
+							Breakpoint:           true,
+							Replicas:             intstr.FromString("50%"),
+							ReplicaSlidingWindow: ptr.To(intstr.FromString("10%")),
 							Match: &rolloutv1alpha1.ResourceMatch{
 								Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
 									{
@@ -128,14 +130,16 @@ func Test_constructRolloutRunBatches(t *testing.T) {
 								Cluster: "cluster-a",
 								Name:    "test-1",
 							},
-							Replicas: intstr.FromString("50%"),
+							Replicas:             intstr.FromString("50%"),
+							ReplicaSlidingWindow: ptr.To(intstr.FromString("10%")),
 						},
 						{
 							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
 								Cluster: "cluster-b",
 								Name:    "test-1",
 							},
-							Replicas: intstr.FromString("50%"),
+							Replicas:             intstr.FromString("50%"),
+							ReplicaSlidingWindow: ptr.To(intstr.FromString("10%")),
 						},
 					},
 				},

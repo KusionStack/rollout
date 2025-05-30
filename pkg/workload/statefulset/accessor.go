@@ -65,15 +65,27 @@ func (s *accessorImpl) GetInfo(cluster string, object client.Object) (*workload.
 }
 
 func (p *accessorImpl) getStatus(obj *appsv1.StatefulSet) workload.InfoStatus {
-	return workload.InfoStatus{
-		ObservedGeneration:       obj.Status.ObservedGeneration,
-		StableRevision:           obj.Status.CurrentRevision,
-		UpdatedRevision:          obj.Status.UpdateRevision,
-		Replicas:                 ptr.Deref(obj.Spec.Replicas, 0),
-		UpdatedReplicas:          obj.Status.UpdatedReplicas,
-		UpdatedReadyReplicas:     obj.Status.UpdatedReplicas,
-		UpdatedAvailableReplicas: obj.Status.UpdatedReplicas,
+	info := workload.InfoStatus{
+		ObservedGeneration: obj.Status.ObservedGeneration,
+		StableRevision:     obj.Status.CurrentRevision,
+		UpdatedRevision:    obj.Status.UpdateRevision,
+		Replicas:           ptr.Deref(obj.Spec.Replicas, 0),
+		UpdatedReplicas:    obj.Status.UpdatedReplicas,
 	}
+
+	if obj.Status.CurrentRevision == obj.Status.UpdateRevision {
+		// if someone delete pod directly, the status.updatedReplicas will be reduced firstly
+		// then Status.ReadyReplicas and Status.AvailableReplicas will be reduced.
+		// So we neet to respect the min value.
+		info.UpdatedReadyReplicas = min(obj.Status.ReadyReplicas, obj.Status.UpdatedReplicas)
+		info.UpdatedAvailableReplicas = min(obj.Status.AvailableReplicas, obj.Status.UpdatedReplicas)
+	} else {
+		// status.ReadyReplicas contains all current and updated replicas
+		info.UpdatedReadyReplicas = min(max(obj.Status.ReadyReplicas-obj.Status.CurrentReplicas, 0), obj.Status.UpdatedReplicas)
+		info.UpdatedAvailableReplicas = min(max(obj.Status.AvailableReplicas-obj.Status.CurrentReplicas, 0), obj.Status.UpdatedReplicas)
+	}
+
+	return info
 }
 
 func checkObj(object client.Object) (*appsv1.StatefulSet, error) {

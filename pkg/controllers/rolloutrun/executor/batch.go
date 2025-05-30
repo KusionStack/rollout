@@ -21,6 +21,7 @@ import (
 	"time"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -210,9 +211,9 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		status := info.APIStatus()
 		batchTargetStatuses = append(batchTargetStatuses, info.APIStatus())
 
-		expectedUpdatedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
+		currentBatchExpectedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
 
-		if info.CheckUpdatedReady(expectedUpdatedReplicas) {
+		if info.CheckUpdatedReady(currentBatchExpectedReplicas) {
 			// if the target is ready, we will not change partition
 			continue
 		}
@@ -220,13 +221,18 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		allWorkloadReady = false
 		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference)
 
+		expectedReplicas, err := e.calculateExpectedReplicasBySlidingWindow(status, currentBatchExpectedReplicas, item.ReplicaSlidingWindow)
+		if err != nil {
+			return false, retryStop, err
+		}
+
 		// ensure partition: upgradePartition is an idempotent function
-		changed, err := batchControl.UpdatePartition(info, item.Replicas)
+		changed, err := batchControl.UpdatePartition(info, expectedReplicas)
 		if err != nil {
 			return false, retryStop, err
 		}
 		if changed {
-			logger.V(2).Info("upgrade target partition", "target", item.CrossClusterObjectNameReference, "partition", expectedUpdatedReplicas)
+			logger.V(2).Info("upgrade target partition", "target", item.CrossClusterObjectNameReference, "partition", expectedReplicas)
 		}
 	}
 
@@ -239,4 +245,21 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 	// wait for next reconcile
 	return false, retryDefault, nil
+}
+
+// calculateExpectedReplicasBySlidingWindow calculate expected replicas by sliding window
+// if window is nil, return currentBatchExpectedReplicas
+// if window is not nil, return min(currentBatchExpectedReplicas, updatedAvailableReplicas + increment)
+func (e *batchExecutor) calculateExpectedReplicasBySlidingWindow(status rolloutv1alpha1.RolloutWorkloadStatus, currentBatchExpectedReplicas int32, window *intstr.IntOrString) (int32, error) {
+	if window == nil {
+		return currentBatchExpectedReplicas, nil
+	}
+	increment, err := workload.CalculateUpdatedReplicas(&status.Replicas, *window)
+	if err != nil {
+		return currentBatchExpectedReplicas, err
+	}
+	expected := status.UpdatedAvailableReplicas + increment
+	// limit expected replicas to currentBatchExpectedReplicas
+	expected = min(currentBatchExpectedReplicas, expected)
+	return expected, nil
 }

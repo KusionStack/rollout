@@ -19,7 +19,6 @@ package statefulset
 import (
 	"github.com/stretchr/testify/suite"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
@@ -45,13 +44,13 @@ func (s *releaseControlTestSuite) Test_ApplyPartition() {
 	tests := []struct {
 		name        string
 		object      *appsv1.StatefulSet
-		input       intstr.IntOrString
+		input       int32
 		checkResult func(object *appsv1.StatefulSet, err error)
 	}{
 		{
 			name:   "total 10, want to update 1",
 			object: newTestApplyPartitionObject(10, 0),
-			input:  intstr.FromInt(1),
+			input:  1,
 			checkResult: func(object *appsv1.StatefulSet, err error) {
 				s.Require().NoError(err)
 				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -61,9 +60,9 @@ func (s *releaseControlTestSuite) Test_ApplyPartition() {
 			},
 		},
 		{
-			name:   "total 10, want to update 60%",
+			name:   "total 10, want to update 6",
 			object: newTestApplyPartitionObject(10, 0),
-			input:  intstr.FromString("60%"),
+			input:  6,
 			checkResult: func(object *appsv1.StatefulSet, err error) {
 				s.Require().NoError(err)
 				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -73,9 +72,9 @@ func (s *releaseControlTestSuite) Test_ApplyPartition() {
 			},
 		},
 		{
-			name:   "total 10, updated 9, want to update 50%",
+			name:   "total 10, updated 9, want to update 5",
 			object: newTestApplyPartitionObject(10, 9),
-			input:  intstr.FromString("50%"),
+			input:  5,
 			checkResult: func(object *appsv1.StatefulSet, err error) {
 				s.Require().NoError(err)
 				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -85,9 +84,9 @@ func (s *releaseControlTestSuite) Test_ApplyPartition() {
 			},
 		},
 		{
-			name:   "total 10, want to update 100%",
+			name:   "total 10, want to update 10",
 			object: newTestApplyPartitionObject(10, 0),
-			input:  intstr.FromString("100%"),
+			input:  10,
 			checkResult: func(object *appsv1.StatefulSet, err error) {
 				s.Require().NoError(err)
 				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -96,7 +95,7 @@ func (s *releaseControlTestSuite) Test_ApplyPartition() {
 		{
 			name:   "total 10, want to update 11",
 			object: newTestApplyPartitionObject(10, 0),
-			input:  intstr.FromInt(11),
+			input:  11,
 			checkResult: func(object *appsv1.StatefulSet, err error) {
 				s.Require().NoError(err)
 				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -112,7 +111,7 @@ func (s *releaseControlTestSuite) Test_ApplyPartition() {
 					},
 				},
 			},
-			input: intstr.FromInt(10),
+			input: 10,
 			checkResult: func(object *appsv1.StatefulSet, err error) {
 				s.Require().NoError(err)
 				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)

@@ -18,9 +18,9 @@ package statefulset
 
 import (
 	"fmt"
+	"maps"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -44,7 +44,7 @@ func (c *accessorImpl) BatchPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated intstr.IntOrString) error {
+func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated int32) error {
 	obj, err := checkObj(object)
 	if err != nil {
 		return err
@@ -55,10 +55,7 @@ func (c *accessorImpl) ApplyPartition(object client.Object, expectedUpdated ints
 		specPartition = ptr.Deref(obj.Spec.UpdateStrategy.RollingUpdate.Partition, 0)
 	}
 
-	expectedPartition, err := workload.CalculateExpectedPartition(obj.Spec.Replicas, expectedUpdated, specPartition)
-	if err != nil {
-		return err
-	}
+	expectedPartition := workload.CalculateExpectedPartition(obj.Spec.Replicas, expectedUpdated, specPartition)
 
 	if expectedPartition > 0 {
 		obj.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
@@ -105,23 +102,17 @@ func applyPodTemplateMetadataPatch(obj *appsv1.StatefulSet, patch *rolloutv1alph
 		if obj.Spec.Selector.MatchLabels == nil {
 			obj.Spec.Selector.MatchLabels = make(map[string]string)
 		}
-		for k, v := range patch.Labels {
-			obj.Spec.Selector.MatchLabels[k] = v
-		}
+		maps.Copy(obj.Spec.Selector.MatchLabels, patch.Labels)
 
 		if obj.Spec.Template.Labels == nil {
 			obj.Spec.Template.Labels = make(map[string]string)
 		}
-		for k, v := range patch.Labels {
-			obj.Spec.Template.Labels[k] = v
-		}
+		maps.Copy(obj.Spec.Template.Labels, patch.Labels)
 	}
 	if len(patch.Annotations) > 0 {
 		if obj.Spec.Template.Annotations == nil {
 			obj.Spec.Template.Annotations = make(map[string]string)
 		}
-		for k, v := range patch.Annotations {
-			obj.Spec.Template.Annotations[k] = v
-		}
+		maps.Copy(obj.Spec.Template.Annotations, patch.Annotations)
 	}
 }

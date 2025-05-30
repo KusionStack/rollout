@@ -113,6 +113,14 @@ spec:
                       description: Properties contains additional information for
                         step
                       type: object
+                    replicaSlidingWindow:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: |-
+                        ReplicaSlidingWindow used to control the number of pods that are allowed to be upgraded in
+                        a sliding window for progressive rollout smoothly.
+                      x-kubernetes-int-or-string: true
                     replicas:
                       anyOf:
                       - type: integer

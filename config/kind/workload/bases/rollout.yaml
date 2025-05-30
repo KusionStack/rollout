@@ -44,5 +44,6 @@ batch:
   batches:
   - replicas: 1
   - replicas: 3
+    replicaSlidingWindow: 1
     breakpoint: true
   - replicas: 100%
