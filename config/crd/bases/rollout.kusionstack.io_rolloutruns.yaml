@@ -90,6 +90,14 @@ spec:
                               name:
                                 description: Name is the resource name
                                 type: string
+                              replicaSlidingWindow:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                description: |-
+                                  ReplicaSlidingWindow used to control the number of pods that are allowed to be upgraded in
+                                  a sliding window for progressive rollout smoothly.
+                                x-kubernetes-int-or-string: true
                               replicas:
                                 anyOf:
                                 - type: integer
@@ -485,6 +493,14 @@ spec:
                         name:
                           description: Name is the resource name
                           type: string
+                        replicaSlidingWindow:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: |-
+                            ReplicaSlidingWindow used to control the number of pods that are allowed to be upgraded in
+                            a sliding window for progressive rollout smoothly.
+                          x-kubernetes-int-or-string: true
                         replicas:
                           anyOf:
                           - type: integer

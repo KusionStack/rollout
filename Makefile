@@ -52,7 +52,7 @@ fmt: golangci
 	$(GOLANGCI) fmt
 
 .PHONY: lint
-lint: golangci
+lint: fmt
 	$(GOLANGCI) run 
 
 .PHONY: test

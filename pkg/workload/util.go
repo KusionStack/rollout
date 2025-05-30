@@ -15,6 +15,8 @@
 package workload
 
 import (
+	"maps"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -51,24 +53,16 @@ func CalculateUpdatedReplicas(totalReplicas *int32, expectedReplicas intstr.IntO
 
 // CalculateExpectedPartition calculates the expected partition based on the total replicas, expected replicas, and the partition in the spec.
 // In this function, partition means how many replicas are not updated.
-func CalculateExpectedPartition(total *int32, expectedReplicas intstr.IntOrString, partitionInSpec int32) (int32, error) {
-	expectedUpdatedReplicas, err := CalculateUpdatedReplicas(total, expectedReplicas)
-	if err != nil {
-		return 0, err
-	}
-
+func CalculateExpectedPartition(total *int32, expectedUpdatedReplicas, partitionInSpec int32) int32 {
 	totalReplicas := ptr.Deref(total, 0)
-	currentUpdatedReplicas := totalReplicas - partitionInSpec
-	if currentUpdatedReplicas < 0 {
-		currentUpdatedReplicas = 0
-	}
+	currentUpdatedReplicas := max(totalReplicas-partitionInSpec, 0)
 
 	if currentUpdatedReplicas >= expectedUpdatedReplicas {
 		// already updated if the current updated partition is greater than or equal to the expected updated partition
-		return partitionInSpec, nil
+		return partitionInSpec
 	}
 
-	return totalReplicas - expectedUpdatedReplicas, nil
+	return max(totalReplicas-expectedUpdatedReplicas, 0)
 }
 
 // PatchMetadata patches metadata with the given patch
@@ -77,17 +71,13 @@ func PatchMetadata(meta *metav1.ObjectMeta, patch rolloutv1alpha1.MetadataPatch)
 		if meta.Labels == nil {
 			meta.Labels = make(map[string]string)
 		}
-		for k, v := range patch.Labels {
-			meta.Labels[k] = v
-		}
+		maps.Copy(meta.Labels, patch.Labels)
 	}
 	if len(patch.Annotations) > 0 {
 		if meta.Annotations == nil {
 			meta.Annotations = make(map[string]string)
 		}
-		for k, v := range patch.Annotations {
-			meta.Annotations[k] = v
-		}
+		maps.Copy(meta.Annotations, patch.Annotations)
 	}
 }
 

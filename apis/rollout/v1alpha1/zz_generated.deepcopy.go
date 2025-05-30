@@ -795,7 +795,9 @@ func (in *RolloutRunCanaryStrategy) DeepCopyInto(out *RolloutRunCanaryStrategy) 
 	if in.Targets != nil {
 		in, out := &in.Targets, &out.Targets
 		*out = make([]RolloutRunStepTarget, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	if in.Traffic != nil {
 		in, out := &in.Traffic, &out.Traffic
@@ -952,7 +954,9 @@ func (in *RolloutRunStep) DeepCopyInto(out *RolloutRunStep) {
 	if in.Targets != nil {
 		in, out := &in.Targets, &out.Targets
 		*out = make([]RolloutRunStepTarget, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	if in.Traffic != nil {
 		in, out := &in.Traffic, &out.Traffic
@@ -1023,6 +1027,11 @@ func (in *RolloutRunStepTarget) DeepCopyInto(out *RolloutRunStepTarget) {
 	*out = *in
 	out.CrossClusterObjectNameReference = in.CrossClusterObjectNameReference
 	out.Replicas = in.Replicas
+	if in.ReplicaSlidingWindow != nil {
+		in, out := &in.ReplicaSlidingWindow, &out.ReplicaSlidingWindow
+		*out = new(intstr.IntOrString)
+		**out = **in
+	}
 	return
 }
 
@@ -1094,6 +1103,11 @@ func (in *RolloutStatus) DeepCopy() *RolloutStatus {
 func (in *RolloutStep) DeepCopyInto(out *RolloutStep) {
 	*out = *in
 	out.Replicas = in.Replicas
+	if in.ReplicaSlidingWindow != nil {
+		in, out := &in.ReplicaSlidingWindow, &out.ReplicaSlidingWindow
+		*out = new(intstr.IntOrString)
+		**out = **in
+	}
 	if in.Traffic != nil {
 		in, out := &in.Traffic, &out.Traffic
 		*out = new(TrafficStrategy)
@@ -1268,7 +1282,9 @@ func (in *RolloutWebhookReviewBatch) DeepCopyInto(out *RolloutWebhookReviewBatch
 	if in.Targets != nil {
 		in, out := &in.Targets, &out.Targets
 		*out = make([]RolloutRunStepTarget, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	if in.Properties != nil {
 		in, out := &in.Properties, &out.Properties
@@ -1296,7 +1312,9 @@ func (in *RolloutWebhookReviewCanary) DeepCopyInto(out *RolloutWebhookReviewCana
 	if in.Targets != nil {
 		in, out := &in.Targets, &out.Targets
 		*out = make([]RolloutRunStepTarget, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	if in.Properties != nil {
 		in, out := &in.Properties, &out.Properties

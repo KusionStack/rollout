@@ -18,7 +18,6 @@ package poddecoration
 
 import (
 	"github.com/stretchr/testify/suite"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 )
@@ -46,13 +45,13 @@ func (s *releaseControlTestSuite) TestApplyPartition() {
 	tests := []struct {
 		name        string
 		object      *operatingv1alpha1.PodDecoration
-		input       intstr.IntOrString
+		input       int32
 		checkResult func(object *operatingv1alpha1.PodDecoration, err error)
 	}{
 		{
 			name:   "total 10, want to update 1",
 			object: newTestApplyPartitionObject(10, 0),
-			input:  intstr.FromInt(1),
+			input:  1,
 			checkResult: func(object *operatingv1alpha1.PodDecoration, err error) {
 				s.Require().NoError(err)
 				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -62,9 +61,9 @@ func (s *releaseControlTestSuite) TestApplyPartition() {
 			},
 		},
 		{
-			name:   "total 10, want to update 60%",
+			name:   "total 10, want to update 6",
 			object: newTestApplyPartitionObject(10, 0),
-			input:  intstr.FromString("60%"),
+			input:  6,
 			checkResult: func(object *operatingv1alpha1.PodDecoration, err error) {
 				s.Require().NoError(err)
 				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -74,9 +73,9 @@ func (s *releaseControlTestSuite) TestApplyPartition() {
 			},
 		},
 		{
-			name:   "total 10, updated 9, want to update 50%",
+			name:   "total 10, updated 9, want to update 5",
 			object: newTestApplyPartitionObject(10, 9),
-			input:  intstr.FromString("50%"),
+			input:  5,
 			checkResult: func(object *operatingv1alpha1.PodDecoration, err error) {
 				s.Require().NoError(err)
 				s.Require().NotNil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -86,9 +85,9 @@ func (s *releaseControlTestSuite) TestApplyPartition() {
 			},
 		},
 		{
-			name:   "total 10, want to update 100%",
+			name:   "total 10, want to update 10",
 			object: newTestApplyPartitionObject(10, 0),
-			input:  intstr.FromString("100%"),
+			input:  10,
 			checkResult: func(object *operatingv1alpha1.PodDecoration, err error) {
 				s.Require().NoError(err)
 				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -97,7 +96,7 @@ func (s *releaseControlTestSuite) TestApplyPartition() {
 		{
 			name:   "total 10, want to update 11",
 			object: newTestApplyPartitionObject(10, 0),
-			input:  intstr.FromInt(11),
+			input:  11,
 			checkResult: func(object *operatingv1alpha1.PodDecoration, err error) {
 				s.Require().NoError(err)
 				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)
@@ -115,7 +114,7 @@ func (s *releaseControlTestSuite) TestApplyPartition() {
 					MatchedPods: 10,
 				},
 			},
-			input: intstr.FromInt(10),
+			input: 10,
 			checkResult: func(object *operatingv1alpha1.PodDecoration, err error) {
 				s.Require().NoError(err)
 				s.Nil(object.Spec.UpdateStrategy.RollingUpdate)
