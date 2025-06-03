@@ -35,6 +35,7 @@ import (
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
 	"kusionstack.io/rollout/pkg/features/rolloutclasspredicate"
+	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -98,6 +99,11 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 		onetime := ontimestrategy.ConvertFrom(strategy)
 		data := onetime.JSONData()
 		run.Annotations[ontimestrategy.AnnoOneTimeStrategy] = string(data)
+	}
+
+	orderID, ok := utils.GetMapValue(obj.Annotations, rolloutapi.AnnoInsigntOrderID)
+	if ok {
+		run.Annotations[rolloutapi.AnnoInsigntOrderID] = orderID
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.RolloutClassPredicate) {

@@ -78,8 +78,7 @@ func (c *BatchReleaseControl) Initialize(info *workload.Info, ownerKind, ownerNa
 	return err
 }
 
-func (c *BatchReleaseControl) UpdatePartition(info *workload.Info, expectedUpdated intstr.IntOrString) (bool, error) {
-	ctx := clusterinfo.WithCluster(context.Background(), info.ClusterName)
+func (c *BatchReleaseControl) UpdatePartition(ctx context.Context, info *workload.Info, expectedUpdated intstr.IntOrString) (bool, error) {
 	obj := info.Object
 	return utils.UpdateOnConflict(ctx, c.client, c.client, obj, func() error {
 		return c.control.ApplyPartition(obj, expectedUpdated)
