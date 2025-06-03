@@ -122,6 +122,7 @@ replace (
 	github.com/konsorten/go-windows-terminal-sequences => github.com/konsorten/go-windows-terminal-sequences v1.0.1
 	github.com/onsi/gomega => github.com/onsi/gomega v1.15.0
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
+	google.golang.org/protobuf => google.golang.org/protobuf v1.31.0
 	k8s.io/api => k8s.io/api v0.22.2
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.22.2
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.4-rc.0
