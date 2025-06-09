@@ -31,6 +31,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cyphar/filepath-securejoin v0.2.2 // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
+	github.com/go-resty/resty/v2 v2.16.5 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
@@ -154,5 +155,5 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.22.2
 	k8s.io/system-validators => k8s.io/system-validators v1.5.0
 	k8s.io/utils => k8s.io/utils v0.0.0-20240102154912-e7106e64919e
-	sigs.k8s.io/controller-runtime => code.alipay.com/antcloud-aks/controller-runtime v0.10.3-paascore-1.0.6.0.20250530082834-501913265322
+	sigs.k8s.io/controller-runtime => code.alipay.com/antcloud-aks/controller-runtime v0.10.3-paascore-1.0.6.0.20250609060719-34f3feba8871
 )

@@ -17,7 +17,6 @@
 package executor
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -26,6 +25,7 @@ import (
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	insightclient "sigs.k8s.io/controller-runtime/pkg/insight/client"
+	"sigs.k8s.io/controller-runtime/pkg/insight/exporter/kareexporter"
 
 	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
@@ -208,7 +208,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	insightOrderID := utils.GetMapValueByDefault(rolloutRun.Annotations, rolloutapi.AnnoInsigntOrderID, "")
 	prop := &insightclient.TraceProps{
 		ControllerName: "rollout",
-		Fields:         map[string]interface{}{"orderID": insightOrderID},
+		Fields:         map[string]interface{}{kareexporter.AICloudOrderID: insightOrderID},
 	}
 
 	allWorkloadReady := true
@@ -238,7 +238,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		}
 
 		// ensure partition: upgradePartition is an idempotent function
-		clusterCtx := insightclient.NewContextWithTraceProps(clusterinfo.WithCluster(context.Background(), info.ClusterName), prop)
+		clusterCtx := insightclient.NewContextWithTraceProps(clusterinfo.WithCluster(ctx, info.ClusterName), prop)
 		changed, err := batchControl.UpdatePartition(clusterCtx, info, expectedReplicas)
 		if err != nil {
 			return false, retryStop, err
