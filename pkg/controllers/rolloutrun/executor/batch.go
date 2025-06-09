@@ -17,15 +17,20 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
+	insightclient "sigs.k8s.io/controller-runtime/pkg/insight/client"
 
+	rolloutapi "kusionstack.io/rollout/apis/rollout"
 	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/control"
+	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -200,6 +205,12 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
 
+	insightOrderID := utils.GetMapValueByDefault(rolloutRun.Annotations, rolloutapi.AnnoInsigntOrderID, "")
+	prop := &insightclient.TraceProps{
+		ControllerName: "rollout",
+		Fields:         map[string]interface{}{"orderID": insightOrderID},
+	}
+
 	allWorkloadReady := true
 	for _, item := range currentBatch.Targets {
 		info := ctx.Workloads.Get(item.Cluster, item.Name)
@@ -227,7 +238,8 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		}
 
 		// ensure partition: upgradePartition is an idempotent function
-		changed, err := batchControl.UpdatePartition(info, expectedReplicas)
+		clusterCtx := insightclient.NewContextWithTraceProps(clusterinfo.WithCluster(context.Background(), info.ClusterName), prop)
+		changed, err := batchControl.UpdatePartition(clusterCtx, info, expectedReplicas)
 		if err != nil {
 			return false, retryStop, err
 		}

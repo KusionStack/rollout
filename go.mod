@@ -93,16 +93,16 @@ require (
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.15.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
-	golang.org/x/term v0.20.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
-	golang.org/x/time v0.5.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
+	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -122,6 +122,7 @@ replace (
 	github.com/konsorten/go-windows-terminal-sequences => github.com/konsorten/go-windows-terminal-sequences v1.0.1
 	github.com/onsi/gomega => github.com/onsi/gomega v1.15.0
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
+	google.golang.org/protobuf => google.golang.org/protobuf v1.31.0
 	k8s.io/api => k8s.io/api v0.22.2
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.22.2
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.4-rc.0
@@ -153,5 +154,5 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.22.2
 	k8s.io/system-validators => k8s.io/system-validators v1.5.0
 	k8s.io/utils => k8s.io/utils v0.0.0-20240102154912-e7106e64919e
-	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.10.3
+	sigs.k8s.io/controller-runtime => code.alipay.com/antcloud-aks/controller-runtime v0.10.3-paascore-1.0.6.0.20250530082834-501913265322
 )

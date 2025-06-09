@@ -40,4 +40,7 @@ const (
 
 	// AnnoRolloutName is the name of the rollout object.
 	AnnoRolloutName = "rollout.kusionstack.io/name"
+
+	// AnnoInsigntOrderID is the order id of upstream operation platform for insght.
+	AnnoInsigntOrderID = "rollout.kusionstack.io/insight-order-id"
 )

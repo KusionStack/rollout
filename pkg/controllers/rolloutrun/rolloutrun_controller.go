@@ -30,6 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	insightclient "sigs.k8s.io/controller-runtime/pkg/insight/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -248,9 +249,10 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 		return ctrl.Result{}, err
 	}
 
+	k8sClient := insightclient.Wrap(r.Client)
 	executorCtx := &executor.ExecutorContext{
 		Context:        ctx,
-		Client:         r.Client,
+		Client:         k8sClient,
 		Recorder:       r.Recorder,
 		Accessor:       accesor,
 		OwnerKind:      ownerKind,
