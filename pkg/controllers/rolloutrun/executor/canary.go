@@ -106,7 +106,7 @@ func (e *canaryExecutor) doInit(ctx *ExecutorContext) (bool, time.Duration, erro
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		err := releaseControl.Initialize(wi, ctx.OwnerKind, ctx.OwnerName, rolloutRun.Name)
+		err := releaseControl.Initialize(ctx, wi, ctx.OwnerKind, ctx.OwnerName, rolloutRun.Name)
 		if err != nil {
 			return false, retryStop, err
 		}
@@ -263,7 +263,7 @@ func (e *canaryExecutor) release(ctx *ExecutorContext) (bool, time.Duration, err
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		if err := releaseControl.Finalize(wi); err != nil {
+		if err := releaseControl.Finalize(ctx, wi); err != nil {
 			return false, retryStop, newDoCanaryError(
 				"FailedFinalize",
 				fmt.Sprintf("failed to delete canary resource for workload(%s), err: %v", item.CrossClusterObjectNameReference, err),

@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation"
+	kubeutilclient "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -223,7 +224,7 @@ func (r *RolloutReconciler) ensureFinalizer(ctx context.Context, obj *rolloutv1a
 	logger := logr.FromContextOrDiscard(ctx)
 	if obj.DeletionTimestamp == nil {
 		// ensure finalizer
-		if err := utils.AddAndUpdateFinalizer(r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
+		if err := kubeutilclient.AddFinalizerAndUpdate(ctx, r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
 			r.recordCondition(obj, newStatus, reconcileOK, metav1.ConditionFalse, "FailedAddFinalizer", fmt.Sprintf("failed to add finalizer %s, err: %v", rollout.FinalizerRolloutProtection, err))
 			return err
 		}
@@ -232,7 +233,7 @@ func (r *RolloutReconciler) ensureFinalizer(ctx context.Context, obj *rolloutv1a
 
 	if condition.IsTerminationCompleted(obj.Status.Conditions) {
 		// remove finalizer
-		if err := utils.RemoveAndUpdateFinalizer(r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
+		if err := kubeutilclient.RemoveFinalizerAndUpdate(ctx, r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
 			r.recordCondition(obj, newStatus, reconcileOK, metav1.ConditionFalse, "FailedRemoveFinalizer", fmt.Sprintf("failed to remove finalizer %s, err: %v", rollout.FinalizerRolloutProtection, err))
 			return err
 		}

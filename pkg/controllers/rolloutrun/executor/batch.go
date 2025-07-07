@@ -159,7 +159,7 @@ func (e *batchExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, er
 		if wi == nil {
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
-		err := batchControl.Initialize(wi, ctx.OwnerKind, ctx.OwnerName, rolloutRunName, currentBatchIndex)
+		err := batchControl.Initialize(ctx, wi, ctx.OwnerKind, ctx.OwnerName, rolloutRunName, currentBatchIndex)
 		if err != nil {
 			return false, retryStop, err
 		}
@@ -227,7 +227,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		}
 
 		// ensure partition: upgradePartition is an idempotent function
-		changed, err := batchControl.UpdatePartition(info, expectedReplicas)
+		changed, err := batchControl.UpdatePartition(ctx, info, expectedReplicas)
 		if err != nil {
 			return false, retryStop, err
 		}

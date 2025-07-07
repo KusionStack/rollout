@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubeutilclient "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -123,7 +124,7 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, nil
 	}
 
-	if err = r.handleFinalizer(obj); err != nil {
+	if err = r.handleFinalizer(ctx, obj); err != nil {
 		logger.Error(err, "handleFinalizer failed")
 		return ctrl.Result{}, nil
 	}
@@ -167,15 +168,15 @@ func (r *RolloutRunReconciler) satisfiedExpectations(instance *rolloutv1alpha1.R
 	return true
 }
 
-func (r *RolloutRunReconciler) handleFinalizer(rolloutRun *rolloutv1alpha1.RolloutRun) error {
+func (r *RolloutRunReconciler) handleFinalizer(ctx context.Context, rolloutRun *rolloutv1alpha1.RolloutRun) error {
 	if rolloutRun.IsCompleted() {
 		// remove finalizer when rolloutRun is completed
-		if err := utils.RemoveAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
+		if err := kubeutilclient.RemoveFinalizerAndUpdate(ctx, r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
 			return err
 		}
 	} else if rolloutRun.DeletionTimestamp.IsZero() {
 		// add finalizer when rolloutRun is not completed and not deleted
-		if err := utils.AddAndUpdateFinalizer(r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
+		if err := kubeutilclient.AddFinalizerAndUpdate(ctx, r.Client, rolloutRun, rollout.FinalizerRolloutProtection); err != nil {
 			return err
 		}
 	}
