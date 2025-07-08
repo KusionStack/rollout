@@ -65,6 +65,19 @@ func CalculateExpectedPartition(total *int32, expectedUpdatedReplicas, partition
 	return max(totalReplicas-expectedUpdatedReplicas, 0)
 }
 
+// CalculateProgressingPartition calculates the progressing partition based on the total replicas, expected replicas, and the partition in the spec.
+// In this function, partition means how many replicas need to be updated.
+func CalculateProgressingPartition(total *int32, expectedUpdatedReplicas, partitionInSpec int32) int32 {
+	totalReplicas := ptr.Deref(total, 0)
+
+	if partitionInSpec >= expectedUpdatedReplicas {
+		// already updated if the current updated partition is greater than or equal to the expected updated partition
+		return partitionInSpec
+	}
+
+	return min(expectedUpdatedReplicas, totalReplicas)
+}
+
 // PatchMetadata patches metadata with the given patch
 func PatchMetadata(meta *metav1.ObjectMeta, patch rolloutv1alpha1.MetadataPatch) {
 	if len(patch.Labels) > 0 {

@@ -86,3 +86,64 @@ func TestCalculateExpectedPartition(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculatexProgressingPartition(t *testing.T) {
+	tests := []struct {
+		name             string
+		total            int32
+		expectedReplicas int32
+		partitionInSpec  int32
+		want             int32
+		wantErr          bool
+	}{
+		{
+			name:             "total 10, current partition 0, want to update 1",
+			total:            10,
+			expectedReplicas: 1,
+			partitionInSpec:  0,
+			want:             1,
+			wantErr:          false,
+		},
+		{
+			name:             "total 10, current partition 5, want to update 1",
+			total:            10,
+			expectedReplicas: 1,
+			partitionInSpec:  5,
+			want:             5,
+			wantErr:          false,
+		},
+		{
+			name:             "total 10, current partition 10, want to update 1",
+			total:            10,
+			expectedReplicas: 1,
+			partitionInSpec:  10,
+			want:             10,
+			wantErr:          false,
+		},
+		{
+			name:             "total 10, current partition 15, want to update 0",
+			total:            10,
+			expectedReplicas: 0,
+			partitionInSpec:  15,
+			want:             15,
+			wantErr:          false,
+		},
+		{
+			name:             "total 10, current partition 0, want to update 15",
+			total:            10,
+			expectedReplicas: 15,
+			partitionInSpec:  0,
+			want:             10,
+			wantErr:          false,
+		},
+	}
+	for i := range tests {
+		tt := tests[i]
+		t.Run(tt.name, func(t *testing.T) {
+			got := CalculateProgressingPartition(&tt.total, tt.expectedReplicas, tt.partitionInSpec)
+			if got != tt.want {
+				t.Errorf("CalculateExpectedPartition() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
