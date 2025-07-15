@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
 // Accessor defines the functions to access the workload.

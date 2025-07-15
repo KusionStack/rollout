@@ -18,7 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/apis/rollout"
+	"kusionstack.io/kube-api/rollout"
 	"kusionstack.io/rollout/pkg/backend"
 )
 

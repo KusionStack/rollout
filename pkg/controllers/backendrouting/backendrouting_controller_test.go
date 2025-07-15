@@ -31,7 +31,7 @@ import (
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
 var _ = Describe("backend-routing-controller", func() {

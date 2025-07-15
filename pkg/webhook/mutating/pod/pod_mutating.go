@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"kusionstack.io/rollout/apis/rollout"
+	"kusionstack.io/kube-api/rollout"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils/progressinginfos"
 	"kusionstack.io/rollout/pkg/webhook/generic"

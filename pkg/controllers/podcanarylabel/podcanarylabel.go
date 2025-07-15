@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	rolloutapi "kusionstack.io/rollout/apis/rollout"
+	rolloutapi "kusionstack.io/kube-api/rollout"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	rolloutcontroller "kusionstack.io/rollout/pkg/controllers/rollout"
 	"kusionstack.io/rollout/pkg/utils"

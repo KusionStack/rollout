@@ -9,8 +9,8 @@ import (
 	"github.com/samber/lo"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/apis/rollout"
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils"
 )
@@ -112,7 +112,7 @@ func (m *ProgressingInfoMutator) SetProgressingInfo(obj runtimeclient.Object, in
 
 	// get info from obj annotation
 	var existing *rolloutv1alpha1.ProgressingInfo
-	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), rollout.AnnoRolloutProgressingInfo, "")
+	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), rolloutapi.AnnoRolloutProgressingInfo, "")
 	if len(objInfo) > 0 {
 		temp := rolloutv1alpha1.ProgressingInfo{}
 		err := json.Unmarshal([]byte(objInfo), &temp)
@@ -128,7 +128,7 @@ func (m *ProgressingInfoMutator) SetProgressingInfo(obj runtimeclient.Object, in
 		changed = true
 		// set progressingInfo if no progressingInfo
 		utils.MutateAnnotations(obj, func(annotations map[string]string) {
-			annotations[rollout.AnnoRolloutProgressingInfo] = string(expected)
+			annotations[rolloutapi.AnnoRolloutProgressingInfo] = string(expected)
 		})
 	}
 	return changed
@@ -156,7 +156,7 @@ func generateProgressingInfos(owners []*registry.WorkloadAccessor) (*rolloutv1al
 	result := ProgressingInfos{}
 
 	for _, owner := range owners {
-		ownerInfo := utils.GetMapValueByDefault(owner.Object.GetAnnotations(), rollout.AnnoRolloutProgressingInfo, "")
+		ownerInfo := utils.GetMapValueByDefault(owner.Object.GetAnnotations(), rolloutapi.AnnoRolloutProgressingInfo, "")
 		if len(ownerInfo) == 0 {
 			continue
 		}

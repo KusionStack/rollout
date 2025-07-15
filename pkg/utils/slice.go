@@ -18,7 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
 func SliceTopologyInfoEqual(a, b []v1alpha1.TopologyInfo) bool {
