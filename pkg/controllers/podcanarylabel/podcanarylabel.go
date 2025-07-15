@@ -104,7 +104,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		// this workload is not controlled by rollout, we need to make sure pod revision label is not added
 		updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
 			utils.MutateLabels(pod, func(labels map[string]string) {
-				delete(labels, rolloutapi.LabelPodRevision)
+				delete(labels, rolloutapi.LabelTrafficRevision)
 			})
 			return nil
 		})
@@ -125,7 +125,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	// patch pod label
 	updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
 		utils.MutateLabels(pod, func(labels map[string]string) {
-			labels[rolloutapi.LabelPodRevision] = podRevision
+			labels[rolloutapi.LabelTrafficRevision] = podRevision
 		})
 		return nil
 	})
@@ -140,17 +140,17 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 func recognizePodRevision(pc workload.PodControl, reader client.Reader, workloadObj client.Object, pod *corev1.Pod) string {
 	if workload.IsCanary(workloadObj) {
 		// canary workload, always set pod revision to canary
-		return rolloutapi.LabelValuePodRevisionCanary
+		return rolloutapi.LabelValueTrafficRevisionCanary
 	}
 
 	if !workload.IsProgressing(workloadObj) {
 		// workload is not progressing, set pod revision to base
-		return rolloutapi.LabelValuePodRevisionBase
+		return rolloutapi.LabelValueTrafficRevisionBase
 	}
 
 	// workload is progressing, set updated pod revision to canary
 	if updated, _ := pc.IsUpdatedPod(reader, workloadObj, pod); updated {
-		return rolloutapi.LabelValuePodRevisionCanary
+		return rolloutapi.LabelValueTrafficRevisionCanary
 	}
-	return rolloutapi.LabelValuePodRevisionBase
+	return rolloutapi.LabelValueTrafficRevisionBase
 }

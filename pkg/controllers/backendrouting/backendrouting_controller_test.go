@@ -243,7 +243,7 @@ var _ = Describe("backend-routing-controller", func() {
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
 
-		It("Canary ready", func() {
+		It("Canary By Weight", func() {
 			// add canary to backendrouting
 			brTmp := &v1alpha1.BackendRouting{}
 			err := fedClient.Get(ctx, types.NamespacedName{
@@ -255,24 +255,19 @@ var _ = Describe("backend-routing-controller", func() {
 			brTmp.Spec.Forwarding.Canary = v1alpha1.CanaryBackendRule{
 				Name: "br-controller-ut-svc1-canary",
 				TrafficStrategy: v1alpha1.TrafficStrategy{
-					Weight: &canaryWeight,
-					HTTPRule: &v1alpha1.HTTPRouteRule{
-						Matches: []v1alpha1.HTTPRouteMatch{
-							{
-								Headers: []gatewayapiv1.HTTPHeaderMatch{
-									{
-										Name:  "env",
-										Value: "canary",
-									},
-								},
-							},
-						},
-						Filter: v1alpha1.HTTPRouteFilter{
-							RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
-								Set: []gatewayapiv1.HTTPHeader{
-									{
-										Name:  "x-mse-tag",
-										Value: "canary",
+					HTTP: &v1alpha1.HTTPTrafficStrategy{
+						Weight: &canaryWeight,
+						HTTPRouteRule: v1alpha1.HTTPRouteRule{
+							Filters: []gatewayapiv1.HTTPRouteFilter{
+								{
+									Type: gatewayapiv1.HTTPRouteFilterRequestHeaderModifier,
+									RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+										Set: []gatewayapiv1.HTTPHeader{
+											{
+												Name:  "x-mse-tag",
+												Value: "canary",
+											},
+										},
 									},
 								},
 							},
@@ -294,7 +289,6 @@ var _ = Describe("backend-routing-controller", func() {
 				}
 				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary"] == "true" &&
 					igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "50" &&
-					igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-by-header-value"] == "canary" &&
 					igsTmp.Annotations["mse.ingress.kubernetes.io/request-header-control-update"] == "" &&
 					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
@@ -322,24 +316,19 @@ var _ = Describe("backend-routing-controller", func() {
 			brTmp.Spec.Forwarding.Canary = v1alpha1.CanaryBackendRule{
 				Name: "br-controller-ut-svc1-canary",
 				TrafficStrategy: v1alpha1.TrafficStrategy{
-					Weight: &canaryWeight,
-					HTTPRule: &v1alpha1.HTTPRouteRule{
-						Matches: []v1alpha1.HTTPRouteMatch{
-							{
-								Headers: []gatewayapiv1.HTTPHeaderMatch{
-									{
-										Name:  "env",
-										Value: "canary",
-									},
-								},
-							},
-						},
-						Filter: v1alpha1.HTTPRouteFilter{
-							RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
-								Set: []gatewayapiv1.HTTPHeader{
-									{
-										Name:  "x-mse-tag",
-										Value: "canary",
+					HTTP: &v1alpha1.HTTPTrafficStrategy{
+						Weight: &canaryWeight,
+						HTTPRouteRule: v1alpha1.HTTPRouteRule{
+							Filters: []gatewayapiv1.HTTPRouteFilter{
+								{
+									Type: gatewayapiv1.HTTPRouteFilterRequestHeaderModifier,
+									RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+										Set: []gatewayapiv1.HTTPHeader{
+											{
+												Name:  "x-mse-tag",
+												Value: "canary",
+											},
+										},
 									},
 								},
 							},
@@ -360,6 +349,77 @@ var _ = Describe("backend-routing-controller", func() {
 					return false
 				}
 				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-weight"] == "20" &&
+					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				brTmp = &v1alpha1.BackendRouting{}
+				err = fedClient.Get(ctx, types.NamespacedName{
+					Name:      br0.Name,
+					Namespace: br0.Namespace,
+				}, brTmp)
+				if err != nil {
+					return false
+				}
+				return brTmp.Status.Phase == v1alpha1.Ready && brTmp.Generation == brTmp.Status.ObservedGeneration
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
+		})
+
+		It("Canary By Header", func() {
+			// add canary to backendrouting
+			brTmp := &v1alpha1.BackendRouting{}
+			err := fedClient.Get(ctx, types.NamespacedName{
+				Name:      br0.Name,
+				Namespace: br0.Namespace,
+			}, brTmp)
+			Expect(err).ShouldNot(HaveOccurred())
+			brTmp.Spec.Forwarding.Canary = v1alpha1.CanaryBackendRule{
+				Name: "br-controller-ut-svc1-canary",
+				TrafficStrategy: v1alpha1.TrafficStrategy{
+					HTTP: &v1alpha1.HTTPTrafficStrategy{
+						HTTPRouteRule: v1alpha1.HTTPRouteRule{
+							Matches: []v1alpha1.HTTPRouteMatch{
+								{
+									Headers: []gatewayapiv1.HTTPHeaderMatch{
+										{
+											Name:  "env",
+											Value: "canary",
+										},
+									},
+								},
+							},
+							Filters: []gatewayapiv1.HTTPRouteFilter{
+								{
+									Type: gatewayapiv1.HTTPRouteFilterRequestHeaderModifier,
+									RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+										Set: []gatewayapiv1.HTTPHeader{
+											{
+												Name:  "x-mse-tag",
+												Value: "canary",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err = fedClient.Update(ctx, brTmp)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Eventually(func() bool {
+				igsTmp := &networkingv1.Ingress{}
+				err = clusterClient1.Get(ctx, types.NamespacedName{
+					Name:      "br-controller-ut-igs1-canary",
+					Namespace: "default",
+				}, igsTmp)
+				if err != nil {
+					return false
+				}
+				return igsTmp.Annotations["nginx.ingress.kubernetes.io/canary"] == "true" &&
+					igsTmp.Annotations["nginx.ingress.kubernetes.io/canary-by-header-value"] == "canary" &&
+					igsTmp.Annotations["mse.ingress.kubernetes.io/request-header-control-update"] == "" &&
 					igsTmp.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name == "br-controller-ut-svc1-canary"
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 

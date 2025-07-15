@@ -112,7 +112,7 @@ type RolloutRunCanaryStrategy struct {
 
 	// PodTemplateMetadataPatch defines a patch for workload podTemplate metadata.
 	// +optional
-	PodTemplateMetadataPatch *MetadataPatch `json:"podTemplateMetadataPatch,omitempty"`
+	TemplateMetadataPatch *MetadataPatch `json:"podTemplateMetadataPatch,omitempty"`
 }
 
 type RolloutRunStepTarget struct {

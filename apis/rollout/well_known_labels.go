@@ -26,9 +26,9 @@ const (
 	// This label will be added to canary workload and pods.
 	LabelCanary = "rollout.kusionstack.io/canary"
 	// This label indicates the revision of pods controlled by workload.
-	LabelPodRevision            = "pod.rollout.kusionstack.io/revision"
-	LabelValuePodRevisionBase   = "base"
-	LabelValuePodRevisionCanary = "canary"
+	LabelTrafficRevision            = "traffic.rollout.kusionstack.io/revision"
+	LabelValueTrafficRevisionBase   = "base"
+	LabelValueTrafficRevisionCanary = "canary"
 )
 
 // rollout class label

@@ -126,10 +126,10 @@ func constructRolloutRunCanary(strategy *rolloutv1alpha1.CanaryStrategy, workloa
 	}
 
 	step := &rolloutv1alpha1.RolloutRunCanaryStrategy{
-		Targets:                  targets,
-		Traffic:                  strategy.Traffic,
-		Properties:               strategy.Properties,
-		PodTemplateMetadataPatch: strategy.PodTemplateMetadataPatch,
+		Targets:               targets,
+		Traffic:               strategy.Traffic,
+		Properties:            strategy.Properties,
+		TemplateMetadataPatch: strategy.TemplateMetadataPatch,
 	}
 	return step
 }

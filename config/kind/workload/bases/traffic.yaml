@@ -48,6 +48,7 @@ kind: Ingress
 metadata:
   name: rollout-demo1
 spec:
+  ingressClassName: mse
   rules:
   - host: rollout-demo.example.com
     http:
@@ -66,6 +67,7 @@ kind: Ingress
 metadata:
   name: rollout-demo2
 spec:
+  ingressClassName: mse
   rules:
   - host: rollout-demo.example.com
     http:

@@ -25,16 +25,17 @@ metadata:
   name: rollout-demo
 canary:
   replicas: 2
-  podTemplateMetadataPatch:
+  templateMetadataPatch:
     labels:
       service.tag: "canary"
   traffic:
     http:
-      filter:
-        requestHeaderModifier:
+      filters:
+      - requestHeaderModifier:
           set:
           - name: x-mse-tag
             value: canary
+        type: RequestHeaderModifier
       matches:
       - headers:
         - type: Exact 

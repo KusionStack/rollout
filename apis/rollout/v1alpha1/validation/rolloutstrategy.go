@@ -78,13 +78,13 @@ func ValidateCanaryStrategy(strategy *rolloutv1alpha1.CanaryStrategy, fldPath *f
 
 	allErrs = append(allErrs, appsvalidation.ValidatePositiveIntOrPercent(strategy.Replicas, fldPath.Child("replicas"))...)
 	allErrs = append(allErrs, ValidateResourceMatch(strategy.Match, fldPath.Child("matchTargets"))...)
-	allErrs = append(allErrs, validatePodTemplatePatch(strategy.PodTemplateMetadataPatch, fldPath.Child("patch"))...)
+	allErrs = append(allErrs, validateTemplateMetadataPatch(strategy.TemplateMetadataPatch, fldPath.Child("patch"))...)
 	allErrs = append(allErrs, validateTrafficStrategy(strategy.Traffic, fldPath.Child("traffic"))...)
 
 	return allErrs
 }
 
-func validatePodTemplatePatch(patch *rolloutv1alpha1.MetadataPatch, fldPath *field.Path) field.ErrorList {
+func validateTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch, fldPath *field.Path) field.ErrorList {
 	if patch == nil {
 		return nil
 	}
@@ -140,8 +140,16 @@ func validateTrafficStrategy(traffic *rolloutv1alpha1.TrafficStrategy, fldPath *
 	}
 	allErrs := field.ErrorList{}
 
-	if traffic.Weight != nil && (traffic.HTTPRule != nil && len(traffic.HTTPRule.Matches) > 0) {
-		allErrs = append(allErrs, field.Forbidden(fldPath, "weight and http rule matches cannot be specified together"))
+	if traffic.HTTP != nil {
+		if traffic.HTTP.Weight != nil {
+			if len(traffic.HTTP.Matches) > 0 {
+				allErrs = append(allErrs, field.Forbidden(fldPath, "weight and http rule matches cannot be specified together"))
+			}
+			if traffic.HTTP.BaseTraffic != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath, "weight and base traffic cannot be specified together"))
+			}
+		}
 	}
+
 	return allErrs
 }

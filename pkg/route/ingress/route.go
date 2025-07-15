@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/samber/lo"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -59,36 +60,41 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.
 		AnnoMseReqHeaderCtrlAdd:    "",
 		AnnoMseReqHeaderCtrlRemove: "",
 	}
-	if strategy.Weight != nil {
-		annosCanaryNeedCheck[AnnoCanaryWeight] = strconv.Itoa(int(*strategy.Weight))
-	}
 
 	isMseIngress := igs.Spec.IngressClassName != nil && *igs.Spec.IngressClassName == MseIngressClass
 
-	if strategy.HTTPRule != nil {
-		if len(strategy.HTTPRule.Matches) > 0 {
-			if len(strategy.HTTPRule.Matches[0].Headers) > 0 {
-				annosCanaryNeedCheck[AnnoCanaryHeader] = string(strategy.HTTPRule.Matches[0].Headers[0].Name)
-				annosCanaryNeedCheck[AnnoCanaryHeaderValue] = strategy.HTTPRule.Matches[0].Headers[0].Value
+	if strategy.HTTP != nil {
+		if len(strategy.HTTP.Matches) > 0 {
+			if len(strategy.HTTP.Matches[0].Headers) > 0 {
+				annosCanaryNeedCheck[AnnoCanaryHeader] = string(strategy.HTTP.Matches[0].Headers[0].Name)
+				annosCanaryNeedCheck[AnnoCanaryHeaderValue] = strategy.HTTP.Matches[0].Headers[0].Value
 			}
-			if isMseIngress && len(strategy.HTTPRule.Matches[0].QueryParams) > 0 {
-				annosCanaryNeedCheck[AnnoMseCanaryQuery] = string(strategy.HTTPRule.Matches[0].QueryParams[0].Name)
-				annosCanaryNeedCheck[AnnoMseCanaryQueryValue] = strategy.HTTPRule.Matches[0].QueryParams[0].Value
+			if isMseIngress && len(strategy.HTTP.Matches[0].QueryParams) > 0 {
+				annosCanaryNeedCheck[AnnoMseCanaryQuery] = string(strategy.HTTP.Matches[0].QueryParams[0].Name)
+				annosCanaryNeedCheck[AnnoMseCanaryQueryValue] = strategy.HTTP.Matches[0].QueryParams[0].Value
 			}
+		} else if strategy.HTTP.Weight != nil {
+			annosCanaryNeedCheck[AnnoCanaryWeight] = strconv.Itoa(int(*strategy.HTTP.Weight))
 		}
-		if isMseIngress && strategy.HTTPRule.Filter.RequestHeaderModifier != nil {
-			annoSet := generateMultiHeadersAnno(strategy.HTTPRule.Filter.RequestHeaderModifier.Set)
-			if annoSet != "" {
-				annosCanaryNeedCheck[AnnoMseReqHeaderCtrlUpdate] = annoSet
-			}
 
-			annoAdd := generateMultiHeadersAnno(strategy.HTTPRule.Filter.RequestHeaderModifier.Add)
-			if annoAdd != "" {
-				annosCanaryNeedCheck[AnnoMseReqHeaderCtrlAdd] = annoAdd
-			}
+		if isMseIngress && len(strategy.HTTP.Filters) > 0 {
+			filter, ok := lo.Find(strategy.HTTP.Filters, func(item v1.HTTPRouteFilter) bool {
+				return item.RequestHeaderModifier != nil
+			})
+			if ok {
+				annoSet := generateMultiHeadersAnno(filter.RequestHeaderModifier.Set)
+				if annoSet != "" {
+					annosCanaryNeedCheck[AnnoMseReqHeaderCtrlUpdate] = annoSet
+				}
 
-			if len(strategy.HTTPRule.Filter.RequestHeaderModifier.Remove) > 0 {
-				annosCanaryNeedCheck[AnnoMseReqHeaderCtrlRemove] = strings.Join(strategy.HTTPRule.Filter.RequestHeaderModifier.Remove, ",")
+				annoAdd := generateMultiHeadersAnno(filter.RequestHeaderModifier.Add)
+				if annoAdd != "" {
+					annosCanaryNeedCheck[AnnoMseReqHeaderCtrlAdd] = annoAdd
+				}
+
+				if len(filter.RequestHeaderModifier.Remove) > 0 {
+					annosCanaryNeedCheck[AnnoMseReqHeaderCtrlRemove] = strings.Join(filter.RequestHeaderModifier.Remove, ",")
+				}
 			}
 		}
 	}

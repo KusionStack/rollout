@@ -28,14 +28,18 @@ import (
 )
 
 var validTraffic = &rolloutv1alpha1.TrafficStrategy{
-	Weight: ptr.To[int32](10),
-	HTTPRule: &rolloutv1alpha1.HTTPRouteRule{
-		Filter: rolloutv1alpha1.HTTPRouteFilter{
-			RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
-				Set: []gatewayapiv1.HTTPHeader{
-					{
-						Name:  "foo",
-						Value: "bar",
+	HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+		Weight: ptr.To[int32](10),
+		HTTPRouteRule: rolloutv1alpha1.HTTPRouteRule{
+			Filters: []gatewayapiv1.HTTPRouteFilter{
+				{
+					RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+						Set: []gatewayapiv1.HTTPHeader{
+							{
+								Name:  "foo",
+								Value: "bar",
+							},
+						},
 					},
 				},
 			},
@@ -44,14 +48,28 @@ var validTraffic = &rolloutv1alpha1.TrafficStrategy{
 }
 
 var invalidTraffic = &rolloutv1alpha1.TrafficStrategy{
-	Weight: ptr.To[int32](10),
-	HTTPRule: &rolloutv1alpha1.HTTPRouteRule{
-		Matches: []rolloutv1alpha1.HTTPRouteMatch{
-			{
-				Headers: []gatewayapiv1.HTTPHeaderMatch{
-					{
-						Name:  "foo",
-						Value: "bar",
+	HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+		Weight: ptr.To[int32](10),
+		HTTPRouteRule: rolloutv1alpha1.HTTPRouteRule{
+			Matches: []rolloutv1alpha1.HTTPRouteMatch{
+				{
+					Headers: []gatewayapiv1.HTTPHeaderMatch{
+						{
+							Name:  "foo",
+							Value: "bar",
+						},
+					},
+				},
+			},
+			Filters: []gatewayapiv1.HTTPRouteFilter{
+				{
+					RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+						Set: []gatewayapiv1.HTTPHeader{
+							{
+								Name:  "foo",
+								Value: "bar",
+							},
+						},
 					},
 				},
 			},

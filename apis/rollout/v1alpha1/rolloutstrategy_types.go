@@ -128,7 +128,7 @@ type CanaryStrategy struct {
 	// +optional
 	Properties map[string]string `json:"properties,omitempty"`
 
-	// PodTemplateMetadataPatch defines a patch for workload podTemplate metadata.
+	// TemplateMetadataPatch defines a patch for workload template metadata.
 	// +optional
-	PodTemplateMetadataPatch *MetadataPatch `json:"podTemplateMetadataPatch,omitempty"`
+	TemplateMetadataPatch *MetadataPatch `json:"templateMetadataPatch,omitempty"`
 }

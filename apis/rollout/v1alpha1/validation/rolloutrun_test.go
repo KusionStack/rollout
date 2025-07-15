@@ -75,7 +75,7 @@ func newValidRollotRun() *rolloutv1alpha1.RolloutRun {
 						Replicas: intstr.FromInt(1),
 					},
 				},
-				PodTemplateMetadataPatch: &rolloutv1alpha1.MetadataPatch{
+				TemplateMetadataPatch: &rolloutv1alpha1.MetadataPatch{
 					Labels: map[string]string{
 						"canary": "true",
 					},
@@ -305,7 +305,9 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				obj := validRolloutRun.DeepCopy()
 				obj.Spec.Canary.Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Canary.Traffic = &rolloutv1alpha1.TrafficStrategy{
-					Weight: ptr.To[int32](10),
+					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+						Weight: ptr.To[int32](10),
+					},
 				}
 				return obj
 			}(),
@@ -320,7 +322,7 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 					State: rolloutv1alpha1.RolloutStepRunning,
 				}
 				obj.Spec.Canary.Targets[0].Replicas = intstr.FromInt(2)
-				obj.Spec.Canary.PodTemplateMetadataPatch.Labels["canary"] = "false"
+				obj.Spec.Canary.TemplateMetadataPatch.Labels["canary"] = "false"
 				return obj
 			}(),
 			wantErr: true,
@@ -350,7 +352,9 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				}
 				obj.Spec.Batch.Batches[0].Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Batch.Batches[0].Traffic = &rolloutv1alpha1.TrafficStrategy{
-					Weight: ptr.To[int32](10),
+					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+						Weight: ptr.To[int32](10),
+					},
 				}
 				return obj
 			}(),
@@ -387,7 +391,9 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				obj.Spec.Batch.Batches[0].Breakpoint = true
 				obj.Spec.Batch.Batches[0].Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Batch.Batches[0].Traffic = &rolloutv1alpha1.TrafficStrategy{
-					Weight: ptr.To[int32](10),
+					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+						Weight: ptr.To[int32](10),
+					},
 				}
 				return obj
 			}(),
