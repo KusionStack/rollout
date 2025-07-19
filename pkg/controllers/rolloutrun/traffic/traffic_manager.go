@@ -20,12 +20,12 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/meta"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 type Manager struct {
@@ -75,44 +75,78 @@ func (m *Manager) With(logger logr.Logger, workloads []rolloutv1alpha1.RolloutRu
 	m.strategy = strategy
 }
 
-func (m *Manager) ForkStable() (controllerutil.OperationResult, error) {
+func (m *Manager) ForkBackends() (controllerutil.OperationResult, error) {
 	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
-		if routing.Spec.Forwarding == nil {
-			routing.Spec.Forwarding = &rolloutv1alpha1.BackendForwarding{}
+		if routing.Spec.ForkedBackends == nil {
+			routing.Spec.ForkedBackends = &rolloutv1alpha1.ForkedBackends{}
 		}
-		routing.Spec.Forwarding.Stable = rolloutv1alpha1.StableBackendRule{
+
+		routing.Spec.ForkedBackends.Stable = rolloutv1alpha1.ForkedBackend{
 			Name: routing.Spec.Backend.Name + "-stable",
 		}
+
+		routing.Spec.ForkedBackends.Canary = rolloutv1alpha1.ForkedBackend{
+			Name: routing.Spec.Backend.Name + "-canary",
+		}
 		return nil
 	})
 }
 
-func (m *Manager) ForkCanary() (controllerutil.OperationResult, error) {
+func (m *Manager) DeleteForkedBackends() (controllerutil.OperationResult, error) {
+	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+		routing.Spec.ForkedBackends = nil
+		return nil
+	})
+}
+
+func (m *Manager) InitializeRoute() (controllerutil.OperationResult, error) {
 	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
 		if routing.Spec.Forwarding == nil {
-			routing.Spec.Forwarding = &rolloutv1alpha1.BackendForwarding{}
+			routing.Spec.Forwarding = &rolloutv1alpha1.BackendForwarding{
+				HTTP: &rolloutv1alpha1.HTTPForwarding{},
+			}
 		}
-		routing.Spec.Forwarding.Canary = rolloutv1alpha1.CanaryBackendRule{
-			Name:            routing.Spec.Backend.Name + "-canary",
-			TrafficStrategy: *m.strategy,
+		if m.strategy.HTTP.StableTraffic == nil {
+			routing.Spec.Forwarding.HTTP.Origin = &rolloutv1alpha1.OriginHTTPForwarding{
+				BackendName: routing.Spec.ForkedBackends.Stable.Name,
+			}
+		} else {
+			routing.Spec.Forwarding.HTTP.Stable = &rolloutv1alpha1.StableHTTPForwarding{
+				HTTPRouteRule: *m.strategy.HTTP.StableTraffic,
+			}
 		}
 		return nil
 	})
 }
 
-func (m *Manager) RevertCanary() (controllerutil.OperationResult, error) {
-	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
-		if routing.Spec.Forwarding == nil {
-			return nil
-		}
-		routing.Spec.Forwarding.Canary = rolloutv1alpha1.CanaryBackendRule{}
-		return nil
-	})
-}
-
-func (m *Manager) RevertStable() (controllerutil.OperationResult, error) {
+func (m *Manager) ResetRoute() (controllerutil.OperationResult, error) {
 	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
 		routing.Spec.Forwarding = nil
+		return nil
+	})
+}
+
+func (m *Manager) AddCanaryRoute() (controllerutil.OperationResult, error) {
+	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+		if routing.Spec.Forwarding == nil {
+			routing.Spec.Forwarding = &rolloutv1alpha1.BackendForwarding{
+				HTTP: &rolloutv1alpha1.HTTPForwarding{},
+			}
+		}
+		routing.Spec.Forwarding.HTTP.Canary = &rolloutv1alpha1.CanaryHTTPForwarding{
+			CanaryHTTPRouteRule: m.strategy.HTTP.CanaryHTTPRouteRule,
+		}
+		return nil
+	})
+}
+
+func (m *Manager) DeleteCanaryRoute() (controllerutil.OperationResult, error) {
+	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+		if routing.Spec.Forwarding != nil &&
+			routing.Spec.Forwarding.HTTP != nil &&
+			routing.Spec.Forwarding.HTTP.Canary != nil {
+			routing.Spec.Forwarding.HTTP.Canary = nil
+		}
 		return nil
 	})
 }
@@ -133,7 +167,7 @@ func (m *Manager) mutateRouting(mutateFn func(routing *rolloutv1alpha1.BackendRo
 		}
 		for i := range topo.routings {
 			routing := topo.routings[i]
-			updated, err := utils.UpdateOnConflict(ctx, m.client, m.client, routing, func() error {
+			updated, err := clientutil.UpdateOnConflict(ctx, m.client, m.client, routing, func(routing *rolloutv1alpha1.BackendRouting) error {
 				return mutateFn(routing)
 			})
 			if err != nil {
@@ -156,7 +190,7 @@ func (m *Manager) CheckReady() bool {
 		}
 		for _, routing := range topo.routings {
 			if routing.Generation == routing.Status.ObservedGeneration &&
-				routing.Status.Phase == rolloutv1alpha1.Ready {
+				meta.IsStatusConditionTrue(routing.Status.Conditions, rolloutv1alpha1.BackendRoutingReady) {
 				continue
 			}
 			return false

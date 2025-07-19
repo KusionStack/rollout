@@ -1,10 +1,9 @@
 package executor
 
 import (
-	ctrl "sigs.k8s.io/controller-runtime"
-
 	rolloutapis "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // doCommand

@@ -21,11 +21,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rolloutapi "kusionstack.io/kube-api/rollout"
-	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
 )
 

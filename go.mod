@@ -23,7 +23,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubernetes v1.22.2
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
-	kusionstack.io/kube-api v0.6.7-0.20250715075952-2aa7e2e576af
+	kusionstack.io/kube-api v0.6.7-0.20250719054959-1cbe2be851f6
 	kusionstack.io/kube-utils v0.2.1-0.20250613035327-11e9cdaec9d6
 	kusionstack.io/resourceconsist v0.0.2
 	sigs.k8s.io/controller-runtime v0.20.4
@@ -75,7 +75,7 @@ require (
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/samber/lo v1.47.0
 	github.com/spf13/afero v1.11.0 // indirect
-	go.uber.org/multierr v1.11.0
+	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/mod v0.23.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
@@ -138,4 +138,5 @@ replace (
 	k8s.io/system-validators => k8s.io/system-validators v1.5.0
 	k8s.io/utils => k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.10.3
+	sigs.k8s.io/gateway-api => sigs.k8s.io/gateway-api v1.2.0
 )

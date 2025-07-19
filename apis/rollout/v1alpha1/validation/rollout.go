@@ -21,7 +21,6 @@ import (
 	metav1validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 

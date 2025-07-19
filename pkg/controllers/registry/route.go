@@ -32,14 +32,14 @@ const (
 var Routes = NewRouteRegistry()
 
 type RouteRegistry interface {
-	genericregistry.Registry[schema.GroupVersionKind, route.Store]
+	genericregistry.Registry[schema.GroupVersionKind, route.Route]
 }
 
 func NewRouteRegistry() RouteRegistry {
-	return genericregistry.New[schema.GroupVersionKind, route.Store]()
+	return genericregistry.New[schema.GroupVersionKind, route.Route]()
 }
 
 func InitRouteRegistry(mgr manager.Manager) (bool, error) {
-	Routes.Register(ingress.GVK, ingress.NewStorage(mgr))
+	Routes.Register(ingress.GVK, ingress.NewStorage())
 	return true, nil
 }

@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	appsvalidation "k8s.io/kubernetes/pkg/apis/apps/validation"
-
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
@@ -144,7 +143,7 @@ func validateTrafficStrategy(traffic *rolloutv1alpha1.TrafficStrategy, fldPath *
 			if len(traffic.HTTP.Matches) > 0 {
 				allErrs = append(allErrs, field.Forbidden(fldPath, "weight and http rule matches cannot be specified together"))
 			}
-			if traffic.HTTP.BaseTraffic != nil {
+			if traffic.HTTP.StableTraffic != nil {
 				allErrs = append(allErrs, field.Forbidden(fldPath, "weight and base traffic cannot be specified together"))
 			}
 		}

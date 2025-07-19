@@ -18,7 +18,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
-
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 

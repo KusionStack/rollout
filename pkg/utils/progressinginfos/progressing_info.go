@@ -7,10 +7,10 @@ import (
 	"sort"
 
 	"github.com/samber/lo"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils"
 )

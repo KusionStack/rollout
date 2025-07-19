@@ -32,14 +32,14 @@ const (
 var Backends = NewBackendRegistry()
 
 type BackendRegistry interface {
-	genericregistry.Registry[schema.GroupVersionKind, backend.Store]
+	genericregistry.Registry[schema.GroupVersionKind, backend.InClusterBackend]
 }
 
 func NewBackendRegistry() BackendRegistry {
-	return genericregistry.New[schema.GroupVersionKind, backend.Store]()
+	return genericregistry.New[schema.GroupVersionKind, backend.InClusterBackend]()
 }
 
 func InitBackendRegistry(mgr manager.Manager) (bool, error) {
-	Backends.Register(service.GVK, service.NewStorage(mgr))
+	Backends.Register(service.GVK, service.New())
 	return true, nil
 }

@@ -22,6 +22,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"kusionstack.io/rollout/pkg/utils/accessor"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -29,14 +30,18 @@ var GVK = appsv1.SchemeGroupVersion.WithKind("StatefulSet")
 
 var ObjectTypeError = fmt.Errorf("object must be %s", GVK.GroupKind().String())
 
-type accessorImpl struct{}
-
-func New() workload.Accessor {
-	return &accessorImpl{}
+type accessorImpl struct {
+	accessor.ObjectAccessor
 }
 
-func (s *accessorImpl) GroupVersionKind() schema.GroupVersionKind {
-	return GVK
+func New() workload.Accessor {
+	return &accessorImpl{
+		ObjectAccessor: accessor.NewObjectAccessor(
+			GVK,
+			&appsv1.StatefulSet{},
+			&appsv1.StatefulSetList{},
+		),
+	}
 }
 
 func (c *accessorImpl) DependentWorkloadGVKs() []schema.GroupVersionKind {
@@ -45,14 +50,6 @@ func (c *accessorImpl) DependentWorkloadGVKs() []schema.GroupVersionKind {
 
 func (s *accessorImpl) Watchable() bool {
 	return true
-}
-
-func (s *accessorImpl) NewObject() client.Object {
-	return &appsv1.StatefulSet{}
-}
-
-func (s *accessorImpl) NewObjectList() client.ObjectList {
-	return &appsv1.StatefulSetList{}
 }
 
 func (s *accessorImpl) GetInfo(cluster string, object client.Object) (*workload.Info, error) {

@@ -22,22 +22,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
-
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var validTraffic = &rolloutv1alpha1.TrafficStrategy{
 	HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
-		Weight: ptr.To[int32](10),
-		HTTPRouteRule: rolloutv1alpha1.HTTPRouteRule{
-			Filters: []gatewayapiv1.HTTPRouteFilter{
-				{
-					RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
-						Set: []gatewayapiv1.HTTPHeader{
-							{
-								Name:  "foo",
-								Value: "bar",
+		CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+			Weight: ptr.To[int32](10),
+			HTTPRouteRule: rolloutv1alpha1.HTTPRouteRule{
+				Filters: []gatewayapiv1.HTTPRouteFilter{
+					{
+						RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+							Set: []gatewayapiv1.HTTPHeader{
+								{
+									Name:  "foo",
+									Value: "bar",
+								},
 							},
 						},
 					},
@@ -49,25 +50,27 @@ var validTraffic = &rolloutv1alpha1.TrafficStrategy{
 
 var invalidTraffic = &rolloutv1alpha1.TrafficStrategy{
 	HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
-		Weight: ptr.To[int32](10),
-		HTTPRouteRule: rolloutv1alpha1.HTTPRouteRule{
-			Matches: []rolloutv1alpha1.HTTPRouteMatch{
-				{
-					Headers: []gatewayapiv1.HTTPHeaderMatch{
-						{
-							Name:  "foo",
-							Value: "bar",
-						},
-					},
-				},
-			},
-			Filters: []gatewayapiv1.HTTPRouteFilter{
-				{
-					RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
-						Set: []gatewayapiv1.HTTPHeader{
+		CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+			Weight: ptr.To[int32](10),
+			HTTPRouteRule: rolloutv1alpha1.HTTPRouteRule{
+				Matches: []rolloutv1alpha1.HTTPRouteMatch{
+					{
+						Headers: []gatewayapiv1.HTTPHeaderMatch{
 							{
 								Name:  "foo",
 								Value: "bar",
+							},
+						},
+					},
+				},
+				Filters: []gatewayapiv1.HTTPRouteFilter{
+					{
+						RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+							Set: []gatewayapiv1.HTTPHeader{
+								{
+									Name:  "foo",
+									Value: "bar",
+								},
 							},
 						},
 					},

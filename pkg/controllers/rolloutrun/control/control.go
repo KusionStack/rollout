@@ -28,13 +28,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	kubeutilclient "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	rolloutapi "kusionstack.io/kube-api/rollout"
-	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )

@@ -7,10 +7,10 @@ import (
 )
 
 // ValidateWebhookURL validates webhook's URL.
-func ValidateWebhookURL(fldPath *field.Path, URL string, forceHttps bool) field.ErrorList {
+func ValidateWebhookURL(fldPath *field.Path, urlStr string, forceHttps bool) field.ErrorList {
 	var allErrors field.ErrorList
 	const form = "; desired format: https://host[/path]"
-	if u, err := url.Parse(URL); err != nil {
+	if u, err := url.Parse(urlStr); err != nil {
 		allErrors = append(allErrors, field.Required(fldPath, "url must be a valid URL: "+err.Error()+form))
 	} else {
 		if forceHttps && u.Scheme != "https" {

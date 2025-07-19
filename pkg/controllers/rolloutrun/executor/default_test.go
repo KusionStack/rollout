@@ -13,12 +13,12 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	rolloutapi "kusionstack.io/kube-api/rollout"
-	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 	"kusionstack.io/rollout/pkg/workload/statefulset"
 )

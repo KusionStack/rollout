@@ -18,7 +18,6 @@ package executor
 
 import (
 	"github.com/stretchr/testify/suite"
-
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 

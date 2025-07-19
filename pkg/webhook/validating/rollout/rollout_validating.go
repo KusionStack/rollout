@@ -24,10 +24,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	rolloutvalidation "kusionstack.io/rollout/apis/rollout/v1alpha1/validation"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 )

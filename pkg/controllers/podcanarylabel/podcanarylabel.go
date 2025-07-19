@@ -20,6 +20,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	rolloutapi "kusionstack.io/kube-api/rollout"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -29,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	rolloutapi "kusionstack.io/kube-api/rollout"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	rolloutcontroller "kusionstack.io/rollout/pkg/controllers/rollout"
 	"kusionstack.io/rollout/pkg/utils"
@@ -104,7 +104,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		// this workload is not controlled by rollout, we need to make sure pod revision label is not added
 		updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
 			utils.MutateLabels(pod, func(labels map[string]string) {
-				delete(labels, rolloutapi.LabelTrafficRevision)
+				delete(labels, rolloutapi.LabelTrafficLane)
 			})
 			return nil
 		})
@@ -120,37 +120,37 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		return reconcile.Result{}, nil
 	}
 
-	podRevision := recognizePodRevision(pc, r.Client, workloadObj.Object, pod)
+	trafficLane := recognizeTrafficLane(pc, r.Client, workloadObj.Object, pod)
 
 	// patch pod label
 	updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
 		utils.MutateLabels(pod, func(labels map[string]string) {
-			labels[rolloutapi.LabelTrafficRevision] = podRevision
+			labels[rolloutapi.LabelTrafficLane] = trafficLane
 		})
 		return nil
 	})
 
 	if updated {
-		logger.V(2).Info("updated pod revision label value", "revision", podRevision)
+		logger.V(2).Info("updated pod traffic lane label value", "traffic-lane", trafficLane)
 	}
 
 	return reconcile.Result{}, err
 }
 
-func recognizePodRevision(pc workload.PodControl, reader client.Reader, workloadObj client.Object, pod *corev1.Pod) string {
+func recognizeTrafficLane(pc workload.PodControl, reader client.Reader, workloadObj client.Object, pod *corev1.Pod) string {
 	if workload.IsCanary(workloadObj) {
 		// canary workload, always set pod revision to canary
-		return rolloutapi.LabelValueTrafficRevisionCanary
+		return rolloutapi.LabelValueTrafficLaneCanary
 	}
 
 	if !workload.IsProgressing(workloadObj) {
 		// workload is not progressing, set pod revision to base
-		return rolloutapi.LabelValueTrafficRevisionBase
+		return rolloutapi.LabelValueTrafficLaneStable
 	}
 
 	// workload is progressing, set updated pod revision to canary
 	if updated, _ := pc.IsUpdatedPod(reader, workloadObj, pod); updated {
-		return rolloutapi.LabelValueTrafficRevisionCanary
+		return rolloutapi.LabelValueTrafficLaneCanary
 	}
-	return rolloutapi.LabelValueTrafficRevisionBase
+	return rolloutapi.LabelValueTrafficLaneStable
 }

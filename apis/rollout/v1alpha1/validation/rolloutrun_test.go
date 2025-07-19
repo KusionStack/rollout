@@ -22,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
@@ -306,7 +305,9 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				obj.Spec.Canary.Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Canary.Traffic = &rolloutv1alpha1.TrafficStrategy{
 					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
-						Weight: ptr.To[int32](10),
+						CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+							Weight: ptr.To[int32](10),
+						},
 					},
 				}
 				return obj
@@ -353,7 +354,9 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				obj.Spec.Batch.Batches[0].Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Batch.Batches[0].Traffic = &rolloutv1alpha1.TrafficStrategy{
 					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
-						Weight: ptr.To[int32](10),
+						CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+							Weight: ptr.To[int32](10),
+						},
 					},
 				}
 				return obj
@@ -392,7 +395,9 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				obj.Spec.Batch.Batches[0].Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Batch.Batches[0].Traffic = &rolloutv1alpha1.TrafficStrategy{
 					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
-						Weight: ptr.To[int32](10),
+						CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+							Weight: ptr.To[int32](10),
+						},
 					},
 				}
 				return obj

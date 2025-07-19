@@ -21,14 +21,15 @@ import (
 
 	"github.com/samber/lo"
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	v1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/route"
 )
 
@@ -40,14 +41,10 @@ type ingressRoute struct {
 	cluster string
 }
 
-func (i *ingressRoute) GetRouteObject() client.Object {
-	return i.obj
-}
-
-func (i *ingressRoute) AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.BackendForwarding) error {
+func (i *ingressRoute) AddCanary(ctx context.Context, obj *rolloutv1alpha1.BackendRouting) error {
 	igs := i.obj
 
-	strategy := forwarding.Canary.TrafficStrategy
+	strategy := obj.Spec.Forwarding.HTTP.Canary
 
 	annosCanaryNeedCheck := map[string]string{
 		AnnoCanary:                 "true",
@@ -63,22 +60,22 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.
 
 	isMseIngress := igs.Spec.IngressClassName != nil && *igs.Spec.IngressClassName == MseIngressClass
 
-	if strategy.HTTP != nil {
-		if len(strategy.HTTP.Matches) > 0 {
-			if len(strategy.HTTP.Matches[0].Headers) > 0 {
-				annosCanaryNeedCheck[AnnoCanaryHeader] = string(strategy.HTTP.Matches[0].Headers[0].Name)
-				annosCanaryNeedCheck[AnnoCanaryHeaderValue] = strategy.HTTP.Matches[0].Headers[0].Value
+	if strategy != nil {
+		if len(strategy.Matches) > 0 {
+			if len(strategy.Matches[0].Headers) > 0 {
+				annosCanaryNeedCheck[AnnoCanaryHeader] = string(strategy.Matches[0].Headers[0].Name)
+				annosCanaryNeedCheck[AnnoCanaryHeaderValue] = strategy.Matches[0].Headers[0].Value
 			}
-			if isMseIngress && len(strategy.HTTP.Matches[0].QueryParams) > 0 {
-				annosCanaryNeedCheck[AnnoMseCanaryQuery] = string(strategy.HTTP.Matches[0].QueryParams[0].Name)
-				annosCanaryNeedCheck[AnnoMseCanaryQueryValue] = strategy.HTTP.Matches[0].QueryParams[0].Value
+			if isMseIngress && len(strategy.Matches[0].QueryParams) > 0 {
+				annosCanaryNeedCheck[AnnoMseCanaryQuery] = string(strategy.Matches[0].QueryParams[0].Name)
+				annosCanaryNeedCheck[AnnoMseCanaryQueryValue] = strategy.Matches[0].QueryParams[0].Value
 			}
-		} else if strategy.HTTP.Weight != nil {
-			annosCanaryNeedCheck[AnnoCanaryWeight] = strconv.Itoa(int(*strategy.HTTP.Weight))
+		} else if strategy.Weight != nil {
+			annosCanaryNeedCheck[AnnoCanaryWeight] = strconv.Itoa(int(*strategy.Weight))
 		}
 
-		if isMseIngress && len(strategy.HTTP.Filters) > 0 {
-			filter, ok := lo.Find(strategy.HTTP.Filters, func(item v1.HTTPRouteFilter) bool {
+		if isMseIngress && len(strategy.Filters) > 0 {
+			filter, ok := lo.Find(strategy.Filters, func(item v1.HTTPRouteFilter) bool {
 				return item.RequestHeaderModifier != nil
 			})
 			if ok {
@@ -100,28 +97,30 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.
 	}
 
 	canaryIgs := &networkingv1.Ingress{}
-	canaryIgs.Name = igs.Name + "-canary"
+	canaryIgs.Name = i.canaryIngressName()
 	canaryIgs.Namespace = igs.Namespace
+
+	forked := obj.Spec.ForkedBackends
 
 	_, err := controllerutil.CreateOrUpdate(clusterinfo.WithCluster(ctx, i.cluster), i.client, canaryIgs, func() error {
 		canaryIgs.Spec = igs.Spec
 
 		if canaryIgs.Spec.DefaultBackend != nil {
-			if canaryIgs.Spec.DefaultBackend.Service != nil && canaryIgs.Spec.DefaultBackend.Service.Name == forwarding.Stable.Name {
-				canaryIgs.Spec.DefaultBackend.Service.Name = forwarding.Canary.Name
+			if canaryIgs.Spec.DefaultBackend.Service != nil && canaryIgs.Spec.DefaultBackend.Service.Name == forked.Stable.Name {
+				canaryIgs.Spec.DefaultBackend.Service.Name = forked.Canary.Name
 			}
-			if canaryIgs.Spec.DefaultBackend.Resource != nil && canaryIgs.Spec.DefaultBackend.Resource.Name == forwarding.Stable.Name {
-				canaryIgs.Spec.DefaultBackend.Resource.Name = forwarding.Canary.Name
+			if canaryIgs.Spec.DefaultBackend.Resource != nil && canaryIgs.Spec.DefaultBackend.Resource.Name == forked.Stable.Name {
+				canaryIgs.Spec.DefaultBackend.Resource.Name = forked.Canary.Name
 			}
 		}
 
 		for idx, rule := range canaryIgs.Spec.Rules {
 			for k, path := range rule.HTTP.Paths {
-				if path.Backend.Service != nil && path.Backend.Service.Name == forwarding.Stable.Name {
-					path.Backend.Service.Name = forwarding.Canary.Name
+				if path.Backend.Service != nil && path.Backend.Service.Name == forked.Stable.Name {
+					path.Backend.Service.Name = forked.Canary.Name
 				}
-				if path.Backend.Resource != nil && path.Backend.Resource.Name == forwarding.Stable.Name {
-					path.Backend.Resource.Name = forwarding.Canary.Name
+				if path.Backend.Resource != nil && path.Backend.Resource.Name == forked.Stable.Name {
+					path.Backend.Resource.Name = forked.Canary.Name
 				}
 				canaryIgs.Spec.Rules[idx].HTTP.Paths[k] = path
 			}
@@ -138,74 +137,82 @@ func (i *ingressRoute) AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.
 				delete(canaryIgs.Annotations, key)
 			}
 		}
+
+		if canaryIgs.Labels == nil {
+			canaryIgs.Labels = make(map[string]string)
+		}
+		canaryIgs.Labels[rolloutapi.LabelCanary] = "true"
+		canaryIgs.Labels[rolloutapi.LabelTemporaryResource] = "true"
 		return nil
 	})
 
 	return err
 }
 
-func (i *ingressRoute) RemoveCanaryRoute(ctx context.Context) error {
-	canaryIgsName := i.obj.Name + "-canary"
-	canaryIgs := &networkingv1.Ingress{}
-	err := i.client.Get(clusterinfo.WithCluster(ctx, i.cluster), types.NamespacedName{
-		Namespace: i.obj.Namespace,
-		Name:      canaryIgsName,
-	}, canaryIgs)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
+func (i *ingressRoute) canaryIngressName() string {
+	return i.obj.Name + "-canary"
+}
+
+func (i *ingressRoute) DeleteCanary(ctx context.Context, obj *rolloutv1alpha1.BackendRouting) error {
+	canaryIgsName := i.canaryIngressName()
+	canaryIgs := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: i.obj.Namespace,
+			Name:      canaryIgsName,
+		},
+	}
+	err := i.client.Delete(clusterinfo.WithCluster(ctx, i.cluster), canaryIgs)
+	return client.IgnoreNotFound(err)
+}
+
+func (i *ingressRoute) changeCanaryBackend(kind, from, to string) func(ingress *networkingv1.Ingress) error {
+	return func(ingress *networkingv1.Ingress) error {
+		if ingress.Spec.DefaultBackend != nil {
+			backend := ingress.Spec.DefaultBackend
+			switch kind {
+			case "Service":
+				if backend.Service != nil && backend.Service.Name == from {
+					backend.Service.Name = to
+				}
+			default:
+				if backend.Resource != nil && backend.Resource.Name == from {
+					backend.Resource.Name = to
+				}
+			}
+		}
+
+		for _, rule := range ingress.Spec.Rules {
+			for k := range rule.HTTP.Paths {
+				backend := rule.HTTP.Paths[k].Backend
+				switch kind {
+				case "Service":
+					if backend.Service != nil && backend.Service.Name == from {
+						backend.Service.Name = to
+					}
+				default:
+					if backend.Resource != nil && backend.Resource.Name == from {
+						backend.Resource.Name = to
+					}
+				}
+			}
 		}
 		return nil
 	}
-	return i.client.Delete(clusterinfo.WithCluster(ctx, i.cluster), canaryIgs)
 }
 
-func (i *ingressRoute) ChangeBackend(ctx context.Context, detail route.BackendChangeDetail) error {
-	igs := i.obj
-	needChange := false
-
-	if igs.Spec.DefaultBackend != nil {
-		if detail.Kind == "Service" {
-			if igs.Spec.DefaultBackend.Service != nil && igs.Spec.DefaultBackend.Service.Name == detail.Src {
-				igs.Spec.DefaultBackend.Service.Name = detail.Dst
-				needChange = true
-			}
-		} else {
-			if igs.Spec.DefaultBackend.Resource != nil && igs.Spec.DefaultBackend.Resource.Kind == detail.Kind &&
-				igs.Spec.DefaultBackend.Resource.Name == detail.Src {
-				igs.Spec.DefaultBackend.Resource.Name = detail.Dst
-				needChange = true
-			}
-		}
-	}
-
-	for idx, rule := range igs.Spec.Rules {
-		for k, path := range rule.HTTP.Paths {
-			if detail.Kind == "Service" {
-				if path.Backend.Service != nil && path.Backend.Service.Name == detail.Src {
-					path.Backend.Service.Name = detail.Dst
-					igs.Spec.Rules[idx].HTTP.Paths[k] = path
-					needChange = true
-				}
-			} else {
-				if path.Backend.Resource != nil && path.Backend.Resource.Kind == detail.Kind &&
-					path.Backend.Resource.Name == detail.Src {
-					path.Backend.Resource.Name = detail.Dst
-					igs.Spec.Rules[idx].HTTP.Paths[k] = path
-					needChange = true
-				}
-			}
-		}
-	}
-
-	if needChange {
-		return i.client.Update(clusterinfo.WithCluster(ctx, i.cluster), igs)
-	}
-
-	return nil
+func (i *ingressRoute) ChangeOrigin(ctx context.Context, originBackend rolloutv1alpha1.CrossClusterObjectReference, to string) error {
+	modify := i.changeCanaryBackend(originBackend.Kind, originBackend.Name, to)
+	_, err := clientutil.UpdateOnConflict(clusterinfo.WithCluster(ctx, i.cluster), i.client, i.client, i.obj, modify)
+	return err
 }
 
-var _ route.IRoute = &ingressRoute{}
+func (i *ingressRoute) ResetOrigin(ctx context.Context, originBackend rolloutv1alpha1.CrossClusterObjectReference, from string) error {
+	modify := i.changeCanaryBackend(originBackend.Kind, from, originBackend.Name)
+	_, err := clientutil.UpdateOnConflict(clusterinfo.WithCluster(ctx, i.cluster), i.client, i.client, i.obj, modify)
+	return err
+}
+
+var _ route.RouteControl = &ingressRoute{}
 
 func generateMultiHeadersAnno(headers []v1.HTTPHeader) string {
 	if len(headers) == 0 {

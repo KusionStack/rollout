@@ -24,6 +24,7 @@ import (
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"kusionstack.io/rollout/pkg/utils/accessor"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -38,14 +39,18 @@ var ObjectTypeError = fmt.Errorf("object must be %s", GVK.GroupKind().String())
 
 var _ workload.Accessor = &accessorImpl{}
 
-type accessorImpl struct{}
-
-func New() workload.Accessor {
-	return &accessorImpl{}
+type accessorImpl struct {
+	accessor.ObjectAccessor
 }
 
-func (w *accessorImpl) GroupVersionKind() schema.GroupVersionKind {
-	return GVK
+func New() workload.Accessor {
+	return &accessorImpl{
+		ObjectAccessor: accessor.NewObjectAccessor(
+			GVK,
+			&operatingv1alpha1.CollaSet{},
+			&operatingv1alpha1.CollaSetList{},
+		),
+	}
 }
 
 func (c *accessorImpl) DependentWorkloadGVKs() []schema.GroupVersionKind {
@@ -54,14 +59,6 @@ func (c *accessorImpl) DependentWorkloadGVKs() []schema.GroupVersionKind {
 
 func (w *accessorImpl) Watchable() bool {
 	return true
-}
-
-func (w *accessorImpl) NewObject() client.Object {
-	return &operatingv1alpha1.CollaSet{}
-}
-
-func (w *accessorImpl) NewObjectList() client.ObjectList {
-	return &operatingv1alpha1.CollaSetList{}
 }
 
 func (w *accessorImpl) GetInfo(cluster string, object client.Object) (*workload.Info, error) {

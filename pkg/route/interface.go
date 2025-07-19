@@ -18,10 +18,10 @@ package route
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/kube-api/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/utils/accessor"
 )
 
 type BackendChangeDetail struct {
@@ -31,19 +31,19 @@ type BackendChangeDetail struct {
 	ApiVersion string
 }
 
-type IRoute interface {
-	GetRouteObject() client.Object
-	AddCanaryRoute(ctx context.Context, forwarding *v1alpha1.BackendForwarding) error
-	RemoveCanaryRoute(ctx context.Context) error
-	ChangeBackend(ctx context.Context, detail BackendChangeDetail) error
+type RouteControl interface {
+	ChangeOrigin(ctx context.Context, originBackend rolloutv1alpha1.CrossClusterObjectReference, to string) error
+	ResetOrigin(ctx context.Context, originBackend rolloutv1alpha1.CrossClusterObjectReference, from string) error
+
+	AddCanary(ctx context.Context, obj *rolloutv1alpha1.BackendRouting) error
+	DeleteCanary(ctx context.Context, obj *rolloutv1alpha1.BackendRouting) error
 }
 
-type Store interface {
-	GroupVersionKind() schema.GroupVersionKind
-	// NewObject returns a new instance of the route type
-	NewObject() client.Object
+type Route interface {
+	accessor.ObjectAccessor
+
 	// Wrap get a client.Object and returns a route interface
-	Wrap(cluster string, obj client.Object) (IRoute, error)
+	Wrap(client client.Client, cluster string, route client.Object) (RouteControl, error)
 	// Get returns a wrapped route interface
-	Get(ctx context.Context, cluster, namespace, name string) (IRoute, error)
+	// Get(ctx context.Context, cluster, namespace, name string) (RouteControl, error)
 }

@@ -15,25 +15,15 @@
 package backend
 
 import (
-	"context"
-
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"kusionstack.io/rollout/pkg/utils/accessor"
 )
 
-type IBackend interface {
-	GetBackendObject() client.Object
-	// todo: discussion: maybe Fork can be replaced by Create/Delete, and using Create/Delete to check if ready or deleted
-	ForkStable(stableName string) client.Object
-	ForkCanary(canaryName string) client.Object
-}
+type InClusterBackend interface {
+	accessor.ObjectAccessor
 
-type Store interface {
-	GroupVersionKind() schema.GroupVersionKind
-	// NewObject returns a new instance of the backend type
-	NewObject() client.Object
-	// Wrap get a client.Object and returns a backend interface
-	Wrap(cluster string, obj client.Object) (IBackend, error)
-	// Get returns a wrapped backend interface
-	Get(ctx context.Context, cluster, namespace, name string) (IBackend, error)
+	// Fork returns a new object with the given backend.
+	Fork(original client.Object, config v1alpha1.ForkedBackend) client.Object
 }

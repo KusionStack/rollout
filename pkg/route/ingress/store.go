@@ -15,59 +15,39 @@
 package ingress
 
 import (
-	"context"
 	"fmt"
 
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"kusionstack.io/rollout/pkg/route"
+	"kusionstack.io/rollout/pkg/utils/accessor"
 )
 
 type IgsStore struct {
-	client client.Client
+	accessor.ObjectAccessor
 }
 
-func NewStorage(mgr manager.Manager) route.Store {
+func NewStorage() route.Route {
 	return &IgsStore{
-		client: mgr.GetClient(),
+		ObjectAccessor: accessor.NewObjectAccessor(
+			GVK,
+			&networkingv1.Ingress{},
+			&networkingv1.IngressList{},
+		),
 	}
 }
 
-func (i *IgsStore) GroupVersionKind() schema.GroupVersionKind {
-	return GVK
-}
-
-func (i *IgsStore) NewObject() client.Object {
-	return &networkingv1.Ingress{}
-}
-
-func (i *IgsStore) Wrap(cluster string, obj client.Object) (route.IRoute, error) {
-	igs, ok := obj.(*networkingv1.Ingress)
+func (i *IgsStore) Wrap(client client.Client, cluster string, route client.Object) (route.RouteControl, error) {
+	igs, ok := route.(*networkingv1.Ingress)
 	if !ok {
 		return nil, fmt.Errorf("not Ingress")
 	}
 	return &ingressRoute{
-		client:  i.client,
+		client:  client,
 		obj:     igs,
 		cluster: cluster,
 	}, nil
 }
 
-func (i *IgsStore) Get(ctx context.Context, cluster, namespace, name string) (route.IRoute, error) {
-	var igs networkingv1.Ingress
-	err := i.client.Get(clusterinfo.WithCluster(ctx, cluster), types.NamespacedName{
-		Namespace: namespace,
-		Name:      name,
-	}, &igs)
-	if err != nil {
-		return nil, err
-	}
-	return i.Wrap(cluster, &igs)
-}
-
-var _ route.Store = &IgsStore{}
+var _ route.Route = &IgsStore{}

@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -37,7 +38,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/initializers"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/test/e2e/controller"

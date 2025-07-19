@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/types"
-
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 

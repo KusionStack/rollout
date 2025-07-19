@@ -27,11 +27,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kusionstack.io/kube-api/rollout"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"kusionstack.io/kube-api/rollout"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils/progressinginfos"
 	"kusionstack.io/rollout/pkg/webhook/generic"

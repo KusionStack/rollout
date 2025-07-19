@@ -15,9 +15,8 @@
 package traffictopology
 
 import (
-	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
-
 	"kusionstack.io/kube-api/rollout/v1alpha1"
+	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
 )
 
 var _ rsFrameController.IEmployer = TPEmployer{}

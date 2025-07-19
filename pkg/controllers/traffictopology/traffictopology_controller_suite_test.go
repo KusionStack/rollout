@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"kusionstack.io/kube-utils/multicluster/clusterprovider"
@@ -42,7 +43,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 )
 

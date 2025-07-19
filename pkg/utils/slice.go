@@ -17,7 +17,6 @@ package utils
 import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"kusionstack.io/kube-api/rollout/v1alpha1"
 )
 

@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 
-	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
