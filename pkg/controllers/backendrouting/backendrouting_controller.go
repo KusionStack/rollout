@@ -39,9 +39,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"kusionstack.io/rollout/pkg/backend"
 	"kusionstack.io/rollout/pkg/controllers/registry"
-	"kusionstack.io/rollout/pkg/route"
+	"kusionstack.io/rollout/pkg/trafficrouting/backend"
+	"kusionstack.io/rollout/pkg/trafficrouting/route"
 )
 
 const (
@@ -153,13 +153,12 @@ func (r *BackendRoutingReconciler) satisfiedExpectations(ctx context.Context, ob
 func (r *BackendRoutingReconciler) initSyncContext(ctx context.Context, obj *rolloutv1alpha1.BackendRouting) (*syncContext, error) {
 	syncCtx := &syncContext{
 		Object: obj,
-		Routes: make([]route.RouteControl, len(obj.Spec.Routes)),
+		Routes: make([]route.RouteController, len(obj.Spec.Routes)),
 	}
-	syncCtx.Initialize()
+	syncCtx.SetDefaults()
 
 	// find origin backend
-
-	backend, backendObj, err := r.findBackend(ctx, obj, obj.Spec.Backend.Name)
+	_, backendObj, err := r.findBackend(ctx, obj, obj.Spec.Backend.Name)
 	if err != nil {
 		syncCtx.NewStatus.Backends.Origin.Conditions.Ready = ptr.To(false)
 		return syncCtx, err
@@ -167,21 +166,12 @@ func (r *BackendRoutingReconciler) initSyncContext(ctx context.Context, obj *rol
 		syncCtx.NewStatus.Backends.Origin.Conditions.Ready = ptr.To(true)
 	}
 
-	syncCtx.BackendInterface = backend
 	syncCtx.BackendObject = backendObj
 
-	for i, routeSpec := range obj.Spec.Routes {
-		rctl, err := r.findRoute(ctx, obj.Namespace, routeSpec)
-		if err != nil {
-			syncCtx.setRouteCondition(i, metav1.ConditionUnknown, "Unknown", err.Error())
-			return syncCtx, err
-		}
-		if syncCtx.NewStatus.Routes[i].Condition.Status == metav1.ConditionUnknown {
-			syncCtx.setRouteCondition(i, metav1.ConditionTrue, "RouteFound", "")
-		}
-		syncCtx.Routes[i] = rctl
+	err = r.findAllRouteControllers(ctx, syncCtx)
+	if err != nil {
+		return syncCtx, err
 	}
-
 	return syncCtx, nil
 }
 
@@ -287,19 +277,21 @@ func (b *BackendRoutingReconciler) syncInClusterBackends(ctx context.Context, sy
 	return nil
 }
 
-func (b *BackendRoutingReconciler) findBackend(ctx context.Context, obj *rolloutv1alpha1.BackendRouting, name string) (backend.InClusterBackend, client.Object, error) {
-	gvk := schema.FromAPIVersionAndKind(obj.Spec.Backend.APIVersion, obj.Spec.Backend.Kind)
+func (b *BackendRoutingReconciler) findBackend(ctx context.Context, br *rolloutv1alpha1.BackendRouting, name string) (backend.InClusterBackend, client.Object, error) {
+	gvk := schema.FromAPIVersionAndKind(br.Spec.Backend.APIVersion, br.Spec.Backend.Kind)
+	cluster := br.Spec.Backend.Cluster
+	namespace := br.Namespace
+
 	backendStore, err := b.backendRegistry.Get(gvk)
 	if err != nil {
 		return nil, nil, err
 	}
-	newObj := backendStore.NewObject()
-	ctx = clusterinfo.WithCluster(ctx, obj.Spec.Backend.Cluster)
-	err = b.Client.Get(ctx, client.ObjectKey{
-		Namespace: obj.Namespace,
+	backendObj := backendStore.NewObject()
+	err = b.Client.Get(clusterinfo.WithCluster(ctx, cluster), client.ObjectKey{
+		Namespace: namespace,
 		Name:      name,
-	}, newObj)
-	return backendStore, newObj, err
+	}, backendObj)
+	return backendStore, backendObj, err
 }
 
 func (b *BackendRoutingReconciler) deleteBackendResource(ctx context.Context, syncCtx *syncContext, name string) (bool, error) {
@@ -330,7 +322,10 @@ func (b *BackendRoutingReconciler) deleteBackendResource(ctx context.Context, sy
 
 func (b *BackendRoutingReconciler) ensureBackendResource(ctx context.Context, syncCtx *syncContext, config rolloutv1alpha1.ForkedBackend) error {
 	obj := syncCtx.Object
+
 	logger := logr.FromContextOrDiscard(ctx)
+	logger = logger.WithValues("apiVersion", obj.Spec.Backend.APIVersion, "kind", obj.Spec.Backend.Kind, "name", config.Name)
+
 	ctx = clusterinfo.WithCluster(ctx, obj.Spec.Backend.Cluster)
 	backendStore, _, err := b.findBackend(ctx, obj, config.Name)
 	if err == nil {
@@ -338,34 +333,31 @@ func (b *BackendRoutingReconciler) ensureBackendResource(ctx context.Context, sy
 		return nil
 	}
 	if !errors.IsNotFound(err) {
-		logger.Error(err, "failed to get backend resource", "backend", obj.Spec.Backend.Name)
+		logger.Error(err, "failed to get backend resource")
 		return err
 	}
 
 	// need to create
-	newBackend := backendStore.Fork(syncCtx.BackendObject, config)
-	// set owner
-	newBackend.SetOwnerReferences([]metav1.OwnerReference{*metav1.NewControllerRef(obj, backendStore.GroupVersionKind())})
+	newBackendObj := backendStore.Fork(syncCtx.BackendObject, config)
 	// add label
-	labels := newBackend.GetLabels()
+	labels := newBackendObj.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 	labels[rolloutapi.LabelTemporaryResource] = "true"
-	newBackend.SetLabels(labels)
+	newBackendObj.SetLabels(labels)
 
-	err = b.Client.Create(ctx, newBackend)
+	err = b.Client.Create(ctx, newBackendObj)
 	if err != nil {
-		logger.Error(err, "failed to create backend resource", "backend", newBackend.GetName())
+		logger.Error(err, "failed to create backend resource")
 		return err
 	}
+	logger.Info("backend resource created")
 	return nil
 }
 
 func (b *BackendRoutingReconciler) syncInClusterRoutes(ctx context.Context, syncCtx *syncContext) error {
-	obj := syncCtx.Object
-
-	syncRoute := func(i int, fn func(routeCtl route.RouteControl) error) error {
+	syncRoute := func(i int, fn func(routeCtl route.RouteController) error) error {
 		routeCtl := syncCtx.Routes[i]
 		err := fn(routeCtl)
 		if err != nil {
@@ -374,16 +366,18 @@ func (b *BackendRoutingReconciler) syncInClusterRoutes(ctx context.Context, sync
 			return err
 		}
 		// TODO: add synced logic, read condition from annotations
-		syncCtx.setRouteCondition(i, metav1.ConditionTrue, "Synced", "")
+		// syncCtx.setRouteCondition(i, metav1.ConditionTrue, "Synced", "")
 		return nil
 	}
+
+	logger := logr.FromContextOrDiscard(ctx)
 
 	for i, routeStatus := range syncCtx.NewStatus.Routes {
 		needCreate, needDelete := syncCtx.checkOriginRoute(routeStatus.Forwarding)
 
 		if needCreate {
-			err := syncRoute(i, func(routeCtl route.RouteControl) error {
-				return routeCtl.ChangeOrigin(ctx, obj.Spec.Backend, obj.Spec.Forwarding.HTTP.Origin.BackendName)
+			err := syncRoute(i, func(routeCtl route.RouteController) error {
+				return routeCtl.Initialize(ctx)
 			})
 			if err != nil {
 				return err
@@ -395,8 +389,8 @@ func (b *BackendRoutingReconciler) syncInClusterRoutes(ctx context.Context, sync
 			syncCtx.NewStatus.Routes[i].Forwarding.Origin.Conditions.Ready = nil
 			syncCtx.NewStatus.Routes[i].Forwarding.Origin.Conditions.Terminating = ptr.To(true)
 
-			err := syncRoute(i, func(routeCtl route.RouteControl) error {
-				return routeCtl.ResetOrigin(ctx, obj.Spec.Backend, syncCtx.NewStatus.Routes[i].Forwarding.Origin.BackendName)
+			err := syncRoute(i, func(routeCtl route.RouteController) error {
+				return routeCtl.Reset(ctx)
 			})
 			if err != nil {
 				return err
@@ -408,8 +402,8 @@ func (b *BackendRoutingReconciler) syncInClusterRoutes(ctx context.Context, sync
 
 		needCreate, needDelete = syncCtx.checkCanaryRoute(routeStatus.Forwarding)
 		if needCreate {
-			err := syncRoute(i, func(routeCtl route.RouteControl) error {
-				return routeCtl.AddCanary(ctx, obj)
+			err := syncRoute(i, func(routeCtl route.RouteController) error {
+				return routeCtl.AddCanary(ctx)
 			})
 			if err != nil {
 				return err
@@ -421,29 +415,95 @@ func (b *BackendRoutingReconciler) syncInClusterRoutes(ctx context.Context, sync
 			syncCtx.NewStatus.Routes[i].Forwarding.Canary.Conditions.Ready = nil
 			syncCtx.NewStatus.Routes[i].Forwarding.Canary.Conditions.Terminating = ptr.To(true)
 
-			err := syncRoute(i, func(routeCtl route.RouteControl) error {
-				return routeCtl.DeleteCanary(ctx, obj)
+			err := syncRoute(i, func(routeCtl route.RouteController) error {
+				return routeCtl.DeleteCanary(ctx)
 			})
 			if err != nil {
 				return err
 			}
 			syncCtx.NewStatus.Routes[i].Forwarding.Canary = nil
 		}
+
+		ctrl := syncCtx.Routes[i]
+		conditions, err := ctrl.GetCondition(ctx)
+		if err != nil {
+			logger.Error(err, "failed to get route condition", "route", routeStatus.CrossClusterObjectReference)
+			continue
+		}
+
+		// check ready according to condition extension
+		status, reason, message := b.checkRouteReady(ctx, ctrl.GetRoute().GetGeneration(), conditions)
+		syncCtx.setRouteCondition(i, status, reason, message)
 	}
 	return nil
 }
 
-func (b *BackendRoutingReconciler) findRoute(ctx context.Context, namespace string, routeInfo rolloutv1alpha1.CrossClusterObjectReference) (route.RouteControl, error) {
-	routeAccessor, err := b.routeRegistry.Get(schema.FromAPIVersionAndKind(routeInfo.APIVersion, routeInfo.Kind))
-	if err != nil {
-		return nil, err
+func (b *BackendRoutingReconciler) checkRouteReady(_ context.Context, generation int64, conditions []metav1.Condition) (metav1.ConditionStatus, string, string) {
+	if len(conditions) == 0 {
+		return metav1.ConditionTrue, "NoConditionExtension", ""
+	}
+	cond := meta.FindStatusCondition(conditions, "Ready")
+	if cond != nil {
+		if generation != cond.ObservedGeneration {
+			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Ready condition is out of synced, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, cond.ObservedGeneration)
+		}
+		switch cond.Status {
+		case metav1.ConditionTrue:
+			return cond.Status, "ConditionExtensionReady", cond.Message
+		default:
+			return metav1.ConditionFalse, "ConditionExtensionNotReady", cond.Message
+		}
+	}
+	cond = meta.FindStatusCondition(conditions, "Synced")
+	if cond != nil {
+		if generation != cond.ObservedGeneration {
+			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Scyned condition is out of synced, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, cond.ObservedGeneration)
+		}
+		switch cond.Status {
+		case metav1.ConditionTrue:
+			if !cond.LastTransitionTime.IsZero() && !metav1.Now().After(cond.LastTransitionTime.Time.Add(30*time.Second)) {
+				// if synced is true, we need to wait for 30 seconds
+				return metav1.ConditionFalse, "SufficientDelayTime", "waiting 30 seconds to ensure sufficient time for routing rules to take effect."
+			}
+			return cond.Status, "ConditionExtensionSynced", cond.Message
+		default:
+			return metav1.ConditionFalse, "ConditionExtensionNotSynced", cond.Message
+		}
+	}
+	return metav1.ConditionUnknown, "NoConditionExtension", "no Ready or Synced condition found in conditions extension"
+}
+
+func (b *BackendRoutingReconciler) findAllRouteControllers(ctx context.Context, syncCtx *syncContext) error {
+	fn := func(routeInfo rolloutv1alpha1.CrossClusterObjectReference) (route.Route, client.Object, error) {
+		routeAccessor, err := b.routeRegistry.Get(schema.FromAPIVersionAndKind(routeInfo.APIVersion, routeInfo.Kind))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		routeObj := routeAccessor.NewObject()
+		err = b.Client.Get(
+			clusterinfo.WithCluster(ctx, routeInfo.Cluster),
+			client.ObjectKey{Namespace: syncCtx.Object.Namespace, Name: routeInfo.Name},
+			routeObj,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+		return routeAccessor, routeObj, nil
 	}
 
-	routeObj := routeAccessor.NewObject()
-	err = b.Client.Get(clusterinfo.WithCluster(ctx, routeInfo.Cluster), client.ObjectKey{Namespace: namespace, Name: routeInfo.Name}, routeObj)
-	if err != nil {
-		return nil, err
-	}
+	for i, routeInfo := range syncCtx.Object.Spec.Routes {
+		accessor, routeObj, err := fn(routeInfo)
+		if err != nil {
+			syncCtx.setRouteCondition(i, metav1.ConditionUnknown, "Unknown", err.Error())
+			return err
+		}
+		if syncCtx.NewStatus.Routes[i].Condition.Status == metav1.ConditionUnknown {
+			syncCtx.setRouteCondition(i, metav1.ConditionTrue, "RouteExists", "")
+		}
 
-	return routeAccessor.Wrap(b.Client, routeInfo.Cluster, routeObj)
+		rctl, _ := accessor.GetController(b.Client, syncCtx.Object, routeObj, syncCtx.NewStatus.Routes[i])
+		syncCtx.Routes[i] = rctl
+	}
+	return nil
 }

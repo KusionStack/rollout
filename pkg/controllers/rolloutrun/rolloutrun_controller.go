@@ -40,9 +40,9 @@ import (
 
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
-	"kusionstack.io/rollout/pkg/controllers/rolloutrun/traffic"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/rolloutclasspredicate"
+	trafficcontrol "kusionstack.io/rollout/pkg/trafficrouting/control"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/utils/expectations"
 	"kusionstack.io/rollout/pkg/workload"
@@ -244,7 +244,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 		result ctrl.Result
 	)
 
-	trafficManager, err := traffic.NewManager(r.Client, r.Logger, topologies)
+	trafficManager, err := trafficcontrol.NewManager(r.Client, r.Logger, topologies)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

@@ -72,9 +72,11 @@ func (s *backendRoutingTestSuite) SetupSuite() {
 	err := rolloutv1alpha1.AddToScheme(testscheme)
 	s.Require().NoError(err)
 
-	fedEnv := &envtest.Environment{
-		Scheme:            testscheme,
-		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
+	testClusterEnv := &envtest.Environment{
+		Scheme: testscheme,
+		CRDInstallOptions: envtest.CRDInstallOptions{
+			Paths: []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
+		},
 	}
 
 	var (
@@ -83,13 +85,9 @@ func (s *backendRoutingTestSuite) SetupSuite() {
 		cluster2Config *rest.Config
 	)
 
-	fedConfig, s.fedClient = s.setupCluster(fedEnv)
-	cluster1Config, s.cluster1Client = s.setupCluster(&envtest.Environment{
-		Scheme: testscheme,
-	})
-	cluster2Config, s.cluster2Client = s.setupCluster(&envtest.Environment{
-		Scheme: testscheme,
-	})
+	fedConfig, s.fedClient = s.setupCluster(testClusterEnv)
+	cluster1Config, s.cluster1Client = s.setupCluster(testClusterEnv)
+	cluster2Config, s.cluster2Client = s.setupCluster(testClusterEnv)
 
 	// manager
 	os.Setenv(clusterinfo.EnvClusterAllowList, "cluster1,cluster2")

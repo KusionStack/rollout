@@ -9,20 +9,18 @@ import (
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/pkg/backend"
-	"kusionstack.io/rollout/pkg/route"
+	"kusionstack.io/rollout/pkg/trafficrouting/route"
 )
 
 type syncContext struct {
-	once             sync.Once
-	Object           *rolloutv1alpha1.BackendRouting
-	BackendInterface backend.InClusterBackend
-	BackendObject    client.Object
-	NewStatus        *rolloutv1alpha1.BackendRoutingStatus
-	Routes           []route.RouteControl
+	once          sync.Once
+	Object        *rolloutv1alpha1.BackendRouting
+	BackendObject client.Object
+	NewStatus     *rolloutv1alpha1.BackendRoutingStatus
+	Routes        []route.RouteController
 }
 
-func (c *syncContext) Initialize() {
+func (c *syncContext) SetDefaults() {
 	c.once.Do(func() {
 		if c.NewStatus == nil {
 			c.NewStatus = c.Object.Status.DeepCopy()
@@ -160,7 +158,7 @@ func (c *syncContext) setRouteCondition(routeIndex int, status metav1.ConditionS
 }
 
 func (c *syncContext) Status() rolloutv1alpha1.BackendRoutingStatus {
-	c.Initialize()
+	c.SetDefaults()
 
 	backendReady := true
 	reason := "Ready"

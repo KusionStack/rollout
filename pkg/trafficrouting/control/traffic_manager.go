@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package traffic
+package control
 
 import (
 	"context"
@@ -41,7 +41,7 @@ type Manager struct {
 func NewManager(c client.Client, logger logr.Logger, topologies []rolloutv1alpha1.TrafficTopology) (*Manager, error) {
 	m := &Manager{
 		client:     c,
-		logger:     logger.WithName("traffic"),
+		logger:     logger.WithName("trafficrouting"),
 		topoligies: make(map[rolloutv1alpha1.CrossClusterObjectNameReference]*topology),
 	}
 	for _, obj := range topologies {
@@ -70,7 +70,7 @@ func NewManager(c client.Client, logger logr.Logger, topologies []rolloutv1alpha
 }
 
 func (m *Manager) With(logger logr.Logger, workloads []rolloutv1alpha1.RolloutRunStepTarget, strategy *rolloutv1alpha1.TrafficStrategy) {
-	m.logger = logger.WithName("traffic")
+	m.logger = logger.WithName("trafficrouting")
 	m.targets = workloads
 	m.strategy = strategy
 }
@@ -112,6 +112,7 @@ func (m *Manager) InitializeRoute() (controllerutil.OperationResult, error) {
 			}
 		} else {
 			routing.Spec.Forwarding.HTTP.Stable = &rolloutv1alpha1.StableHTTPForwarding{
+				BackendName:   routing.Spec.ForkedBackends.Stable.Name,
 				HTTPRouteRule: *m.strategy.HTTP.StableTraffic,
 			}
 		}
@@ -134,6 +135,7 @@ func (m *Manager) AddCanaryRoute() (controllerutil.OperationResult, error) {
 			}
 		}
 		routing.Spec.Forwarding.HTTP.Canary = &rolloutv1alpha1.CanaryHTTPForwarding{
+			BackendName:         routing.Spec.ForkedBackends.Canary.Name,
 			CanaryHTTPRouteRule: m.strategy.HTTP.CanaryHTTPRouteRule,
 		}
 		return nil
@@ -154,7 +156,7 @@ func (m *Manager) DeleteCanaryRoute() (controllerutil.OperationResult, error) {
 func (m *Manager) mutateRouting(mutateFn func(routing *rolloutv1alpha1.BackendRouting) error) (controllerutil.OperationResult, error) {
 	operation := controllerutil.OperationResultNone
 	if m.strategy == nil {
-		m.logger.Info("no traffic strategy found, skip it")
+		m.logger.Info("no trafficrouting strategy found, skip it")
 		return operation, nil
 	}
 	ctx := clusterinfo.WithCluster(context.Background(), clusterinfo.Fed)
@@ -162,7 +164,7 @@ func (m *Manager) mutateRouting(mutateFn func(routing *rolloutv1alpha1.BackendRo
 	for _, workload := range m.targets {
 		topo, ok := m.topoligies[workload.CrossClusterObjectNameReference]
 		if !ok {
-			m.logger.Info("no traffic topology found for workload", "workload", workload.CrossClusterObjectNameReference)
+			m.logger.Info("no trafficrouting topology found for workload", "workload", workload.CrossClusterObjectNameReference)
 			continue
 		}
 		for i := range topo.routings {

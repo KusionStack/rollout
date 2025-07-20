@@ -16,6 +16,7 @@ spec:
   trafficTopologyRefs:
   - rollout-demo1
   - rollout-demo2
+  - rollout-demo1-httproute
 
 ---
 

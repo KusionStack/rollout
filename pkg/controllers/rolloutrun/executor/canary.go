@@ -132,40 +132,43 @@ func (e *canaryExecutor) modifyTraffic(ctx *ExecutorContext, op string) (bool, t
 	rolloutRun := ctx.RolloutRun
 	opResult := controllerutil.OperationResultNone
 
-	// 1.a. do traffic initialization
-	if rolloutRun.Spec.Canary.Traffic != nil {
-		var err error
-		switch op {
-		case "forkBackends":
-			opResult, err = ctx.TrafficManager.ForkBackends()
-		case "initializeRoute":
-			opResult, err = ctx.TrafficManager.InitializeRoute()
-		case "addCanaryRoute":
-			opResult, err = ctx.TrafficManager.AddCanaryRoute()
-		case "deleteCanaryRoute":
-			opResult, err = ctx.TrafficManager.DeleteCanaryRoute()
-		case "resetRoute":
-			opResult, err = ctx.TrafficManager.ResetRoute()
-		case "deleteForkedBackends":
-			opResult, err = ctx.TrafficManager.DeleteForkedBackends()
-		}
-		if err != nil {
-			logger.Error(err, "failed to modify traffic", "operation", op)
-			return false, retryDefault
-		}
-		logger.Info("modify traffic routing", "operation", op, "result", opResult)
+	if rolloutRun.Spec.Canary.Traffic == nil {
+		logger.Info("traffic is nil, skip modify traffic")
+		return true, retryImmediately
 	}
+
+	// 1.a. do traffic initialization
+	var err error
+	switch op {
+	case "forkBackends":
+		opResult, err = ctx.TrafficManager.ForkBackends()
+	case "initializeRoute":
+		opResult, err = ctx.TrafficManager.InitializeRoute()
+	case "addCanaryRoute":
+		opResult, err = ctx.TrafficManager.AddCanaryRoute()
+	case "deleteCanaryRoute":
+		opResult, err = ctx.TrafficManager.DeleteCanaryRoute()
+	case "resetRoute":
+		opResult, err = ctx.TrafficManager.ResetRoute()
+	case "deleteForkedBackends":
+		opResult, err = ctx.TrafficManager.DeleteForkedBackends()
+	}
+	if err != nil {
+		logger.Error(err, "failed to modify traffic", "operation", op)
+		return false, retryDefault
+	}
+
 	if opResult != controllerutil.OperationResultNone {
+		logger.Info("modify traffic routing", "operation", op, "result", opResult)
+		// check next time
 		return false, retryDefault
 	}
 
 	// 1.b. waiting for traffic
-	if rolloutRun.Spec.Canary.Traffic != nil {
-		ready := ctx.TrafficManager.CheckReady()
-		if !ready {
-			logger.Info("waiting for BackendRouting ready")
-			return false, retryDefault
-		}
+	ready := ctx.TrafficManager.CheckReady()
+	if !ready {
+		logger.Info("waiting for BackendRouting ready")
+		return false, retryDefault
 	}
 
 	return true, retryImmediately

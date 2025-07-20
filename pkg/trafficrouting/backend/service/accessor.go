@@ -22,7 +22,7 @@ import (
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/pkg/backend"
+	"kusionstack.io/rollout/pkg/trafficrouting/backend"
 	"kusionstack.io/rollout/pkg/utils/accessor"
 )
 
@@ -40,22 +40,24 @@ func New() backend.InClusterBackend {
 	}
 }
 
-func (s *accessorImpl) Fork(original client.Object, config rolloutv1alpha1.ForkedBackend) client.Object {
-	obj := original.(*corev1.Service)
-	forkedbackend := &corev1.Service{}
-	forkedbackend.Name = config.Name
-	forkedbackend.Namespace = obj.Namespace
-	forkedbackend.Spec.Ports = obj.Spec.Ports
-	forkedbackend.Spec.Type = obj.Spec.Type
-	forkedbackend.Spec.Selector = obj.Spec.Selector
-	if forkedbackend.Spec.Selector == nil {
-		forkedbackend.Spec.Selector = make(map[string]string)
+func (s *accessorImpl) Fork(origin client.Object, config rolloutv1alpha1.ForkedBackend) client.Object {
+	obj := origin.(*corev1.Service)
+	forkedObj := &corev1.Service{}
+	// fork metadata
+	forkedObj.ObjectMeta = backend.ForkObjectMeta(obj, config.Name)
+	if forkedObj.Labels == nil {
+		forkedObj.Labels = make(map[string]string)
 	}
-	maps.Copy(forkedbackend.Spec.Selector, config.ExtraLabelSelector)
-	if forkedbackend.Labels == nil {
-		forkedbackend.Labels = make(map[string]string)
+	maps.Copy(forkedObj.Labels, config.ExtraLabelSelector)
+	forkedObj.Labels[rolloutapi.LabelTemporaryResource] = "true"
+	// fork spec
+	forkedObj.Spec.Ports = obj.Spec.Ports
+	forkedObj.Spec.Type = obj.Spec.Type
+	forkedObj.Spec.Selector = obj.Spec.Selector
+	if forkedObj.Spec.Selector == nil {
+		forkedObj.Spec.Selector = make(map[string]string)
 	}
-	maps.Copy(forkedbackend.Labels, config.ExtraLabelSelector)
-	forkedbackend.Labels[rolloutapi.LabelTemporaryResource] = "true"
-	return forkedbackend
+	// change selector
+	maps.Copy(forkedObj.Spec.Selector, config.ExtraLabelSelector)
+	return forkedObj
 }

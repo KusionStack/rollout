@@ -18,18 +18,23 @@ import (
 	"fmt"
 
 	networkingv1 "k8s.io/api/networking/v1"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/pkg/route"
+	"kusionstack.io/rollout/pkg/trafficrouting/route"
 	"kusionstack.io/rollout/pkg/utils/accessor"
 )
 
-type IgsStore struct {
+var GVK = networkingv1.SchemeGroupVersion.WithKind("Ingress")
+
+var _ route.Route = &routeImpl{}
+
+type routeImpl struct {
 	accessor.ObjectAccessor
 }
 
-func NewStorage() route.Route {
-	return &IgsStore{
+func New() route.Route {
+	return &routeImpl{
 		ObjectAccessor: accessor.NewObjectAccessor(
 			GVK,
 			&networkingv1.Ingress{},
@@ -38,16 +43,15 @@ func NewStorage() route.Route {
 	}
 }
 
-func (i *IgsStore) Wrap(client client.Client, cluster string, route client.Object) (route.RouteControl, error) {
-	igs, ok := route.(*networkingv1.Ingress)
+func (r *routeImpl) GetController(client client.Client, br *rolloutv1alpha1.BackendRouting, routeObj client.Object, routeStatus rolloutv1alpha1.BackendRouteStatus) (route.RouteController, error) {
+	igs, ok := routeObj.(*networkingv1.Ingress)
 	if !ok {
-		return nil, fmt.Errorf("not Ingress")
+		return nil, fmt.Errorf("input route is not networkingv1.Ingress")
 	}
-	return &ingressRoute{
-		client:  client,
-		obj:     igs,
-		cluster: cluster,
+	return &ingressControl{
+		client:         client,
+		backendrouting: br,
+		routeObj:       igs,
+		routeStatus:    routeStatus,
 	}, nil
 }
-
-var _ route.Route = &IgsStore{}

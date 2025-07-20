@@ -19,10 +19,14 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	gwapiv1alpha2 "sigs.k8s.io/gateway-api-inference-extension/api/v1alpha2"
+	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func init() {
-	utilruntime.Must(rolloutv1alpha1.AddToScheme(clientgoscheme.Scheme))
-	utilruntime.Must(operatingv1alpha1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(rolloutv1alpha1.Install(clientgoscheme.Scheme))
+	utilruntime.Must(operatingv1alpha1.Install(clientgoscheme.Scheme))
+	utilruntime.Must(gatewayapiv1.Install(clientgoscheme.Scheme))
+	utilruntime.Must(gwapiv1alpha2.Install(clientgoscheme.Scheme))
 	//+kubebuilder:scaffold:scheme
 }
