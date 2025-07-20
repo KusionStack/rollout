@@ -15,8 +15,8 @@
 package workload
 
 import (
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"context"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,9 +57,11 @@ type CanaryReleaseControl interface {
 	ApplyCanaryPatch(canary client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error
 }
 
-type PodControl interface {
-	// IsUpdatedPod checks if the pod revision is updated of the workload
-	IsUpdatedPod(reader client.Reader, obj client.Object, pod *corev1.Pod) (bool, error)
-	// GetPodSelector gets the pod selector of the workload
-	GetPodSelector(obj client.Object) (labels.Selector, error)
+type ReplicaObjectControl interface {
+	// RepliceType returns the type of replica object
+	ReplicaType() schema.GroupVersionKind
+	// IsUpdateObject checks if the replica object revision is updated of the workload
+	IsUpdateObject(ctx context.Context, reader client.Reader, workload, object client.Object) (bool, error)
+	// GetReplicObjects gets the pod selector of the workload
+	GetReplicObjects(ctx context.Context, reader client.Reader, workload client.Object) ([]client.Object, error)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,7 +71,7 @@ func (w workloadLabelOrStatusChangedPredict) Update(e event.UpdateEvent) bool {
 	return oldInControl != newInControl || oldProgressing != newProgressing
 }
 
-func enqueueWorkloadPods(accessor workload.Accessor, reader client.Reader, scheme *runtime.Scheme, logger logr.Logger) handler.EventHandler {
+func enqueueWorkloadPods(desiredGVK schema.GroupVersionKind, pc workload.ReplicaObjectControl, reader client.Reader, scheme *runtime.Scheme, logger logr.Logger) handler.EventHandler {
 	handlerWorkloadUpdate := func(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 		// check gvk of object
 		obj := evt.ObjectNew
@@ -86,30 +87,19 @@ func enqueueWorkloadPods(accessor workload.Accessor, reader client.Reader, schem
 		}
 		gvk := kinds[0]
 
-		if accessor.GroupVersionKind() != gvk {
+		if desiredGVK != gvk {
 			// missmatch group version kind
 			return
 		}
 
-		pc, ok := accessor.(workload.PodControl)
-		if !ok {
-			return
-		}
-		selector, err := pc.GetPodSelector(obj)
-		if err != nil {
-			logger.Error(err, "failed to get PodSelector for workload", "key", key.String(), "gvk", gvk.String())
-			return
-		}
-
-		podList := &corev1.PodList{}
-		err = reader.List(context.Background(), podList, client.InNamespace(obj.GetNamespace()), client.MatchingLabelsSelector{Selector: selector})
+		list, err := pc.GetReplicObjects(context.TODO(), reader, obj)
 		if err != nil {
 			logger.Error(err, "failed to list pods for workload", "key", key.String(), "gvk", gvk.String())
 			return
 		}
 
-		for i := range podList.Items {
-			pod := &podList.Items[i]
+		for i := range list {
+			pod := list[i].(*corev1.Pod)
 			q.Add(reconcile.Request{NamespacedName: client.ObjectKeyFromObject(pod)})
 		}
 	}

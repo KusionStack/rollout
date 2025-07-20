@@ -17,35 +17,47 @@
 package collaset
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
-var _ workload.PodControl = &accessorImpl{}
+var _ workload.ReplicaObjectControl = &accessorImpl{}
 
-func (c *accessorImpl) IsUpdatedPod(_ client.Reader, object client.Object, pod *corev1.Pod) (bool, error) {
-	obj, err := checkObj(object)
+func (c *accessorImpl) ReplicaType() schema.GroupVersionKind {
+	return corev1.SchemeGroupVersion.WithKind("Pod")
+}
+
+func (c *accessorImpl) IsUpdateObject(_ context.Context, _ client.Reader, workload, obj client.Object) (bool, error) {
+	cls, err := checkObj(workload)
 	if err != nil {
 		return false, err
 	}
-	revision := utils.GetMapValueByDefault(pod.Labels, appsv1.ControllerRevisionHashLabelKey, obj.Status.CurrentRevision)
-	if revision == obj.Status.CurrentRevision {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return false, fmt.Errorf("object must be Pod")
+	}
+	revision := utils.GetMapValueByDefault(pod.Labels, appsv1.ControllerRevisionHashLabelKey, cls.Status.CurrentRevision)
+	if revision == cls.Status.CurrentRevision {
 		return false, nil
 	}
-	if revision == obj.Status.UpdatedRevision {
+	if revision == cls.Status.UpdatedRevision {
 		return true, nil
 	}
 	return false, nil
 }
 
-func (c *accessorImpl) GetPodSelector(object client.Object) (labels.Selector, error) {
-	obj, err := checkObj(object)
+func (c *accessorImpl) GetReplicObjects(ctx context.Context, reader client.Reader, workload client.Object) ([]client.Object, error) {
+	obj, err := checkObj(workload)
 	if err != nil {
 		return nil, err
 	}
@@ -53,5 +65,12 @@ func (c *accessorImpl) GetPodSelector(object client.Object) (labels.Selector, er
 	if err != nil {
 		return nil, err
 	}
-	return selector, nil
+
+	podList := &corev1.PodList{}
+	err = reader.List(ctx, podList, client.InNamespace(obj.Namespace), client.MatchingLabelsSelector{Selector: selector})
+	if err != nil {
+		return nil, err
+	}
+
+	return lo.Map(podList.Items, func(pod corev1.Pod, _ int) client.Object { return &pod }), nil
 }

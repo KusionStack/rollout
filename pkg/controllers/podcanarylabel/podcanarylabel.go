@@ -63,11 +63,18 @@ func (r *PodCanaryReconciler) SetupWithManager(mgr manager.Manager) error {
 
 	allworkloads := rolloutcontroller.GetWatchableWorkloads(r.workloadRegistry, r.Logger, r.Client, r.Config)
 	for _, accessor := range allworkloads {
+		pc, ok := accessor.(workload.ReplicaObjectControl)
+		if !ok {
+			continue
+		}
+		if pc.ReplicaType().Kind != "Pod" {
+			continue
+		}
 		gvk := accessor.GroupVersionKind()
 		r.Logger.Info("add watcher for workload", "gvk", gvk.String())
 		b.Watches(
 			multicluster.ClustersKind(&source.Kind{Type: accessor.NewObject()}),
-			enqueueWorkloadPods(accessor, r.Client, r.Scheme, r.Logger),
+			enqueueWorkloadPods(gvk, pc, r.Client, r.Scheme, r.Logger),
 			builder.WithPredicates(workloadLabelOrStatusChangedPredict{accessor: accessor}),
 		)
 	}
@@ -114,7 +121,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
-	pc, ok := workloadObj.Accessor.(workload.PodControl)
+	pc, ok := workloadObj.Accessor.(workload.ReplicaObjectControl)
 	if !ok {
 		logger.V(2).Info("accessor does not support pod control, skip reconciling pod")
 		return reconcile.Result{}, nil
@@ -137,7 +144,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	return reconcile.Result{}, err
 }
 
-func recognizeTrafficLane(pc workload.PodControl, reader client.Reader, workloadObj client.Object, pod *corev1.Pod) string {
+func recognizeTrafficLane(pc workload.ReplicaObjectControl, reader client.Reader, workloadObj client.Object, pod *corev1.Pod) string {
 	if workload.IsCanary(workloadObj) {
 		// canary workload, always set pod revision to canary
 		return rolloutapi.LabelValueTrafficLaneCanary
@@ -149,7 +156,7 @@ func recognizeTrafficLane(pc workload.PodControl, reader client.Reader, workload
 	}
 
 	// workload is progressing, set updated pod revision to canary
-	if updated, _ := pc.IsUpdatedPod(reader, workloadObj, pod); updated {
+	if updated, _ := pc.IsUpdateObject(context.TODO(), reader, workloadObj, pod); updated {
 		return rolloutapi.LabelValueTrafficLaneCanary
 	}
 	return rolloutapi.LabelValueTrafficLaneStable
