@@ -63,7 +63,7 @@ func (c *ExecutorContext) Initialize() {
 
 		// init canary status
 		if c.RolloutRun.Spec.Canary != nil && newStatus.CanaryStatus == nil {
-			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{}
+			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{}
 		}
 		// init BatchStatus
 		if c.RolloutRun.Spec.Batch != nil {

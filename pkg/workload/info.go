@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -149,38 +148,33 @@ func Get(ctx context.Context, c client.Client, inter Accessor, cluster, namespac
 
 // List return a list of workloads that match the given namespace and match.
 // It will ignore canary workloads or deleted workloads by default.
-func List(ctx context.Context, c client.Client, inter Accessor, namespace string, match rolloutv1alpha1.ResourceMatch) ([]*Info, error) {
+func List(ctx context.Context, c client.Client, inter Accessor, namespace string, match rolloutv1alpha1.ResourceMatch) (workloads []*Info, canaryWorkloads []*Info, err error) {
 	listObj := inter.NewObjectList()
 	if err := c.List(clusterinfo.WithCluster(ctx, clusterinfo.Clusters), listObj, &client.ListOptions{Namespace: namespace}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	matcher := MatchAsMatcher(match)
 
 	listPtr, err := meta.GetItemsPtr(listObj)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	v, err := conversion.EnforcePtr(listPtr)
 	if err != nil || v.Kind() != reflect.Slice {
-		return nil, fmt.Errorf("neet ptr to slice: %w", err)
+		return nil, nil, fmt.Errorf("neet ptr to slice: %w", err)
 	}
 
 	length := v.Len()
-	workloads := make([]*Info, 0)
+	workloads = make([]*Info, 0)
+	canaryWorkloads = make([]*Info, 0)
 
-	for i := 0; i < length; i++ {
+	for i := range length {
 		elemPtr := v.Index(i).Addr().Interface()
 		obj, ok := elemPtr.(client.Object)
 		if !ok {
-			return nil, fmt.Errorf("can not convert element to client.Object")
-		}
-
-		canary := utils.GetMapValueByDefault(obj.GetLabels(), rolloutapi.LabelCanary, "false")
-		if canary == "true" {
-			// ignore canary workload here, you should get canary worload from release control interface
-			continue
+			return nil, nil, fmt.Errorf("can not convert element to client.Object")
 		}
 
 		if obj.GetDeletionTimestamp() != nil {
@@ -188,15 +182,20 @@ func List(ctx context.Context, c client.Client, inter Accessor, namespace string
 			continue
 		}
 
+		isCanary := IsCanary(obj)
 		cluster := GetClusterFromLabel(obj.GetLabels())
 		if !matcher.Matches(cluster, obj.GetName(), obj.GetLabels()) {
 			continue
 		}
 		info, err := inter.GetInfo(cluster, obj)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		workloads = append(workloads, info)
+		if isCanary {
+			canaryWorkloads = append(canaryWorkloads, info)
+		} else {
+			workloads = append(workloads, info)
+		}
 	}
-	return workloads, nil
+	return workloads, canaryWorkloads, nil
 }

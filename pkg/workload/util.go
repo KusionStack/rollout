@@ -105,8 +105,8 @@ func IsProgressing(workload client.Object) bool {
 }
 
 func IsCanary(workload client.Object) bool {
-	_, ok := utils.GetMapValue(workload.GetLabels(), rolloutapi.LabelCanary)
-	return ok
+	canary, ok := utils.GetMapValue(workload.GetLabels(), rolloutapi.LabelCanary)
+	return ok && canary == "true"
 }
 
 type Owner struct {

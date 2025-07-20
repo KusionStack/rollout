@@ -4754,6 +4754,53 @@ spec:
                   state:
                     description: State is Rollout step state
                     type: string
+                  targetStatuses:
+                    description: TargetStatuses describes the referenced workloads status
+                    items:
+                      properties:
+                        cluster:
+                          description: Cluster defines which cluster the workload is in.
+                          type: string
+                        generation:
+                          description: Generation is the found in workload metadata.
+                          format: int64
+                          type: integer
+                        name:
+                          description: Name is the workload name
+                          type: string
+                        observedGeneration:
+                          description: ObservedGeneration is the most recent generation observed for this workload.
+                          format: int64
+                          type: integer
+                        replicas:
+                          description: Replicas is the desired number of pods targeted by workload
+                          format: int32
+                          type: integer
+                        stableRevision:
+                          description: StableRevision is the old stable revision used to generate pods.
+                          type: string
+                        updatedAvailableReplicas:
+                          description: UpdatedAvailableReplicas is the number of service available pods targeted by workload that have the updated template spec.
+                          format: int32
+                          type: integer
+                        updatedReadyReplicas:
+                          description: UpdatedReadyReplicas is the number of ready pods targeted by workload that have the updated template spec.
+                          format: int32
+                          type: integer
+                        updatedReplicas:
+                          description: UpdatedReplicas is the number of pods targeted by workload that have the updated template spec.
+                          format: int32
+                          type: integer
+                        updatedRevision:
+                          description: UpdatedRevision is the updated template revision used to generate pods.
+                          type: string
+                      required:
+                      - replicas
+                      - updatedAvailableReplicas
+                      - updatedReadyReplicas
+                      - updatedReplicas
+                      type: object
+                    type: array
                   targets:
                     description: WorkloadDetails contains release details for each workload
                     items:

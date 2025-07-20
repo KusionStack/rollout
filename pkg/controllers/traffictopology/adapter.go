@@ -102,7 +102,7 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 		return expected, err
 	}
 
-	workloads, err := workload.List(ctx, t.Client, inter, trafficTopology.Namespace, trafficTopology.Spec.WorkloadRef.Match)
+	workloads, _, err := workload.List(ctx, t.Client, inter, trafficTopology.Namespace, trafficTopology.Spec.WorkloadRef.Match)
 	if err != nil {
 		return expected, err
 	}

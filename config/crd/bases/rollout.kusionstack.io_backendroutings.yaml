@@ -2501,22 +2501,7 @@ spec:
                       description: Cluster indicates the name of cluster
                       type: string
                     condition:
-                      description: |-
-                        Condition contains details for one aspect of the current state of this API Resource.
-                        ---
-                        This struct is intended for direct use as an array at the field path .status.conditions.  For example,
-                        type FooStatus struct{
-                            // Represents the observations of a foo's current state.
-                            // Known .status.conditions.type are: "Available", "Progressing", and "Degraded"
-                            // +patchMergeKey=type
-                            // +patchStrategy=merge
-                            // +listType=map
-                            // +listMapKey=type
-                            Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
-
-
-                            // other fields
-                        }
+                      description: Route condition
                       properties:
                         lastTransitionTime:
                           description: |-
@@ -2574,11 +2559,11 @@ spec:
                       - type
                       type: object
                     forwarding:
+                      description: Forwarding statuses
                       properties:
                         canary:
                           properties:
                             backendName:
-                              description: Name is the name of the referent.
                               type: string
                             conditions:
                               description: Backendonditions represents the current condition of an backend.
@@ -2604,7 +2589,6 @@ spec:
                         origin:
                           properties:
                             backendName:
-                              description: Name is the name of the referent.
                               type: string
                             conditions:
                               description: Backendonditions represents the current condition of an backend.
@@ -2630,7 +2614,6 @@ spec:
                         stable:
                           properties:
                             backendName:
-                              description: Name is the name of the referent.
                               type: string
                             conditions:
                               description: Backendonditions represents the current condition of an backend.

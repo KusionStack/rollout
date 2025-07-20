@@ -319,9 +319,8 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 			oldObj: validRolloutRun,
 			newObj: func() *rolloutv1alpha1.RolloutRun {
 				obj := validRolloutRun.DeepCopy()
-				obj.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepRunning,
-				}
+				obj.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{}
+				obj.Status.CanaryStatus.State = rolloutv1alpha1.RolloutStepRunning
 				obj.Spec.Canary.Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Canary.TemplateMetadataPatch.Labels["canary"] = "false"
 				return obj
