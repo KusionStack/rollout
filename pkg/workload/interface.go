@@ -15,12 +15,13 @@
 package workload
 
 import (
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"context"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/rollout/pkg/utils/accessor"
 )
 
 // Accessor defines the functions to access the workload.
@@ -29,14 +30,9 @@ import (
 // - BatchReleaseControl
 // - PodControl
 type Accessor interface {
-	// GroupVersionKind returns the GroupVersionKind of the workload
-	GroupVersionKind() schema.GroupVersionKind
+	accessor.ObjectAccessor
 	// DependentWorkloadGVKs returns the dependent workloadds' GroupVersionKinds
 	DependentWorkloadGVKs() []schema.GroupVersionKind
-	// NewObject returns a new instance of the workload type
-	NewObject() client.Object
-	// NewObjectList returns a new instance of the workload list type
-	NewObjectList() client.ObjectList
 	// Watchable indicates whether this workload type can be watched from the API server.
 	Watchable() bool
 	// GetInfo returns a info represent workload
@@ -61,9 +57,11 @@ type CanaryReleaseControl interface {
 	ApplyCanaryPatch(canary client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error
 }
 
-type PodControl interface {
-	// IsUpdatedPod checks if the pod revision is updated of the workload
-	IsUpdatedPod(reader client.Reader, obj client.Object, pod *corev1.Pod) (bool, error)
-	// GetPodSelector gets the pod selector of the workload
-	GetPodSelector(obj client.Object) (labels.Selector, error)
+type ReplicaObjectControl interface {
+	// RepliceType returns the type of replica object
+	ReplicaType() schema.GroupVersionKind
+	// IsUpdateObject checks if the replica object revision is updated of the workload
+	IsUpdateObject(ctx context.Context, reader client.Reader, workload, object client.Object) (bool, error)
+	// GetReplicObjects gets the pod selector of the workload
+	GetReplicObjects(ctx context.Context, reader client.Reader, workload client.Object) ([]client.Object, error)
 }

@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"time"
 
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	rolloutapi "kusionstack.io/rollout/apis/rollout"
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/control"
 	"kusionstack.io/rollout/pkg/workload"
 )
@@ -132,36 +132,43 @@ func (e *canaryExecutor) modifyTraffic(ctx *ExecutorContext, op string) (bool, t
 	rolloutRun := ctx.RolloutRun
 	opResult := controllerutil.OperationResultNone
 
-	// 1.a. do traffic initialization
-	if rolloutRun.Spec.Canary.Traffic != nil {
-		var err error
-		switch op {
-		case "forkStable":
-			opResult, err = ctx.TrafficManager.ForkStable()
-		case "forkCanary":
-			opResult, err = ctx.TrafficManager.ForkCanary()
-		case "revertStable":
-			opResult, err = ctx.TrafficManager.RevertStable()
-		case "revertCanary":
-			opResult, err = ctx.TrafficManager.RevertCanary()
-		}
-		if err != nil {
-			logger.Error(err, "failed to modify traffic", "operation", op)
-			return false, retryDefault
-		}
-		logger.Info("modify traffic routing", "operation", op, "result", opResult)
+	if rolloutRun.Spec.Canary.Traffic == nil {
+		logger.Info("traffic is nil, skip modify traffic")
+		return true, retryImmediately
 	}
+
+	// 1.a. do traffic initialization
+	var err error
+	switch op {
+	case "forkBackends":
+		opResult, err = ctx.TrafficManager.ForkBackends()
+	case "initializeRoute":
+		opResult, err = ctx.TrafficManager.InitializeRoute()
+	case "addCanaryRoute":
+		opResult, err = ctx.TrafficManager.AddCanaryRoute()
+	case "deleteCanaryRoute":
+		opResult, err = ctx.TrafficManager.DeleteCanaryRoute()
+	case "resetRoute":
+		opResult, err = ctx.TrafficManager.ResetRoute()
+	case "deleteForkedBackends":
+		opResult, err = ctx.TrafficManager.DeleteForkedBackends()
+	}
+	if err != nil {
+		logger.Error(err, "failed to modify traffic", "operation", op)
+		return false, retryDefault
+	}
+
 	if opResult != controllerutil.OperationResultNone {
+		logger.Info("modify traffic routing", "operation", op, "result", opResult)
+		// check next time
 		return false, retryDefault
 	}
 
 	// 1.b. waiting for traffic
-	if rolloutRun.Spec.Canary.Traffic != nil {
-		ready := ctx.TrafficManager.CheckReady()
-		if !ready {
-			logger.Info("waiting for BackendRouting ready")
-			return false, retryDefault
-		}
+	ready := ctx.TrafficManager.CheckReady()
+	if !ready {
+		logger.Info("waiting for BackendRouting ready")
+		return false, retryDefault
 	}
 
 	return true, retryImmediately
@@ -171,8 +178,14 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 	logger := ctx.GetCanaryLogger()
 	rolloutRun := ctx.RolloutRun
 
-	// 1. do traffic initialization
-	prepareDone, retry := e.modifyTraffic(ctx, "forkStable")
+	// 1. fork backends
+	prepareDone, retry := e.modifyTraffic(ctx, "forkBackends")
+	if !prepareDone {
+		return false, retry, nil
+	}
+
+	// 2. do traffic initialization
+	prepareDone, retry = e.modifyTraffic(ctx, "initializeRoute")
 	if !prepareDone {
 		return false, retry, nil
 	}
@@ -181,7 +194,7 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 	logger.Info("about to create canary resources and check")
 	canaryWorkloads := make([]*workload.Info, 0)
 
-	patch := appendBuiltinPodTemplateMetadataPatch(rolloutRun.Spec.Canary.PodTemplateMetadataPatch)
+	patch := appendBuiltinPodTemplateMetadataPatch(rolloutRun.Spec.Canary.TemplateMetadataPatch)
 
 	changed := false
 	releaseControl := control.NewCanaryReleaseControl(ctx.Accessor, ctx.Client)
@@ -222,8 +235,8 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 		}
 	}
 
-	// 3 do canary traffic routing
-	trafficCanaryDone, retry := e.modifyTraffic(ctx, "forkCanary")
+	// 3. add canary route
+	trafficCanaryDone, retry := e.modifyTraffic(ctx, "addCanaryRoute")
 	if !trafficCanaryDone {
 		return false, retry, nil
 	}
@@ -241,7 +254,7 @@ func appendBuiltinPodTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch)
 	}
 
 	patch.Labels[rolloutapi.LabelCanary] = "true"
-	patch.Labels[rolloutapi.LabelPodRevision] = "canary"
+	patch.Labels[rolloutapi.LabelTrafficLane] = rolloutapi.LabelValueTrafficLaneCanary
 	return patch
 }
 
@@ -249,7 +262,7 @@ func (e *canaryExecutor) release(ctx *ExecutorContext) (bool, time.Duration, err
 	// firstly try to stop webhook
 	e.webhook.Cancel(ctx)
 
-	done, retry := e.modifyTraffic(ctx, "revertCanary")
+	done, retry := e.modifyTraffic(ctx, "deleteCanaryRoute")
 	if !done {
 		return false, retry, nil
 	}
@@ -271,7 +284,12 @@ func (e *canaryExecutor) release(ctx *ExecutorContext) (bool, time.Duration, err
 		}
 	}
 
-	done, retry = e.modifyTraffic(ctx, "revertStable")
+	done, retry = e.modifyTraffic(ctx, "resetRoute")
+	if !done {
+		return false, retry, nil
+	}
+
+	done, retry = e.modifyTraffic(ctx, "deleteForkedBackends")
 	if !done {
 		return false, retry, nil
 	}

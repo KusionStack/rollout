@@ -28,3 +28,10 @@ bash "${ROOT_DIR}/hack/make-rules/install-go-tools.sh" controller-gen
     webhook \
     paths="./..." \
     output:crd:artifacts:config=config/crd/bases
+
+for file in config/crd/bases/*.yaml; do
+    # Traversal delete x-kubernetes-validations fields in crd yaml
+    yq -i eval 'del(.. | ."x-kubernetes-validations"?)' "$file"
+    # delete array indent
+    yamlfmt -formatter indentless_arrays=true "$file"
+done

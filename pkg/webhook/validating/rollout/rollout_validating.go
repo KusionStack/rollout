@@ -24,11 +24,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/apis/rollout/v1alpha1/validation"
+	rolloutvalidation "kusionstack.io/rollout/apis/rollout/v1alpha1/validation"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 )
 
@@ -74,13 +74,13 @@ func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) erro
 	var errs field.ErrorList
 	switch t := obj.(type) {
 	case *rolloutv1alpha1.Rollout:
-		errs = validation.ValidateRollout(t, registry.IsSupportedWorkload)
+		errs = rolloutvalidation.ValidateRollout(t, registry.IsSupportedWorkload)
 	case *rolloutv1alpha1.RolloutStrategy:
-		errs = validation.ValidateRolloutStrategy(t)
+		errs = rolloutvalidation.ValidateRolloutStrategy(t)
 	case *rolloutv1alpha1.RolloutRun:
-		errs = validation.ValidateRolloutRun(t)
+		errs = rolloutvalidation.ValidateRolloutRun(t)
 	case *rolloutv1alpha1.TrafficTopology:
-		errs = validation.ValidateTrafficTopology(t)
+		errs = rolloutvalidation.ValidateTrafficTopology(t)
 	default:
 		return fmt.Errorf("unexpected object type %T", obj)
 	}
@@ -97,19 +97,19 @@ func (v *Validator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.O
 	var errs field.ErrorList
 	switch newV := newObj.(type) {
 	case *rolloutv1alpha1.Rollout:
-		errs = validation.ValidateRollout(newV, registry.IsSupportedWorkload)
+		errs = rolloutvalidation.ValidateRollout(newV, registry.IsSupportedWorkload)
 		if len(errs) == 0 {
-			errs = validation.ValidateRolloutUpdate(newV, oldObj.(*rolloutv1alpha1.Rollout))
+			errs = rolloutvalidation.ValidateRolloutUpdate(newV, oldObj.(*rolloutv1alpha1.Rollout))
 		}
 	case *rolloutv1alpha1.RolloutStrategy:
-		errs = validation.ValidateRolloutStrategy(newV)
+		errs = rolloutvalidation.ValidateRolloutStrategy(newV)
 	case *rolloutv1alpha1.RolloutRun:
-		errs = validation.ValidateRolloutRun(newV)
+		errs = rolloutvalidation.ValidateRolloutRun(newV)
 		if len(errs) == 0 {
-			errs = validation.ValidateRolloutRunUpdate(newV, oldObj.(*rolloutv1alpha1.RolloutRun))
+			errs = rolloutvalidation.ValidateRolloutRunUpdate(newV, oldObj.(*rolloutv1alpha1.RolloutRun))
 		}
 	case *rolloutv1alpha1.TrafficTopology:
-		errs = validation.ValidateTrafficTopology(newV)
+		errs = rolloutvalidation.ValidateTrafficTopology(newV)
 	default:
 		return fmt.Errorf("unexpected object type %T", newObj)
 	}

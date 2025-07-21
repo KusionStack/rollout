@@ -17,22 +17,34 @@
 package statefulset
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
-var _ workload.PodControl = &accessorImpl{}
+var _ workload.ReplicaObjectControl = &accessorImpl{}
 
-func (c *accessorImpl) IsUpdatedPod(_ client.Reader, obj client.Object, pod *corev1.Pod) (bool, error) {
-	sts, ok := obj.(*appsv1.StatefulSet)
+func (c *accessorImpl) ReplicaType() schema.GroupVersionKind {
+	return corev1.SchemeGroupVersion.WithKind("Pod")
+}
+
+func (c *accessorImpl) IsUpdateObject(_ context.Context, _ client.Reader, workload, obj client.Object) (bool, error) {
+	sts, ok := workload.(*appsv1.StatefulSet)
 	if !ok {
 		return false, ObjectTypeError
+	}
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return false, fmt.Errorf("object must be Pod")
 	}
 	revision := utils.GetMapValueByDefault(pod.Labels, appsv1.ControllerRevisionHashLabelKey, sts.Status.CurrentRevision)
 	if revision == sts.Status.CurrentRevision {
@@ -44,8 +56,8 @@ func (c *accessorImpl) IsUpdatedPod(_ client.Reader, obj client.Object, pod *cor
 	return false, nil
 }
 
-func (c *accessorImpl) GetPodSelector(obj client.Object) (labels.Selector, error) {
-	sts, ok := obj.(*appsv1.StatefulSet)
+func (c *accessorImpl) GetReplicObjects(ctx context.Context, reader client.Reader, workload client.Object) ([]client.Object, error) {
+	sts, ok := workload.(*appsv1.StatefulSet)
 	if !ok {
 		return nil, ObjectTypeError
 	}
@@ -53,5 +65,10 @@ func (c *accessorImpl) GetPodSelector(obj client.Object) (labels.Selector, error
 	if err != nil {
 		return nil, err
 	}
-	return selector, nil
+	podList := &corev1.PodList{}
+	err = reader.List(ctx, podList, client.InNamespace(sts.Namespace), client.MatchingLabelsSelector{Selector: selector})
+	if err != nil {
+		return nil, err
+	}
+	return lo.Map(podList.Items, func(pod corev1.Pod, _ int) client.Object { return &pod }), nil
 }

@@ -21,8 +21,7 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/types"
-
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
 type Manager interface {

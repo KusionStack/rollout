@@ -26,11 +26,11 @@ import (
 	"k8s.io/client-go/discovery"
 	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/rest"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rolloutapi "kusionstack.io/rollout/apis/rollout"
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
@@ -126,10 +126,10 @@ func constructRolloutRunCanary(strategy *rolloutv1alpha1.CanaryStrategy, workloa
 	}
 
 	step := &rolloutv1alpha1.RolloutRunCanaryStrategy{
-		Targets:                  targets,
-		Traffic:                  strategy.Traffic,
-		Properties:               strategy.Properties,
-		PodTemplateMetadataPatch: strategy.PodTemplateMetadataPatch,
+		Targets:               targets,
+		Traffic:               strategy.Traffic,
+		Properties:            strategy.Properties,
+		TemplateMetadataPatch: strategy.TemplateMetadataPatch,
 	}
 	return step
 }

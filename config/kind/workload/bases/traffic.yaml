@@ -48,6 +48,7 @@ kind: Ingress
 metadata:
   name: rollout-demo1
 spec:
+  ingressClassName: mse
   rules:
   - host: rollout-demo.example.com
     http:
@@ -66,6 +67,7 @@ kind: Ingress
 metadata:
   name: rollout-demo2
 spec:
+  ingressClassName: mse
   rules:
   - host: rollout-demo.example.com
     http:
@@ -104,3 +106,64 @@ spec:
   ports:
   - port: 80
     targetPort: 80
+
+---
+
+apiVersion: rollout.kusionstack.io/v1alpha1
+kind: TrafficTopology
+metadata:
+  name: rollout-demo1-httproute
+spec:
+  workloadRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    match:
+      selector:
+        matchLabels:
+          app: rollout-demo
+          cluster: cluster-a
+  trafficType: InCluster
+  backend:
+    apiVersion: inference.networking.x-k8s.io/v1alpha2
+    kind: InferencePool
+    name: rollout-demo1
+  routes:
+  - apiVersion: gateway.networking.k8s.io/v1
+    kind: HTTPRoute
+    name: rollout-demo1
+
+---
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rollout-demo1
+  annotations:
+    # rollout.kusionstack.io/route-conditions: '{"conditions":[{"lastTransitionTime":"2025-07-20T08:48:12Z","observedGeneration":0,"reason":"Synced","status":"True","type":"Synced"}]}'
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: rollout-demo1
+      group: inference.networking.x-k8s.io
+      kind: InferencePool
+
+---
+
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferencePool
+metadata:
+  name: rollout-demo1
+spec:
+  # spec.endpointPickerConfig 尽管暂时用不到，但inference pool api限定了需要设置，可以参照下面的设置
+  extensionRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: rollout-demo1
+  selector:
+    cluster: cluster-a
+  targetPortNumber: 80 

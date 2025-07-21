@@ -18,6 +18,7 @@ package executor
 
 import (
 	"context"
+	"slices"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -25,10 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/controllers/rolloutrun/traffic"
+	trafficcontrol "kusionstack.io/rollout/pkg/trafficrouting/control"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -45,7 +46,7 @@ type ExecutorContext struct {
 	RolloutRun     *rolloutv1alpha1.RolloutRun
 	NewStatus      *rolloutv1alpha1.RolloutRunStatus
 	Workloads      *workload.Set
-	TrafficManager *traffic.Manager
+	TrafficManager *trafficcontrol.Manager
 }
 
 func (c *ExecutorContext) Initialize() {
@@ -54,6 +55,7 @@ func (c *ExecutorContext) Initialize() {
 			c.NewStatus = c.RolloutRun.Status.DeepCopy()
 		}
 		newStatus := c.NewStatus
+		newStatus.ObservedGeneration = c.RolloutRun.Generation
 
 		if len(newStatus.Phase) == 0 {
 			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseInitial
@@ -90,12 +92,7 @@ func (c *ExecutorContext) Initialize() {
 // filterWebhooks return webhooks met hookType
 func filterWebhooks(hookType rolloutv1alpha1.HookType, rolloutRun *rolloutv1alpha1.RolloutRun) []rolloutv1alpha1.RolloutWebhook {
 	return lo.Filter(rolloutRun.Spec.Webhooks, func(w rolloutv1alpha1.RolloutWebhook, _ int) bool {
-		for _, item := range w.HookTypes {
-			if item == hookType {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(w.HookTypes, hookType)
 	})
 }
 

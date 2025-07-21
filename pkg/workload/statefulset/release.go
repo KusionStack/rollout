@@ -22,9 +22,9 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/utils/ptr"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/workload"
 )
 

@@ -22,8 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
 func newValidRollotRun() *rolloutv1alpha1.RolloutRun {
@@ -75,7 +74,7 @@ func newValidRollotRun() *rolloutv1alpha1.RolloutRun {
 						Replicas: intstr.FromInt(1),
 					},
 				},
-				PodTemplateMetadataPatch: &rolloutv1alpha1.MetadataPatch{
+				TemplateMetadataPatch: &rolloutv1alpha1.MetadataPatch{
 					Labels: map[string]string{
 						"canary": "true",
 					},
@@ -305,7 +304,11 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				obj := validRolloutRun.DeepCopy()
 				obj.Spec.Canary.Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Canary.Traffic = &rolloutv1alpha1.TrafficStrategy{
-					Weight: ptr.To[int32](10),
+					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+						CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+							Weight: ptr.To[int32](10),
+						},
+					},
 				}
 				return obj
 			}(),
@@ -316,11 +319,10 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 			oldObj: validRolloutRun,
 			newObj: func() *rolloutv1alpha1.RolloutRun {
 				obj := validRolloutRun.DeepCopy()
-				obj.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
-					State: rolloutv1alpha1.RolloutStepRunning,
-				}
+				obj.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{}
+				obj.Status.CanaryStatus.State = rolloutv1alpha1.RolloutStepRunning
 				obj.Spec.Canary.Targets[0].Replicas = intstr.FromInt(2)
-				obj.Spec.Canary.PodTemplateMetadataPatch.Labels["canary"] = "false"
+				obj.Spec.Canary.TemplateMetadataPatch.Labels["canary"] = "false"
 				return obj
 			}(),
 			wantErr: true,
@@ -350,7 +352,11 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				}
 				obj.Spec.Batch.Batches[0].Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Batch.Batches[0].Traffic = &rolloutv1alpha1.TrafficStrategy{
-					Weight: ptr.To[int32](10),
+					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+						CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+							Weight: ptr.To[int32](10),
+						},
+					},
 				}
 				return obj
 			}(),
@@ -387,7 +393,11 @@ func TestValidateRolloutRunUpdate(t *testing.T) {
 				obj.Spec.Batch.Batches[0].Breakpoint = true
 				obj.Spec.Batch.Batches[0].Targets[0].Replicas = intstr.FromInt(2)
 				obj.Spec.Batch.Batches[0].Traffic = &rolloutv1alpha1.TrafficStrategy{
-					Weight: ptr.To[int32](10),
+					HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+						CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+							Weight: ptr.To[int32](10),
+						},
+					},
 				}
 				return obj
 			}(),

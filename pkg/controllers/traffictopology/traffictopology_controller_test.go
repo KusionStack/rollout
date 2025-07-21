@@ -28,9 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
-
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
 var _ = Describe("traffic-topology-controller", func() {

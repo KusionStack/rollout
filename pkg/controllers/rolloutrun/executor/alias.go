@@ -16,7 +16,7 @@
 
 package executor
 
-import rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+import rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 
 const (
 	StepNone               = rolloutv1alpha1.RolloutStepNone

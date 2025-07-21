@@ -22,8 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	appsvalidation "k8s.io/kubernetes/pkg/apis/apps/validation"
-
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
 func ValidateRolloutRun(obj *rolloutv1alpha1.RolloutRun) field.ErrorList {
@@ -58,7 +57,7 @@ func ValidateRolloutRunCanaryStrategy(canary *rolloutv1alpha1.RolloutRunCanarySt
 	// validate targets
 	allErrs = append(allErrs, validateRolloutRunStepTargets(canary.Targets, fldPath.Child("targets"))...)
 	// validate pod template metadata path
-	allErrs = append(allErrs, validatePodTemplatePatch(canary.PodTemplateMetadataPatch, fldPath.Child("podTemplateMetadataPath"))...)
+	allErrs = append(allErrs, validateTemplateMetadataPatch(canary.TemplateMetadataPatch, fldPath.Child("podTemplateMetadataPath"))...)
 	// validate traffic
 	allErrs = append(allErrs, validateTrafficStrategy(canary.Traffic, fldPath.Child("traffic"))...)
 
@@ -133,7 +132,7 @@ func ValidateRolloutRunUpdate(newObj, oldObj *rolloutv1alpha1.RolloutRun) field.
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec").Child("canary"), "canary is immutable"))
 	} else if oldObj.Spec.Canary != nil && newObj.Spec.Canary != nil {
 		// pod template metadata patch is immutable
-		if !apiequality.Semantic.DeepEqual(newObj.Spec.Canary.PodTemplateMetadataPatch, oldObj.Spec.Canary.PodTemplateMetadataPatch) {
+		if !apiequality.Semantic.DeepEqual(newObj.Spec.Canary.TemplateMetadataPatch, oldObj.Spec.Canary.TemplateMetadataPatch) {
 			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec").Child("canary").Child("podTemplateMetadataPatch"), "podTemplateMetadataPatch is immutable"))
 		}
 

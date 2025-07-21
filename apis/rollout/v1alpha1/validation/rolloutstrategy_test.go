@@ -22,20 +22,25 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 )
 
 var validTraffic = &rolloutv1alpha1.TrafficStrategy{
-	Weight: ptr.To[int32](10),
-	HTTPRule: &rolloutv1alpha1.HTTPRouteRule{
-		Filter: rolloutv1alpha1.HTTPRouteFilter{
-			RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
-				Set: []gatewayapiv1.HTTPHeader{
+	HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+		CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+			Weight: ptr.To[int32](10),
+			HTTPRouteRule: rolloutv1alpha1.HTTPRouteRule{
+				Filters: []gatewayapiv1.HTTPRouteFilter{
 					{
-						Name:  "foo",
-						Value: "bar",
+						RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+							Set: []gatewayapiv1.HTTPHeader{
+								{
+									Name:  "foo",
+									Value: "bar",
+								},
+							},
+						},
 					},
 				},
 			},
@@ -44,14 +49,30 @@ var validTraffic = &rolloutv1alpha1.TrafficStrategy{
 }
 
 var invalidTraffic = &rolloutv1alpha1.TrafficStrategy{
-	Weight: ptr.To[int32](10),
-	HTTPRule: &rolloutv1alpha1.HTTPRouteRule{
-		Matches: []rolloutv1alpha1.HTTPRouteMatch{
-			{
-				Headers: []gatewayapiv1.HTTPHeaderMatch{
+	HTTP: &rolloutv1alpha1.HTTPTrafficStrategy{
+		CanaryHTTPRouteRule: rolloutv1alpha1.CanaryHTTPRouteRule{
+			Weight: ptr.To[int32](10),
+			HTTPRouteRule: rolloutv1alpha1.HTTPRouteRule{
+				Matches: []rolloutv1alpha1.HTTPRouteMatch{
 					{
-						Name:  "foo",
-						Value: "bar",
+						Headers: []gatewayapiv1.HTTPHeaderMatch{
+							{
+								Name:  "foo",
+								Value: "bar",
+							},
+						},
+					},
+				},
+				Filters: []gatewayapiv1.HTTPRouteFilter{
+					{
+						RequestHeaderModifier: &gatewayapiv1.HTTPHeaderFilter{
+							Set: []gatewayapiv1.HTTPHeader{
+								{
+									Name:  "foo",
+									Value: "bar",
+								},
+							},
+						},
 					},
 				},
 			},

@@ -32,6 +32,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	"kusionstack.io/kube-api/rollout/v1alpha1/condition"
 	kubeutilclient "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
@@ -44,9 +47,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"kusionstack.io/rollout/apis/rollout"
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/apis/rollout/v1alpha1/condition"
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
@@ -514,7 +514,7 @@ func (r *RolloutReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *
 	if err != nil {
 		return nil, nil, err
 	}
-	workloads, err := workload.List(ctx, r.Client, rest, obj.GetNamespace(), obj.Spec.WorkloadRef.Match)
+	workloads, _, err := workload.List(ctx, r.Client, rest, obj.GetNamespace(), obj.Spec.WorkloadRef.Match)
 	if err != nil {
 		return nil, nil, err
 	}

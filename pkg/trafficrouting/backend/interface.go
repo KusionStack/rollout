@@ -12,10 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rollout
+package backend
 
-const (
-	FinalizerRolloutProtection = "finalizer.rollout.kusionstack.io/protection"
+import (
+	"kusionstack.io/kube-api/rollout/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	FinalizerCanaryResourceProtection = "finalizer.rollout.kusionstack.io/canary-release"
+	"kusionstack.io/rollout/pkg/utils/accessor"
 )
+
+type InClusterBackend interface {
+	accessor.ObjectAccessor
+
+	// Fork returns a new object with the given backend.
+	Fork(original client.Object, config v1alpha1.ForkedBackend) client.Object
+}

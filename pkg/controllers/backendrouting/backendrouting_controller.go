@@ -17,25 +17,31 @@ package backendrouting
 import (
 	"context"
 	"fmt"
-	"reflect"
+	"time"
 
-	"go.uber.org/multierr"
+	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
+	"kusionstack.io/kube-utils/controller/expectations"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
-	"kusionstack.io/rollout/pkg/backend"
 	"kusionstack.io/rollout/pkg/controllers/registry"
-	"kusionstack.io/rollout/pkg/route"
+	"kusionstack.io/rollout/pkg/trafficrouting/backend"
+	"kusionstack.io/rollout/pkg/trafficrouting/route"
 )
 
 const (
@@ -46,6 +52,8 @@ type BackendRoutingReconciler struct {
 	*mixin.ReconcilerMixin
 	backendRegistry registry.BackendRegistry
 	routeRegistry   registry.RouteRegistry
+
+	rvExpectation expectations.ResourceVersionExpectationInterface
 }
 
 func NewReconciler(mgr manager.Manager, backendRegistry registry.BackendRegistry, routeRegistry registry.RouteRegistry) *BackendRoutingReconciler {
@@ -53,6 +61,7 @@ func NewReconciler(mgr manager.Manager, backendRegistry registry.BackendRegistry
 		ReconcilerMixin: mixin.NewReconcilerMixin(ControllerName, mgr),
 		backendRegistry: backendRegistry,
 		routeRegistry:   routeRegistry,
+		rvExpectation:   expectations.NewResourceVersionExpectation(),
 	}
 }
 
@@ -65,7 +74,7 @@ func (b *BackendRoutingReconciler) SetupWithManager(mgr manager.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.BackendRouting{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		For(&rolloutv1alpha1.BackendRouting{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		Complete(b)
 }
 
@@ -76,503 +85,425 @@ func (b *BackendRoutingReconciler) SetupWithManager(mgr manager.Manager) error {
 //+kubebuilder:rbac:groups="networking.k8s.io",resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 
 func (b *BackendRoutingReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	br := &v1alpha1.BackendRouting{}
-	err := b.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
-		Name:      request.Name,
-		Namespace: request.Namespace,
-	}, br)
+	key := request.String()
+	logger := b.Logger.WithValues("backendrouting", key)
+	// set logger into context
+	ctx = logr.NewContext(ctx, logger)
+	logger.V(4).Info("started reconciling backendrouting")
+	defer logger.V(4).Info("finished reconciling backendrouting")
+
+	obj := &rolloutv1alpha1.BackendRouting{}
+	err := b.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), request.NamespacedName, obj)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			return reconcile.Result{}, nil
-		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// todo: finalizers' management
 
-	if br.GetDeletionTimestamp() != nil {
-		return b.reconcileTerminatingBackendRouting(ctx, br)
+	// terminating
+	if obj.GetDeletionTimestamp() != nil {
+		return b.reconcileTerminatingBackendRouting(ctx, obj)
 	}
 
-	if br.Spec.TrafficType == v1alpha1.MultiClusterTrafficType {
-		return b.reconcileMultiClusterType(ctx, br)
+	// check resourceVersion expectation
+	if !b.satisfiedExpectations(ctx, obj) {
+		return ctrl.Result{}, nil
 	}
 
-	// InClusterTrafficType
-	if br.Spec.Forwarding != nil {
-		// todo webhook should reject adding spec.forwarding if backendrouting.status.phase is not ready?
-		return b.reconcileInClusterWithForwarding(ctx, br)
+	syncCtx, err := b.initSyncContext(ctx, obj)
+
+	if err == nil {
+		switch obj.Spec.TrafficType {
+		case rolloutv1alpha1.InClusterTrafficType:
+			err = b.syncInCluster(ctx, syncCtx)
+		case rolloutv1alpha1.MultiClusterTrafficType:
+			// TODO: implement multi cluster traffic type
+		}
 	}
 
-	return b.reconcileInClusterWithoutForwarding(ctx, br)
+	if err != nil {
+		logger.Error(err, "failed to reconcile backendrouting")
+	}
+
+	// update status firstly
+	updateStatusErr := b.updateStatusOnly(ctx, syncCtx)
+	if updateStatusErr != nil {
+		return reconcile.Result{}, updateStatusErr
+	}
+
+	// NOTE: we need to use IsStatusConditionTrue here rather than IsStatusConditionFalse
+	//       to make sure backendrouting is not ready.
+	if !meta.IsStatusConditionTrue(syncCtx.Object.Status.Conditions, rolloutv1alpha1.BackendRoutingReady) {
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+
+	return reconcile.Result{}, err
 }
 
-func (b *BackendRoutingReconciler) reconcileTerminatingBackendRouting(_ context.Context, _ *v1alpha1.BackendRouting) (reconcile.Result, error) {
+func (r *BackendRoutingReconciler) satisfiedExpectations(ctx context.Context, obj client.Object) bool {
+	key := clientutil.ObjectKeyString(obj)
+	logger := logr.FromContextOrDiscard(ctx)
+	if !r.rvExpectation.SatisfiedExpectations(key, obj.GetResourceVersion()) {
+		logger.Info("object does not statisfy resourceVersion expectation, skip reconciling")
+		return false
+	}
+	return true
+}
+
+func (r *BackendRoutingReconciler) initSyncContext(ctx context.Context, obj *rolloutv1alpha1.BackendRouting) (*syncContext, error) {
+	syncCtx := &syncContext{
+		Object: obj,
+		Routes: make([]route.RouteController, len(obj.Spec.Routes)),
+	}
+	syncCtx.SetDefaults()
+
+	// find origin backend
+	_, backendObj, err := r.findBackend(ctx, obj, obj.Spec.Backend.Name)
+	if err != nil {
+		syncCtx.NewStatus.Backends.Origin.Conditions.Ready = ptr.To(false)
+		return syncCtx, err
+	} else {
+		syncCtx.NewStatus.Backends.Origin.Conditions.Ready = ptr.To(true)
+	}
+
+	syncCtx.BackendObject = backendObj
+
+	err = r.findAllRouteControllers(ctx, syncCtx)
+	if err != nil {
+		return syncCtx, err
+	}
+	return syncCtx, nil
+}
+
+func (b *BackendRoutingReconciler) updateStatusOnly(ctx context.Context, syncCtx *syncContext) error {
+	logger := logr.FromContextOrDiscard(ctx)
+	newStatus := syncCtx.Status()
+	if equality.Semantic.DeepEqual(syncCtx.Object.Status, newStatus) {
+		return nil
+	}
+	_, err := clientutil.UpdateOnConflict(ctx, b.Client, b.Client.Status(), syncCtx.Object, func(in *rolloutv1alpha1.BackendRouting) error {
+		in.Status = newStatus
+		return nil
+	})
+	if err != nil {
+		logger.Error(err, "failed to update status", "status", newStatus)
+		return err
+	}
+
+	logger.V(4).Info("backendRouting status updated")
+	key := clientutil.ObjectKeyString(syncCtx.Object)
+	b.rvExpectation.ExpectUpdate(key, syncCtx.Object.ResourceVersion) // nolint
+	return nil
+}
+
+func (b *BackendRoutingReconciler) reconcileTerminatingBackendRouting(_ context.Context, _ *rolloutv1alpha1.BackendRouting) (reconcile.Result, error) {
 	// todo
 	return reconcile.Result{}, nil
 }
 
-func (b *BackendRoutingReconciler) reconcileInClusterWithoutForwarding(ctx context.Context, br *v1alpha1.BackendRouting) (reconcile.Result, error) {
-	backendsStatuses := br.Status.Backends
-	// todo: discussion: if canary backend still exist, should we clean it?
-	if backendsStatuses.Canary.Name != "" {
-		return reconcile.Result{}, fmt.Errorf("canary backend still exist without forwarding spec")
-	}
-
-	routesStatuses := br.Status.RouteStatuses
-	phase := br.Status.Phase
-
-	needUpdateStatus := false
-	if br.Status.ObservedGeneration != br.Generation {
-		needUpdateStatus = true
-	}
-
-	// clean stable backends and routes
-	if backendsStatuses.Stable.Name != "" {
-		if !ptr.Deref(backendsStatuses.Stable.Conditions.Terminating, false) {
-			// not deleting, do backend delete, change route's backend first
-			var routeBackendChangeErr []error
-			for i, currentRoute := range routesStatuses {
-				iRoute, err := b.getRoute(ctx, br.Namespace, currentRoute.CrossClusterObjectReference)
-				if err != nil {
-					return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-				}
-				err = iRoute.ChangeBackend(ctx, route.BackendChangeDetail{
-					Src:        backendsStatuses.Stable.Name,
-					Dst:        backendsStatuses.Origin.Name,
-					Kind:       br.Spec.Backend.Kind,
-					ApiVersion: br.Spec.Backend.APIVersion,
-				})
-				if err != nil {
-					routeBackendChangeErr = append(routeBackendChangeErr, err)
-				}
-				// todo: discussion
-				// only changed by route spec here, we haven't check if it synced,
-				// and actually we can't delete stable backend if route not changed from stable -> origin
-				currentRoute.Synced = false
-				routesStatuses[i] = currentRoute
-			}
-
-			if len(routeBackendChangeErr) > 0 {
-				return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, multierr.Combine(routeBackendChangeErr...))
-			}
-
-			stableBackend, err := b.getBackend(ctx, br, backendsStatuses.Stable.Name)
-			if err != nil {
-				if !errors.IsNotFound(err) {
-					return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-				}
-			} else {
-				if stableBackend.GetBackendObject().GetDeletionTimestamp() == nil {
-					err = b.Client.Delete(clusterinfo.WithCluster(ctx, br.Spec.Backend.Cluster), stableBackend.GetBackendObject())
-					if err != nil {
-						return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-					}
-				}
-			}
-
-			terminating := true
-			backendsStatuses.Stable.Conditions.Terminating = &terminating
-
-			phase = v1alpha1.RouteUpgrading
-			needUpdateStatus = true
-		} else {
-			// deleting, check deleted
-			var routeBackendChangeErr []error
-			for _, currentRoute := range routesStatuses {
-				iRoute, err := b.getRoute(ctx, br.Namespace, currentRoute.CrossClusterObjectReference)
-				if err != nil {
-					return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-				}
-				err = iRoute.ChangeBackend(ctx, route.BackendChangeDetail{
-					Src:        backendsStatuses.Stable.Name,
-					Dst:        backendsStatuses.Origin.Name,
-					Kind:       br.Spec.Backend.Kind,
-					ApiVersion: br.Spec.Backend.APIVersion,
-				})
-				if err != nil {
-					routeBackendChangeErr = append(routeBackendChangeErr, err)
-				}
-				// todo: discussion
-				// only changed by route spec here, we haven't check if it synced,
-				// and actually we can't delete stable backend if route not changed from stable -> origin
-			}
-			// route not synced yet
-			if len(routeBackendChangeErr) > 0 {
-				return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, multierr.Combine(routeBackendChangeErr...))
-			}
-
-			_, err := b.getBackend(ctx, br, backendsStatuses.Stable.Name)
-			if !errors.IsNotFound(err) {
-				return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, fmt.Errorf("stable backend not deleted yet"))
-			}
-
-			// finished
-			backendsStatuses.Stable = v1alpha1.BackendStatus{}
-			for i, currentRoute := range routesStatuses {
-				currentRoute.Synced = true
-				routesStatuses[i] = currentRoute
-			}
-			phase = v1alpha1.Ready
-			needUpdateStatus = true
-		}
-	} else {
-		// check backend ready(now just check exist)
-		originBackend, err := b.getBackend(ctx, br, br.Spec.Backend.Name)
-		if err != nil {
-			return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-		}
-		if backendsStatuses.Origin.Name != originBackend.GetBackendObject().GetName() {
-			needUpdateStatus = true
-			backendsStatuses.Origin.Name = originBackend.GetBackendObject().GetName()
-			conditionTrue := true
-			backendsStatuses.Origin.Conditions.Ready = &conditionTrue
-		}
-		// todo maybe we should check route -> origin?
-		routesStatusesCur := make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
-		for idx, curRoute := range br.Spec.Routes {
-			routesStatusesCur[idx] = v1alpha1.BackendRouteStatus{
-				CrossClusterObjectReference: v1alpha1.CrossClusterObjectReference{
-					ObjectTypeRef: v1alpha1.ObjectTypeRef{
-						APIVersion: curRoute.APIVersion,
-						Kind:       curRoute.Kind,
-					},
-					CrossClusterObjectNameReference: v1alpha1.CrossClusterObjectNameReference{
-						Cluster: curRoute.Cluster,
-						Name:    curRoute.Name,
-					},
-				},
-				Synced: true,
-			}
-		}
-		if !reflect.DeepEqual(routesStatuses, routesStatusesCur) {
-			routesStatuses = routesStatusesCur
-			needUpdateStatus = true
-		}
-		if phase != v1alpha1.Ready {
-			phase = v1alpha1.Ready
-			needUpdateStatus = true
-		}
-	}
-
-	if needUpdateStatus {
-		return reconcile.Result{}, b.updateBackendRoutingStatus(ctx, br, backendsStatuses, routesStatuses, phase)
-	}
-
-	return reconcile.Result{}, nil
-}
-
-func (b *BackendRoutingReconciler) reconcileInClusterWithForwarding(ctx context.Context, br *v1alpha1.BackendRouting) (reconcile.Result, error) {
-	if br.Spec.Forwarding.Canary.Name != "" {
-		return reconcile.Result{}, b.ensureCanaryAdd(ctx, br)
-	} else {
-		// no canary, which means only has stable
-		// if status has canary, delete it and update route
-		if br.Status.Backends.Canary.Name != "" {
-			return reconcile.Result{}, b.ensureCanaryRemove(ctx, br)
-		} else {
-			needUpdateStatus := false
-			if br.Status.ObservedGeneration != br.Generation {
-				needUpdateStatus = true
-			}
-			backendsStatuses := br.Status.Backends
-			routesStatuses := br.Status.RouteStatuses
-			if len(routesStatuses) == 0 {
-				routesStatuses = make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
-			}
-			phase := br.Status.Phase
-
-			// if status hasn't canary, check stable ready, check route -> stable
-			_, err := b.getBackend(ctx, br, br.Spec.Forwarding.Stable.Name)
-			if err != nil {
-				if errors.IsNotFound(err) {
-					// stable not create, do create
-					originBackend, err := b.getBackend(ctx, br, br.Spec.Backend.Name)
-					if err != nil {
-						return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-					}
-					stableForked := originBackend.ForkStable(br.Spec.Forwarding.Stable.Name)
-					err = b.Client.Create(clusterinfo.WithCluster(ctx, br.Spec.Backend.Cluster), stableForked)
-					if err != nil {
-						return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-					}
-				} else {
-					return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-				}
-			}
-
-			if !ptr.Deref(backendsStatuses.Stable.Conditions.Ready, false) {
-				needUpdateStatus = true
-				conditionTrue := true
-				backendsStatuses.Stable.Conditions.Ready = &conditionTrue
-				backendsStatuses.Stable.Name = br.Spec.Forwarding.Stable.Name
-			}
-
-			var routeBackendChangeErr []error
-			for idx, routeSpec := range br.Spec.Routes {
-				iRoute, err := b.getRoute(ctx, br.Namespace, routeSpec)
-				if err != nil {
-					return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, err)
-				}
-				err = iRoute.ChangeBackend(ctx, route.BackendChangeDetail{
-					Src:        br.Spec.Backend.Name,
-					Dst:        br.Spec.Forwarding.Stable.Name,
-					Kind:       br.Spec.Backend.Kind,
-					ApiVersion: br.Spec.Backend.APIVersion,
-				})
-				if err != nil {
-					if routesStatuses[idx].Synced {
-						routesStatuses[idx].Synced = false
-						needUpdateStatus = true
-					}
-					routeBackendChangeErr = append(routeBackendChangeErr, err)
-					continue
-				}
-				if !routesStatuses[idx].Synced {
-					routesStatuses[idx].Synced = true
-					needUpdateStatus = true
-				}
-			}
-
-			if len(routeBackendChangeErr) > 0 {
-				return reconcile.Result{}, b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.BackendUpgrading, multierr.Combine(routeBackendChangeErr...))
-			}
-
-			if phase != v1alpha1.Ready {
-				phase = v1alpha1.Ready
-				needUpdateStatus = true
-			}
-			if needUpdateStatus {
-				return reconcile.Result{}, b.updateBackendRoutingStatus(ctx, br, backendsStatuses, routesStatuses, phase)
-			}
-		}
-	}
-	return reconcile.Result{}, nil
-}
-
-func (b *BackendRoutingReconciler) ensureCanaryRemove(ctx context.Context, br *v1alpha1.BackendRouting) error {
-	needUpdateStatus := false
-	backendsStatuses := br.Status.Backends
-	routesStatuses := br.Status.RouteStatuses
-	if len(routesStatuses) == 0 {
-		routesStatuses = make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
-	}
-	phase := br.Status.Phase
-
-	if backendsStatuses.Canary.Conditions.Terminating == nil || !*backendsStatuses.Canary.Conditions.Terminating {
-		// delete canary route
-		var routeCanaryRemoveErr []error
-		for idx, routeSpec := range br.Spec.Routes {
-			iRoute, err := b.getRoute(ctx, br.Namespace, routeSpec)
-			if err != nil {
-				return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
-			}
-			err = iRoute.RemoveCanaryRoute(ctx)
-			if err != nil {
-				if routesStatuses[idx].Synced {
-					routesStatuses[idx].Synced = false
-				}
-				routeCanaryRemoveErr = append(routeCanaryRemoveErr, err)
-				continue
-			}
-			if !routesStatuses[idx].Synced {
-				routesStatuses[idx].Synced = true
-			}
-		}
-		if len(routeCanaryRemoveErr) > 0 {
-			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, multierr.Combine(routeCanaryRemoveErr...))
-		}
-
-		// delete canary backend
-		canaryBackend, err := b.getBackend(ctx, br, backendsStatuses.Canary.Name)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				// already deleted
-				conditionTrue := true
-				conditionFalse := false
-				backendsStatuses.Canary.Conditions.Terminating = &conditionTrue
-				backendsStatuses.Canary.Conditions.Ready = &conditionFalse
-				phase = v1alpha1.Ready
-				needUpdateStatus = true
-			} else {
-				return err
-			}
-		} else {
-			if canaryBackend.GetBackendObject().GetDeletionTimestamp() == nil {
-				err = b.Client.Delete(clusterinfo.WithCluster(ctx, br.Spec.Backend.Cluster), canaryBackend.GetBackendObject())
-				if err != nil {
-					return err
-				}
-			}
-			conditionTrue := true
-			conditionFalse := false
-			backendsStatuses.Canary.Conditions.Terminating = &conditionTrue
-			backendsStatuses.Canary.Conditions.Ready = &conditionFalse
-			phase = v1alpha1.RouteUpgrading
-			needUpdateStatus = true
-		}
-	} else {
-		// check canary route deleted
-		var routeCanaryRemoveErr []error
-		for idx, routeSpec := range br.Spec.Routes {
-			iRoute, err := b.getRoute(ctx, br.Namespace, routeSpec)
-			if err != nil {
-				return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
-			}
-			err = iRoute.RemoveCanaryRoute(ctx)
-			if err != nil {
-				if routesStatuses[idx].Synced {
-					routesStatuses[idx].Synced = false
-				}
-				routeCanaryRemoveErr = append(routeCanaryRemoveErr, err)
-				continue
-			}
-			if !routesStatuses[idx].Synced {
-				routesStatuses[idx].Synced = true
-			}
-		}
-		if len(routeCanaryRemoveErr) > 0 {
-			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, multierr.Combine(routeCanaryRemoveErr...))
-		}
-
-		// check canary backend deleted
-		_, err := b.getBackend(ctx, br, backendsStatuses.Canary.Name)
-		if !errors.IsNotFound(err) {
-			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, fmt.Errorf("canary backend not deleted yet"))
-		}
-		backendsStatuses.Canary = v1alpha1.BackendStatus{}
-		needUpdateStatus = true
-	}
-
-	if needUpdateStatus {
-		return b.updateBackendRoutingStatus(ctx, br, backendsStatuses, routesStatuses, phase)
-	}
-	return nil
-}
-
-func (b *BackendRoutingReconciler) ensureCanaryAdd(ctx context.Context, br *v1alpha1.BackendRouting) error {
-	needUpdateStatus := false
-	if br.Status.ObservedGeneration != br.Generation {
-		needUpdateStatus = true
-	}
-	backendsStatuses := br.Status.Backends
-	routesStatuses := br.Status.RouteStatuses
-	if len(routesStatuses) == 0 {
-		routesStatuses = make([]v1alpha1.BackendRouteStatus, len(br.Spec.Routes))
-	}
-	phase := br.Status.Phase
-
-	// todo: discussion
-	// should we check origin & stable here?
-	// check canary backend and route
-	_, err := b.getBackend(ctx, br, br.Spec.Forwarding.Canary.Name)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
-		}
-		// canary backend not exist, create canary backend, get origin backend first
-		originBackend, err := b.getBackend(ctx, br, br.Spec.Backend.Name)
-		if err != nil {
-			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
-		}
-
-		canaryForked := originBackend.ForkCanary(br.Spec.Forwarding.Canary.Name)
-		err = b.Client.Create(clusterinfo.WithCluster(ctx, br.Spec.Backend.Cluster), canaryForked)
-		if err != nil {
-			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
-		}
-	}
-	if backendsStatuses.Canary.Name != br.Spec.Forwarding.Canary.Name || !ptr.Deref(backendsStatuses.Canary.Conditions.Ready, false) {
-		backendsStatuses.Canary.Name = br.Spec.Forwarding.Canary.Name
-		conditionTrue := true
-		backendsStatuses.Canary.Conditions.Ready = &conditionTrue
-		needUpdateStatus = true
-	}
-
-	var routeCanaryCreateErr []error
-	for idx, routeSpec := range br.Spec.Routes {
-		iRoute, err := b.getRoute(ctx, br.Namespace, routeSpec)
-		if err != nil {
-			return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, err)
-		}
-		err = iRoute.AddCanaryRoute(ctx, br.Spec.Forwarding)
-		if err != nil {
-			if routesStatuses[idx].Synced {
-				routesStatuses[idx].Synced = false
-				needUpdateStatus = true
-			}
-			routeCanaryCreateErr = append(routeCanaryCreateErr, err)
-			continue
-		}
-		if !routesStatuses[idx].Synced {
-			routesStatuses[idx].Synced = true
-			needUpdateStatus = true
-		}
-	}
-
-	if len(routeCanaryCreateErr) > 0 {
-		return b.handleErr(ctx, br, backendsStatuses, routesStatuses, phase, v1alpha1.RouteUpgrading, multierr.Combine(routeCanaryCreateErr...))
-	}
-
-	if phase != v1alpha1.Ready {
-		phase = v1alpha1.Ready
-		needUpdateStatus = true
-	}
-
-	if needUpdateStatus {
-		return b.updateBackendRoutingStatus(ctx, br, backendsStatuses, routesStatuses, phase)
-	}
-
-	return nil
-}
-
-func (b *BackendRoutingReconciler) handleErr(ctx context.Context, br *v1alpha1.BackendRouting, backendsStatuses v1alpha1.BackendStatuses,
-	routesStatuses []v1alpha1.BackendRouteStatus, phase, desiredPhase v1alpha1.BackendRoutingPhase, err error,
-) error {
-	if phase != desiredPhase {
-		phase = desiredPhase
-		_ = b.updateBackendRoutingStatus(ctx, br, backendsStatuses, routesStatuses, phase)
-	}
-	return err
-}
-
-func (b *BackendRoutingReconciler) getBackend(ctx context.Context, br *v1alpha1.BackendRouting, backendName string) (backend.IBackend, error) {
-	backendStore, err := b.backendRegistry.Get(schema.FromAPIVersionAndKind(br.Spec.Backend.APIVersion, br.Spec.Backend.Kind))
-	if err != nil {
-		return nil, err
-	}
-
-	return backendStore.Get(ctx, br.Spec.Backend.Cluster, br.Namespace, backendName)
-}
-
-func (b *BackendRoutingReconciler) getRoute(ctx context.Context, namespace string, routeInfo v1alpha1.CrossClusterObjectReference) (route.IRoute, error) {
-	routeStore, err := b.routeRegistry.Get(schema.FromAPIVersionAndKind(routeInfo.APIVersion, routeInfo.Kind))
-	if err != nil {
-		return nil, err
-	}
-
-	return routeStore.Get(ctx, routeInfo.Cluster, namespace, routeInfo.Name)
-}
-
-func (b *BackendRoutingReconciler) updateBackendRoutingStatus(ctx context.Context, br *v1alpha1.BackendRouting,
-	backends v1alpha1.BackendStatuses, routes []v1alpha1.BackendRouteStatus, phase v1alpha1.BackendRoutingPhase,
-) error {
-	brGet := &v1alpha1.BackendRouting{}
-	err := b.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
-		Name:      br.Name,
-		Namespace: br.Namespace,
-	}, brGet)
+func (b *BackendRoutingReconciler) syncInCluster(ctx context.Context, syncCtx *syncContext) error {
+	// sync backends
+	err := b.syncInClusterBackends(ctx, syncCtx)
 	if err != nil {
 		return err
 	}
-	brGet.Status.ObservedGeneration = br.Generation
-	brGet.Status.Backends = backends
-	brGet.Status.RouteStatuses = routes
-	brGet.Status.Phase = phase
-	return b.Client.Status().Update(clusterinfo.WithCluster(ctx, clusterinfo.Fed), brGet)
+
+	// sync route
+	err = b.syncInClusterRoutes(ctx, syncCtx)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (b *BackendRoutingReconciler) reconcileMultiClusterType(_ context.Context, _ *v1alpha1.BackendRouting) (reconcile.Result, error) {
-	// todo
-	return reconcile.Result{}, nil
+func (b *BackendRoutingReconciler) syncInClusterBackends(ctx context.Context, syncCtx *syncContext) error {
+	obj := syncCtx.Object
+	logger := logr.FromContextOrDiscard(ctx)
+
+	if obj.Spec.ForkedBackends == nil {
+		deleted, err := b.deleteBackendResource(ctx, syncCtx, syncCtx.NewStatus.Backends.Canary.Name)
+		if err != nil {
+			logger.Error(err, "failed delete canary backend resource", "backend", syncCtx.NewStatus.Backends.Canary.Name)
+			return err
+		}
+		if deleted {
+			syncCtx.NewStatus.Backends.Canary = rolloutv1alpha1.BackendStatus{}
+		} else {
+			syncCtx.NewStatus.Backends.Canary.Conditions = rolloutv1alpha1.BackendConditions{
+				Terminating: ptr.To(true),
+			}
+		}
+		deleted, err = b.deleteBackendResource(ctx, syncCtx, syncCtx.NewStatus.Backends.Stable.Name)
+		if err != nil {
+			logger.Error(err, "failed delete stable backend resource", "backend", syncCtx.NewStatus.Backends.Canary.Name)
+			return err
+		}
+		if deleted {
+			syncCtx.NewStatus.Backends.Stable = rolloutv1alpha1.BackendStatus{}
+		} else {
+			syncCtx.NewStatus.Backends.Stable.Conditions = rolloutv1alpha1.BackendConditions{
+				Terminating: ptr.To(true),
+			}
+		}
+		return nil
+	}
+
+	// ensure canary and stable backends
+	canaryConfig := obj.Spec.ForkedBackends.Canary.DeepCopy()
+	if canaryConfig.ExtraLabelSelector == nil {
+		canaryConfig.ExtraLabelSelector = make(map[string]string)
+	}
+	canaryConfig.ExtraLabelSelector[rolloutapi.LabelTrafficLane] = rolloutapi.LabelValueTrafficLaneCanary
+	err := b.ensureBackendResource(ctx, syncCtx, *canaryConfig)
+	if err != nil {
+		return err
+	}
+	// change status
+	syncCtx.NewStatus.Backends.Canary.Conditions.Ready = ptr.To(true)
+
+	stableConfig := obj.Spec.ForkedBackends.Stable.DeepCopy()
+	if stableConfig.ExtraLabelSelector == nil {
+		stableConfig.ExtraLabelSelector = make(map[string]string)
+	}
+	stableConfig.ExtraLabelSelector[rolloutapi.LabelTrafficLane] = rolloutapi.LabelValueTrafficLaneStable
+	err = b.ensureBackendResource(ctx, syncCtx, *stableConfig)
+	if err != nil {
+		return err
+	}
+
+	// change status
+	syncCtx.NewStatus.Backends.Stable.Conditions.Ready = ptr.To(true)
+	return nil
+}
+
+func (b *BackendRoutingReconciler) findBackend(ctx context.Context, br *rolloutv1alpha1.BackendRouting, name string) (backend.InClusterBackend, client.Object, error) {
+	gvk := schema.FromAPIVersionAndKind(br.Spec.Backend.APIVersion, br.Spec.Backend.Kind)
+	cluster := br.Spec.Backend.Cluster
+	namespace := br.Namespace
+
+	backendStore, err := b.backendRegistry.Get(gvk)
+	if err != nil {
+		return nil, nil, err
+	}
+	backendObj := backendStore.NewObject()
+	err = b.Client.Get(clusterinfo.WithCluster(ctx, cluster), client.ObjectKey{
+		Namespace: namespace,
+		Name:      name,
+	}, backendObj)
+	return backendStore, backendObj, err
+}
+
+func (b *BackendRoutingReconciler) deleteBackendResource(ctx context.Context, syncCtx *syncContext, name string) (bool, error) {
+	if len(name) == 0 {
+		return true, nil
+	}
+
+	obj := syncCtx.Object
+	ctx = clusterinfo.WithCluster(ctx, obj.Spec.Backend.Cluster)
+
+	_, backendObj, err := b.findBackend(ctx, obj, name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// not found means already deleted
+			return true, nil
+		}
+		return true, nil
+	}
+
+	if backendObj.GetDeletionTimestamp() != nil {
+		// waiting for finalizers
+		return false, nil
+	}
+
+	err = b.Client.Delete(ctx, backendObj)
+	return false, err
+}
+
+func (b *BackendRoutingReconciler) ensureBackendResource(ctx context.Context, syncCtx *syncContext, config rolloutv1alpha1.ForkedBackend) error {
+	obj := syncCtx.Object
+
+	logger := logr.FromContextOrDiscard(ctx)
+	logger = logger.WithValues("apiVersion", obj.Spec.Backend.APIVersion, "kind", obj.Spec.Backend.Kind, "name", config.Name)
+
+	ctx = clusterinfo.WithCluster(ctx, obj.Spec.Backend.Cluster)
+	backendStore, _, err := b.findBackend(ctx, obj, config.Name)
+	if err == nil {
+		// found
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		logger.Error(err, "failed to get backend resource")
+		return err
+	}
+
+	// need to create
+	newBackendObj := backendStore.Fork(syncCtx.BackendObject, config)
+	// add label
+	labels := newBackendObj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[rolloutapi.LabelTemporaryResource] = "true"
+	newBackendObj.SetLabels(labels)
+
+	err = b.Client.Create(ctx, newBackendObj)
+	if err != nil {
+		logger.Error(err, "failed to create backend resource")
+		return err
+	}
+	logger.Info("backend resource created")
+	return nil
+}
+
+func (b *BackendRoutingReconciler) syncInClusterRoutes(ctx context.Context, syncCtx *syncContext) error {
+	syncRoute := func(i int, fn func(routeCtl route.RouteController) error) error {
+		routeCtl := syncCtx.Routes[i]
+		err := fn(routeCtl)
+		if err != nil {
+			// TODO: record error
+			syncCtx.setRouteCondition(i, metav1.ConditionFalse, "SyncFailed", err.Error())
+			return err
+		}
+		// TODO: add synced logic, read condition from annotations
+		// syncCtx.setRouteCondition(i, metav1.ConditionTrue, "Synced", "")
+		return nil
+	}
+
+	logger := logr.FromContextOrDiscard(ctx)
+
+	for i, routeStatus := range syncCtx.NewStatus.Routes {
+		needCreate, needDelete := syncCtx.checkOriginRoute(routeStatus.Forwarding)
+
+		if needCreate {
+			err := syncRoute(i, func(routeCtl route.RouteController) error {
+				return routeCtl.Initialize(ctx)
+			})
+			if err != nil {
+				return err
+			}
+			syncCtx.NewStatus.Routes[i].Forwarding.Origin.Conditions.Ready = ptr.To(true)
+		}
+		if needDelete {
+			// set condition firstly
+			syncCtx.NewStatus.Routes[i].Forwarding.Origin.Conditions.Ready = nil
+			syncCtx.NewStatus.Routes[i].Forwarding.Origin.Conditions.Terminating = ptr.To(true)
+
+			err := syncRoute(i, func(routeCtl route.RouteController) error {
+				return routeCtl.Reset(ctx)
+			})
+			if err != nil {
+				return err
+			}
+
+			// delete forwarding status
+			syncCtx.NewStatus.Routes[i].Forwarding.Origin = nil
+		}
+
+		needCreate, needDelete = syncCtx.checkCanaryRoute(routeStatus.Forwarding)
+		if needCreate {
+			err := syncRoute(i, func(routeCtl route.RouteController) error {
+				return routeCtl.AddCanary(ctx)
+			})
+			if err != nil {
+				return err
+			}
+			syncCtx.NewStatus.Routes[i].Forwarding.Canary.Conditions.Ready = ptr.To(true)
+		}
+		if needDelete {
+			// set condition firstly
+			syncCtx.NewStatus.Routes[i].Forwarding.Canary.Conditions.Ready = nil
+			syncCtx.NewStatus.Routes[i].Forwarding.Canary.Conditions.Terminating = ptr.To(true)
+
+			err := syncRoute(i, func(routeCtl route.RouteController) error {
+				return routeCtl.DeleteCanary(ctx)
+			})
+			if err != nil {
+				return err
+			}
+			syncCtx.NewStatus.Routes[i].Forwarding.Canary = nil
+		}
+
+		ctrl := syncCtx.Routes[i]
+		conditions, err := ctrl.GetCondition(ctx)
+		if err != nil {
+			logger.Error(err, "failed to get route condition", "route", routeStatus.CrossClusterObjectReference)
+			continue
+		}
+
+		// check ready according to condition extension
+		status, reason, message := b.checkRouteReady(ctx, ctrl.GetRoute().GetGeneration(), conditions)
+		syncCtx.setRouteCondition(i, status, reason, message)
+	}
+	return nil
+}
+
+func (b *BackendRoutingReconciler) checkRouteReady(_ context.Context, generation int64, conditions []metav1.Condition) (metav1.ConditionStatus, string, string) {
+	if len(conditions) == 0 {
+		return metav1.ConditionTrue, "NoConditionExtension", ""
+	}
+	cond := meta.FindStatusCondition(conditions, "Ready")
+	if cond != nil {
+		if generation != cond.ObservedGeneration {
+			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Ready condition is out of synced, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, cond.ObservedGeneration)
+		}
+		switch cond.Status {
+		case metav1.ConditionTrue:
+			return cond.Status, "ConditionExtensionReady", cond.Message
+		default:
+			return metav1.ConditionFalse, "ConditionExtensionNotReady", cond.Message
+		}
+	}
+	cond = meta.FindStatusCondition(conditions, "Synced")
+	if cond != nil {
+		if generation != cond.ObservedGeneration {
+			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Scyned condition is out of synced, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, cond.ObservedGeneration)
+		}
+		switch cond.Status {
+		case metav1.ConditionTrue:
+			if !cond.LastTransitionTime.IsZero() && !metav1.Now().After(cond.LastTransitionTime.Time.Add(30*time.Second)) {
+				// if synced is true, we need to wait for 30 seconds
+				return metav1.ConditionFalse, "SufficientDelayTime", "waiting 30 seconds to ensure sufficient time for routing rules to take effect."
+			}
+			return cond.Status, "ConditionExtensionSynced", cond.Message
+		default:
+			return metav1.ConditionFalse, "ConditionExtensionNotSynced", cond.Message
+		}
+	}
+	return metav1.ConditionUnknown, "NoConditionExtension", "no Ready or Synced condition found in conditions extension"
+}
+
+func (b *BackendRoutingReconciler) findAllRouteControllers(ctx context.Context, syncCtx *syncContext) error {
+	fn := func(routeInfo rolloutv1alpha1.CrossClusterObjectReference) (route.Route, client.Object, error) {
+		routeAccessor, err := b.routeRegistry.Get(schema.FromAPIVersionAndKind(routeInfo.APIVersion, routeInfo.Kind))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		routeObj := routeAccessor.NewObject()
+		err = b.Client.Get(
+			clusterinfo.WithCluster(ctx, routeInfo.Cluster),
+			client.ObjectKey{Namespace: syncCtx.Object.Namespace, Name: routeInfo.Name},
+			routeObj,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+		return routeAccessor, routeObj, nil
+	}
+
+	for i, routeInfo := range syncCtx.Object.Spec.Routes {
+		accessor, routeObj, err := fn(routeInfo)
+		if err != nil {
+			syncCtx.setRouteCondition(i, metav1.ConditionUnknown, "Unknown", err.Error())
+			return err
+		}
+		if syncCtx.NewStatus.Routes[i].Condition.Status == metav1.ConditionUnknown {
+			syncCtx.setRouteCondition(i, metav1.ConditionTrue, "RouteExists", "")
+		}
+
+		rctl, _ := accessor.GetController(b.Client, syncCtx.Object, routeObj, syncCtx.NewStatus.Routes[i])
+		syncCtx.Routes[i] = rctl
+	}
+	return nil
 }

@@ -20,9 +20,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"kusionstack.io/rollout/pkg/backend"
-	"kusionstack.io/rollout/pkg/backend/service"
 	"kusionstack.io/rollout/pkg/genericregistry"
+	"kusionstack.io/rollout/pkg/trafficrouting/backend"
+	"kusionstack.io/rollout/pkg/trafficrouting/backend/inferencepool"
+	"kusionstack.io/rollout/pkg/trafficrouting/backend/service"
 )
 
 const (
@@ -32,14 +33,15 @@ const (
 var Backends = NewBackendRegistry()
 
 type BackendRegistry interface {
-	genericregistry.Registry[schema.GroupVersionKind, backend.Store]
+	genericregistry.Registry[schema.GroupVersionKind, backend.InClusterBackend]
 }
 
 func NewBackendRegistry() BackendRegistry {
-	return genericregistry.New[schema.GroupVersionKind, backend.Store]()
+	return genericregistry.New[schema.GroupVersionKind, backend.InClusterBackend]()
 }
 
 func InitBackendRegistry(mgr manager.Manager) (bool, error) {
-	Backends.Register(service.GVK, service.NewStorage(mgr))
+	Backends.Register(service.GVK, service.New())
+	Backends.Register(inferencepool.GVK, inferencepool.New())
 	return true, nil
 }

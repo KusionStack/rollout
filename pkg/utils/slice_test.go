@@ -20,8 +20,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
-
-	"kusionstack.io/rollout/apis/rollout/v1alpha1"
+	"kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
 func Test_SliceTopologyInfoEqual(t *testing.T) {

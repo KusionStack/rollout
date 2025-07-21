@@ -21,11 +21,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rolloutapi "kusionstack.io/rollout/apis/rollout"
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
 	"kusionstack.io/rollout/pkg/utils"
 )
 
@@ -105,8 +105,8 @@ func IsProgressing(workload client.Object) bool {
 }
 
 func IsCanary(workload client.Object) bool {
-	_, ok := utils.GetMapValue(workload.GetLabels(), rolloutapi.LabelCanary)
-	return ok
+	canaryValue := workload.GetLabels()[rolloutapi.LabelCanary]
+	return canaryValue == "true"
 }
 
 type Owner struct {

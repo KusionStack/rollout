@@ -21,8 +21,7 @@ import (
 
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
-
-	rolloutv1alpha1 "kusionstack.io/rollout/apis/rollout/v1alpha1"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
 var GroupKindConcurrency = map[string]int{
