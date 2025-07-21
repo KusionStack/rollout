@@ -131,10 +131,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_Retry() {
 	rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 		Targets: unimportantTargets,
 	}
-	rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{
-		RolloutRunStepStatus: rolloutv1alpha1.RolloutRunStepStatus{
-			State: StepPreCanaryStepHook,
-		},
+	rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+		State: StepPreCanaryStepHook,
 	}
 
 	ctx := createTestExecutorContext(rollout, rolloutRun)
@@ -205,10 +203,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
 				}
-				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{
-					RolloutRunStepStatus: rolloutv1alpha1.RolloutRunStepStatus{
-						State: StepPreCanaryStepHook,
-					},
+				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+					State: StepPreCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
@@ -242,21 +238,19 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
 				}
-				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{
-					RolloutRunStepStatus: rolloutv1alpha1.RolloutRunStepStatus{
-						State: StepPreCanaryStepHook,
-						Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
-							{
-								State:             rolloutv1alpha1.WebhookCompleted,
-								HookType:          rolloutv1alpha1.PreCanaryStepHook,
-								Name:              s.webhook1.Name,
-								CodeReasonMessage: s.webhook1Error,
-								FailureCount:      1,
-							},
-							{
-								HookType: rolloutv1alpha1.PreCanaryStepHook,
-								Name:     s.webhook2.Name, // current webhook
-							},
+				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+					State: StepPreCanaryStepHook,
+					Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
+						{
+							State:             rolloutv1alpha1.WebhookCompleted,
+							HookType:          rolloutv1alpha1.PreCanaryStepHook,
+							Name:              s.webhook1.Name,
+							CodeReasonMessage: s.webhook1Error,
+							FailureCount:      1,
+						},
+						{
+							HookType: rolloutv1alpha1.PreCanaryStepHook,
+							Name:     s.webhook2.Name, // current webhook
 						},
 					},
 				}
@@ -300,10 +294,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
 				}
-				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{
-					RolloutRunStepStatus: rolloutv1alpha1.RolloutRunStepStatus{
-						State: StepPreCanaryStepHook,
-					},
+				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+					State: StepPreCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
@@ -337,10 +329,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
 				}
-				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{
-					RolloutRunStepStatus: rolloutv1alpha1.RolloutRunStepStatus{
-						State: StepPreCanaryStepHook,
-					},
+				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+					State: StepPreCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
@@ -381,10 +371,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 						HookTypes: []rolloutv1alpha1.HookType{}, // the hookType matches no one
 					},
 				}
-				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{
-					RolloutRunStepStatus: rolloutv1alpha1.RolloutRunStepStatus{
-						State: StepPreCanaryStepHook,
-					},
+				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+					State: StepPreCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
@@ -417,10 +405,8 @@ func (s *webhookExecutorTestSuite) Test_webhook_PostCanaryHookStep() {
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
 				}
-				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{
-					RolloutRunStepStatus: rolloutv1alpha1.RolloutRunStepStatus{
-						State: StepPostCanaryStepHook,
-					},
+				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+					State: StepPostCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
@@ -453,10 +439,8 @@ func (s *webhookExecutorTestSuite) Test_webhook_PostCanaryHookStep() {
 				rolloutRun.Spec.Canary = &rolloutv1alpha1.RolloutRunCanaryStrategy{
 					Targets: unimportantTargets,
 				}
-				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{
-					RolloutRunStepStatus: rolloutv1alpha1.RolloutRunStepStatus{
-						State: StepPostCanaryStepHook,
-					},
+				rolloutRun.Status.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{
+					State: StepPostCanaryStepHook,
 				}
 				return rollout, rolloutRun
 			},
