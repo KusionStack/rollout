@@ -147,8 +147,7 @@ func Get(ctx context.Context, c client.Client, inter Accessor, cluster, namespac
 }
 
 // List return a list of workloads that match the given namespace and match.
-// It will ignore canary workloads or deleted workloads by default.
-func List(ctx context.Context, c client.Client, inter Accessor, namespace string, match rolloutv1alpha1.ResourceMatch) (workloads []*Info, canaryWorkloads []*Info, err error) {
+func List(ctx context.Context, c client.Client, inter Accessor, namespace string, match rolloutv1alpha1.ResourceMatch) (workloads, canaryWorkloads []*Info, err error) {
 	listObj := inter.NewObjectList()
 	if err := c.List(clusterinfo.WithCluster(ctx, clusterinfo.Clusters), listObj, &client.ListOptions{Namespace: namespace}); err != nil {
 		return nil, nil, err
@@ -168,7 +167,7 @@ func List(ctx context.Context, c client.Client, inter Accessor, namespace string
 
 	length := v.Len()
 	workloads = make([]*Info, 0)
-	canaryWorkloads = make([]*Info, 0)
+	canaryObjects := map[string]client.Object{}
 
 	for i := range length {
 		elemPtr := v.Index(i).Addr().Interface()
@@ -182,7 +181,11 @@ func List(ctx context.Context, c client.Client, inter Accessor, namespace string
 			continue
 		}
 
-		isCanary := IsCanary(obj)
+		if IsCanary(obj) {
+			// ignore canary workload here
+			canaryObjects[obj.GetName()] = obj
+			continue
+		}
 		cluster := GetClusterFromLabel(obj.GetLabels())
 		if !matcher.Matches(cluster, obj.GetName(), obj.GetLabels()) {
 			continue
@@ -191,11 +194,29 @@ func List(ctx context.Context, c client.Client, inter Accessor, namespace string
 		if err != nil {
 			return nil, nil, err
 		}
-		if isCanary {
+		workloads = append(workloads, info)
+	}
+
+	_, canCanary := inter.(CanaryReleaseControl)
+	if canCanary {
+		// find canary workload
+		for _, w := range workloads {
+			name := GetCanaryName(w.Name)
+			canaryObject, ok := canaryObjects[name]
+			if !ok {
+				continue
+			}
+			cluster := GetClusterFromLabel(canaryObject.GetLabels())
+			info, err := inter.GetInfo(cluster, canaryObject)
+			if err != nil {
+				return nil, nil, err
+			}
 			canaryWorkloads = append(canaryWorkloads, info)
-		} else {
-			workloads = append(workloads, info)
 		}
 	}
 	return workloads, canaryWorkloads, nil
+}
+
+func GetCanaryName(workloadName string) string {
+	return workloadName + "-canary"
 }

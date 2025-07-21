@@ -370,8 +370,8 @@ func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.Rol
 
 		if newStatus.CanaryStatus == nil {
 			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunCanaryStatus{}
-			newStatus.CanaryStatus.TargetStatuses = canaryWorkloadStatuses
 		}
+		newStatus.CanaryStatus.TargetStatuses = canaryWorkloadStatuses
 	}
 }
 
