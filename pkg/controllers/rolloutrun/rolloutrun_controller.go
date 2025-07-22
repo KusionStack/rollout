@@ -40,7 +40,6 @@ import (
 
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
-	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/rolloutclasspredicate"
 	trafficcontrol "kusionstack.io/rollout/pkg/trafficrouting/control"
 	"kusionstack.io/rollout/pkg/utils"
@@ -81,7 +80,13 @@ func (r *RolloutRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	b := ctrl.NewControllerManagedBy(mgr).
-		For(&rolloutv1alpha1.RolloutRun{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
+		For(&rolloutv1alpha1.RolloutRun{},
+			builder.WithPredicates(
+				predicate.ResourceVersionChangedPredicate{},
+				// NOTE: This controller only watches one kind of resource,
+				// so we can use predicate to filter events by rollout-class
+				rolloutclasspredicate.RolloutClassMatchesPredicate,
+			))
 
 	_, err := b.Build(r)
 	return err
@@ -106,18 +111,6 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
-	}
-
-	// filter rolloutRun event by rollout class
-	if features.DefaultFeatureGate.Enabled(features.RolloutClassPredicate) {
-		rolloutClassEnv := rolloutclasspredicate.GetRolloutClassFromEnv()
-
-		rolloutClassLabel := utils.GetMapValueByDefault(obj.Labels, rollout.LabelRolloutClass, rolloutclasspredicate.RolloutClassDefault)
-
-		if rolloutClassEnv != rolloutClassLabel {
-			logger.V(4).Info("skipped, rollout class not matched", "expected", rolloutClassEnv, "actural", rolloutClassLabel)
-			return reconcile.Result{}, nil
-		}
 	}
 
 	if !r.satisfiedExpectations(obj) {

@@ -34,7 +34,6 @@ import (
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	"kusionstack.io/rollout/pkg/features"
 	"kusionstack.io/rollout/pkg/features/ontimestrategy"
-	"kusionstack.io/rollout/pkg/features/rolloutclasspredicate"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -101,9 +100,10 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.RolloutClassPredicate) {
-		rolloutClassEnv := rolloutclasspredicate.GetRolloutClassFromEnv()
-
-		run.Labels[rolloutapi.LabelRolloutClass] = rolloutClassEnv
+		class, ok := obj.Labels[rolloutapi.LabelRolloutClass]
+		if ok {
+			run.Labels[rolloutapi.LabelRolloutClass] = class
+		}
 	}
 	return run
 }

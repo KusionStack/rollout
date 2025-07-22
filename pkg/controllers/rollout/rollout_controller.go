@@ -140,13 +140,12 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// filter rollout event by rollout class
+	//
+	// NOTE: rollout can not use RolloutClassMatchesPredicate because it will be trigger
+	//       by other objects(rolloutRun, rolloutStrategy and workloads)
 	if features.DefaultFeatureGate.Enabled(features.RolloutClassPredicate) {
-		rolloutClassEnv := rolloutclasspredicate.GetRolloutClassFromEnv()
-
-		rolloutClassLabel := utils.GetMapValueByDefault(obj.Labels, rollout.LabelRolloutClass, rolloutclasspredicate.RolloutClassDefault)
-
-		if rolloutClassEnv != rolloutClassLabel {
-			logger.V(4).Info("skipped, rollout class not matched", "expected", rolloutClassEnv, "actural", rolloutClassLabel)
+		if !rolloutclasspredicate.IsRolloutClassMatches(obj) {
+			logger.V(4).Info("skipped, rollout class does not matched")
 			return reconcile.Result{}, nil
 		}
 	}
@@ -578,7 +577,7 @@ func (r *RolloutReconciler) cleanupHistory(ctx context.Context, obj *rolloutv1al
 
 	r.Logger.V(1).Info("start to cleanup old rolloutRun", "rollout", obj.Name, "count", diff)
 
-	for i := int32(0); i < diff; i++ {
+	for i := range diff {
 		run := completedRun[i]
 		// rolloutRun controller will delete protection finalizer if rollouRun is completed
 		if err := r.Client.Delete(clusterinfo.WithCluster(ctx, clusterinfo.Fed), run); err != nil {

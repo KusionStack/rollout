@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"kusionstack.io/rollout/pkg/controllers/registry"
+	"kusionstack.io/rollout/pkg/features/rolloutclasspredicate"
 	"kusionstack.io/rollout/pkg/trafficrouting/backend"
 	"kusionstack.io/rollout/pkg/trafficrouting/route"
 )
@@ -74,7 +75,12 @@ func (b *BackendRoutingReconciler) SetupWithManager(mgr manager.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&rolloutv1alpha1.BackendRouting{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		For(&rolloutv1alpha1.BackendRouting{}, builder.WithPredicates(
+			predicate.ResourceVersionChangedPredicate{},
+			// NOTE: This controller only watches one kind of resource,
+			// so we can use predicate to filter events by rollout-class
+			rolloutclasspredicate.RolloutClassMatchesPredicate,
+		)).
 		Complete(b)
 }
 
