@@ -25,7 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
-	"kusionstack.io/kube-api/rollout/v1alpha1"
+	rolloutapi "kusionstack.io/kube-api/rollout"
+	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,6 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 
 	"kusionstack.io/rollout/pkg/controllers/registry"
+	"kusionstack.io/rollout/pkg/features"
+	"kusionstack.io/rollout/pkg/features/rolloutclasspredicate"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
@@ -47,7 +50,7 @@ type TPControllerAdapter struct {
 
 func NewTPControllerAdapter(mgr manager.Manager, workloadRegistry registry.WorkloadRegistry) *TPControllerAdapter {
 	opts := mgr.GetControllerOptions()
-	groupKind := v1alpha1.SchemeGroupVersion.WithKind("TrafficTopology").GroupKind().String()
+	groupKind := rolloutv1alpha1.SchemeGroupVersion.WithKind("TrafficTopology").GroupKind().String()
 	c := &TPControllerAdapter{
 		Client:           mgr.GetClient(),
 		workloadRegistry: workloadRegistry,
@@ -87,7 +90,7 @@ func (t *TPControllerAdapter) GetSelectedEmployeeNames(ctx context.Context, empl
 func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer client.Object) ([]rsFrameController.IEmployer, error) {
 	var expected []rsFrameController.IEmployer
 
-	trafficTopology, ok := employer.(*v1alpha1.TrafficTopology)
+	trafficTopology, ok := employer.(*rolloutv1alpha1.TrafficTopology)
 	if !ok {
 		return expected, fmt.Errorf("not type of TrafficTopology")
 	}
@@ -116,41 +119,53 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 
 	// caution:
 	// for InClusterTrafficType, clusterName of brBackend will be changed
-	brBackend := v1alpha1.CrossClusterObjectReference{
-		ObjectTypeRef: v1alpha1.ObjectTypeRef{
+	brBackend := rolloutv1alpha1.CrossClusterObjectReference{
+		ObjectTypeRef: rolloutv1alpha1.ObjectTypeRef{
 			APIVersion: backendApiVersion,
 			Kind:       backendKind,
 		},
-		CrossClusterObjectNameReference: v1alpha1.CrossClusterObjectNameReference{
+		CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
 			Name: trafficTopology.Spec.Backend.Name,
 		},
 	}
 
-	brRoutes := make([]v1alpha1.CrossClusterObjectReference, len(trafficTopology.Spec.Routes))
+	brRoutes := make([]rolloutv1alpha1.CrossClusterObjectReference, len(trafficTopology.Spec.Routes))
 	for i, route := range trafficTopology.Spec.Routes {
 		routeApiVersion := ptr.Deref(route.APIVersion, "gateway.networking.k8s.io/v1")
 		routeKind := ptr.Deref(route.Kind, "HTTPRoute")
 
-		brRoutes[i] = v1alpha1.CrossClusterObjectReference{
-			ObjectTypeRef: v1alpha1.ObjectTypeRef{
+		brRoutes[i] = rolloutv1alpha1.CrossClusterObjectReference{
+			ObjectTypeRef: rolloutv1alpha1.ObjectTypeRef{
 				APIVersion: routeApiVersion,
 				Kind:       routeKind,
 			},
-			CrossClusterObjectNameReference: v1alpha1.CrossClusterObjectNameReference{
+			CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
 				Name: route.Name,
 			},
 		}
 	}
 
+	owenr := metav1.NewControllerRef(trafficTopology, rolloutv1alpha1.SchemeGroupVersion.WithKind("TrafficTopology"))
+
+	labels := map[string]string{}
+	if features.DefaultFeatureGate.Enabled(features.RolloutClassPredicate) {
+		claas, labeled := trafficTopology.Labels[rolloutapi.LabelRolloutClass]
+		if labeled {
+			labels[rolloutapi.LabelRolloutClass] = claas
+		}
+	}
+
 	switch trafficTopology.Spec.TrafficType {
-	case v1alpha1.MultiClusterTrafficType:
-		br := v1alpha1.BackendRouting{
+	case rolloutv1alpha1.MultiClusterTrafficType:
+		br := rolloutv1alpha1.BackendRouting{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      employer.GetName() + "-msc",
-				Namespace: employer.GetNamespace(),
+				Name:            employer.GetName() + "-msc",
+				Namespace:       employer.GetNamespace(),
+				OwnerReferences: []metav1.OwnerReference{*owenr},
+				Labels:          labels,
 			},
-			Spec: v1alpha1.BackendRoutingSpec{
-				TrafficType: v1alpha1.MultiClusterTrafficType,
+			Spec: rolloutv1alpha1.BackendRoutingSpec{
+				TrafficType: rolloutv1alpha1.MultiClusterTrafficType,
 				Backend:     brBackend,
 				Routes:      brRoutes,
 			},
@@ -160,9 +175,9 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 			BackendRouting:     br,
 		}
 
-		workloadInfos := make([]v1alpha1.CrossClusterObjectNameReference, len(workloads))
+		workloadInfos := make([]rolloutv1alpha1.CrossClusterObjectNameReference, len(workloads))
 		for idx, info := range workloads {
-			workloadInfos[idx] = v1alpha1.CrossClusterObjectNameReference{
+			workloadInfos[idx] = rolloutv1alpha1.CrossClusterObjectNameReference{
 				Name:    info.Name,
 				Cluster: info.ClusterName,
 			}
@@ -171,7 +186,7 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 		backendRoutingEmployer.Workloads = workloadInfos
 		expected = []rsFrameController.IEmployer{backendRoutingEmployer}
 
-	case v1alpha1.InClusterTrafficType:
+	case rolloutv1alpha1.InClusterTrafficType:
 		brNameTPEmployerMap := make(map[string]TPEmployer)
 		for _, info := range workloads {
 			clusterName := info.ClusterName
@@ -180,18 +195,20 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 				brName = brName + "-" + clusterName
 			}
 			brBackend.Cluster = clusterName
-			brRoutesCopy := make([]v1alpha1.CrossClusterObjectReference, len(brRoutes))
+			brRoutesCopy := make([]rolloutv1alpha1.CrossClusterObjectReference, len(brRoutes))
 			for i, brRoute := range brRoutes {
 				brRoute.Cluster = clusterName
 				brRoutesCopy[i] = brRoute
 			}
-			br := v1alpha1.BackendRouting{
+			br := rolloutv1alpha1.BackendRouting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      brName,
-					Namespace: employer.GetNamespace(),
+					Name:            brName,
+					Namespace:       employer.GetNamespace(),
+					OwnerReferences: []metav1.OwnerReference{*owenr},
+					Labels:          labels,
 				},
-				Spec: v1alpha1.BackendRoutingSpec{
-					TrafficType: v1alpha1.InClusterTrafficType,
+				Spec: rolloutv1alpha1.BackendRoutingSpec{
+					TrafficType: rolloutv1alpha1.InClusterTrafficType,
 					Backend:     brBackend,
 					Routes:      brRoutesCopy,
 				},
@@ -201,7 +218,7 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 				brNameTPEmployerMap[brName] = TPEmployer{
 					BackendRoutingName: brName,
 					BackendRouting:     br,
-					Workloads: []v1alpha1.CrossClusterObjectNameReference{
+					Workloads: []rolloutv1alpha1.CrossClusterObjectNameReference{
 						{
 							Cluster: clusterName,
 							Name:    info.Name,
@@ -209,7 +226,7 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 					},
 				}
 			} else {
-				trEmployer.Workloads = append(trEmployer.Workloads, v1alpha1.CrossClusterObjectNameReference{
+				trEmployer.Workloads = append(trEmployer.Workloads, rolloutv1alpha1.CrossClusterObjectNameReference{
 					Cluster: clusterName,
 					Name:    info.Name,
 				})
@@ -229,7 +246,7 @@ func (t *TPControllerAdapter) GetExpectedEmployer(ctx context.Context, employer 
 func (t *TPControllerAdapter) GetCurrentEmployer(ctx context.Context, employer client.Object) ([]rsFrameController.IEmployer, error) {
 	var current []rsFrameController.IEmployer
 
-	trafficTopology, ok := employer.(*v1alpha1.TrafficTopology)
+	trafficTopology, ok := employer.(*rolloutv1alpha1.TrafficTopology)
 	if !ok {
 		return current, fmt.Errorf("not type of TrafficTopology")
 	}
@@ -238,7 +255,7 @@ func (t *TPControllerAdapter) GetCurrentEmployer(ctx context.Context, employer c
 	for _, topo := range trafficTopology.Status.Topologies {
 		trEmployer, ok := brNameTREmployerMap[topo.BackendRoutingName]
 		if !ok {
-			br := &v1alpha1.BackendRouting{}
+			br := &rolloutv1alpha1.BackendRouting{}
 			err := t.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
 				Name:      topo.BackendRoutingName,
 				Namespace: employer.GetNamespace(),
@@ -252,7 +269,7 @@ func (t *TPControllerAdapter) GetCurrentEmployer(ctx context.Context, employer c
 			brNameTREmployerMap[topo.BackendRoutingName] = TPEmployer{
 				BackendRoutingName: br.Name,
 				BackendRouting:     *br,
-				Workloads: []v1alpha1.CrossClusterObjectNameReference{
+				Workloads: []rolloutv1alpha1.CrossClusterObjectNameReference{
 					topo.WorkloadRef,
 				},
 			}
@@ -279,7 +296,7 @@ func (t *TPControllerAdapter) CreateEmployer(ctx context.Context, employer clien
 			failCreated = append(failCreated, toCreate)
 			return fmt.Errorf("not type of TPEmployer")
 		}
-		brGet := &v1alpha1.BackendRouting{}
+		brGet := &rolloutv1alpha1.BackendRouting{}
 		err := t.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
 			Name:      br.BackendRouting.Name,
 			Namespace: br.BackendRouting.Namespace,
@@ -318,7 +335,7 @@ func (t *TPControllerAdapter) DeleteEmployer(ctx context.Context, employer clien
 			failDeleted = append(failDeleted, toDelete)
 			return fmt.Errorf("not type of TPEmployer")
 		}
-		brGet := &v1alpha1.BackendRouting{}
+		brGet := &rolloutv1alpha1.BackendRouting{}
 		err := t.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
 			Name:      br.BackendRouting.Name,
 			Namespace: br.BackendRouting.Namespace,
@@ -359,11 +376,11 @@ func (t *TPControllerAdapter) DeleteEmployees(ctx context.Context, employer clie
 }
 
 func (t *TPControllerAdapter) NewEmployer() client.Object {
-	return &v1alpha1.TrafficTopology{}
+	return &rolloutv1alpha1.TrafficTopology{}
 }
 
 func (t *TPControllerAdapter) NewEmployee() client.Object {
-	return &v1alpha1.BackendRouting{}
+	return &rolloutv1alpha1.BackendRouting{}
 }
 
 func (t *TPControllerAdapter) EmployerEventHandler() handler.EventHandler {
@@ -376,7 +393,7 @@ func (t *TPControllerAdapter) EmployeeEventHandler() handler.EventHandler {
 }
 
 func (t *TPControllerAdapter) EmployerPredicates() predicate.Funcs {
-	return predicate.Funcs{}
+	return rolloutclasspredicate.RolloutClassMatchesPredicate
 }
 
 func (t *TPControllerAdapter) EmployeePredicates() predicate.Funcs {
@@ -384,7 +401,7 @@ func (t *TPControllerAdapter) EmployeePredicates() predicate.Funcs {
 }
 
 func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer client.Object, cudEmployerResults rsFrameController.CUDEmployerResults, cudEmployeeResults rsFrameController.CUDEmployeeResults) error {
-	trafficTopology, ok := employer.(*v1alpha1.TrafficTopology)
+	trafficTopology, ok := employer.(*rolloutv1alpha1.TrafficTopology)
 	if !ok {
 		return fmt.Errorf("not type of TrafficTopology")
 	}
@@ -400,14 +417,14 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 	needRecordEmployers = append(needRecordEmployers, cudEmployerResults.FailDeleted...)
 	needRecordEmployers = append(needRecordEmployers, cudEmployerResults.Unchanged...)
 
-	var expect []v1alpha1.TopologyInfo
+	var expect []rolloutv1alpha1.TopologyInfo
 	for _, needRecordEmployer := range needRecordEmployers {
 		trEmployerStatues, ok := needRecordEmployer.GetEmployerStatuses().(TREmployerStatues)
 		if !ok {
 			return fmt.Errorf("not type of TREmployerStatuses")
 		}
 		for _, workload := range trEmployerStatues.Workloads {
-			expect = append(expect, v1alpha1.TopologyInfo{
+			expect = append(expect, rolloutv1alpha1.TopologyInfo{
 				BackendRoutingName: needRecordEmployer.GetEmployerId(),
 				WorkloadRef:        workload,
 			})
@@ -415,10 +432,10 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 	}
 
 	needUpdateStatus := false
-	var updateStatusFuncs []func(tp *v1alpha1.TrafficTopology)
+	var updateStatusFuncs []func(tp *rolloutv1alpha1.TrafficTopology)
 	if !utils.SliceTopologyInfoEqual(expect, trafficTopology.Status.Topologies) {
 		needUpdateStatus = true
-		updateStatusFuncs = append(updateStatusFuncs, func(tp *v1alpha1.TrafficTopology) {
+		updateStatusFuncs = append(updateStatusFuncs, func(tp *rolloutv1alpha1.TrafficTopology) {
 			tp.Status.Topologies = expect
 		})
 	}
@@ -429,10 +446,10 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 		conditionReadyStatus = metav1.ConditionTrue
 	}
 
-	updateConditionFunc := func(tp *v1alpha1.TrafficTopology) {
+	updateConditionFunc := func(tp *rolloutv1alpha1.TrafficTopology) {
 		exist := false
 		for i, cond := range tp.Status.Conditions {
-			if cond.Type != v1alpha1.TrafficTopologyConditionReady {
+			if cond.Type != rolloutv1alpha1.TrafficTopologyConditionReady {
 				continue
 			}
 			exist = true
@@ -446,8 +463,8 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 			break
 		}
 		if !exist {
-			tp.Status.Conditions = append(tp.Status.Conditions, v1alpha1.Condition{
-				Type:   v1alpha1.TrafficTopologyConditionReady,
+			tp.Status.Conditions = append(tp.Status.Conditions, rolloutv1alpha1.Condition{
+				Type:   rolloutv1alpha1.TrafficTopologyConditionReady,
 				Status: conditionReadyStatus,
 				LastTransitionTime: metav1.Time{
 					Time: time.Now(),
@@ -460,7 +477,7 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 	}
 	currentConditionReadyExist := false
 	for _, condition := range trafficTopology.Status.Conditions {
-		if condition.Type == v1alpha1.TrafficTopologyConditionReady {
+		if condition.Type == rolloutv1alpha1.TrafficTopologyConditionReady {
 			currentConditionReadyExist = true
 			if condition.Status != conditionReadyStatus {
 				needUpdateStatus = true
@@ -477,7 +494,7 @@ func (t *TPControllerAdapter) RecordStatuses(ctx context.Context, employer clien
 	var err error
 	if needUpdateStatus {
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			trGet := &v1alpha1.TrafficTopology{}
+			trGet := &rolloutv1alpha1.TrafficTopology{}
 			err := t.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), types.NamespacedName{
 				Name:      trafficTopology.Name,
 				Namespace: trafficTopology.Namespace,
