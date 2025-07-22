@@ -186,5 +186,6 @@ func GetRESTConfigOrDie() *rest.Config {
 	restConfig := config.GetConfigOrDie()
 	restConfig.QPS = 100
 	restConfig.Burst = 200
+	restConfig.UserAgent = "kusionstack.io/rollout"
 	return restConfig
 }
