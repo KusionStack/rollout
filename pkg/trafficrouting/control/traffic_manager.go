@@ -30,7 +30,6 @@ import (
 
 type Manager struct {
 	client client.Client
-	logger logr.Logger
 
 	topoligies map[rolloutv1alpha1.CrossClusterObjectNameReference]*topology
 
@@ -38,22 +37,25 @@ type Manager struct {
 	strategy *rolloutv1alpha1.TrafficStrategy
 }
 
-func NewManager(c client.Client, logger logr.Logger, topologies []rolloutv1alpha1.TrafficTopology) (*Manager, error) {
+func NewManager(ctx context.Context, c client.Client, topologies []rolloutv1alpha1.TrafficTopology) (*Manager, error) {
 	m := &Manager{
 		client:     c,
-		logger:     logger.WithName("trafficrouting"),
 		topoligies: make(map[rolloutv1alpha1.CrossClusterObjectNameReference]*topology),
 	}
+
+	logger := logr.FromContextOrDiscard(ctx)
+	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
+
 	for _, obj := range topologies {
 		for _, info := range obj.Status.Topologies {
 			ref := info.WorkloadRef
-			var routing rolloutv1alpha1.BackendRouting
+			routing := &rolloutv1alpha1.BackendRouting{}
 			key := client.ObjectKey{Namespace: obj.Namespace, Name: info.BackendRoutingName}
-			err := m.client.Get(context.TODO(), key, &routing)
+			err := m.client.Get(ctx, key, routing)
 			if err != nil {
+				logger.Error(err, "failed to get backend routing", "backendrouting", info.BackendRoutingName)
 				return nil, err
 			}
-
 			topo, ok := m.topoligies[ref]
 			if !ok {
 				topo = &topology{
@@ -62,21 +64,20 @@ func NewManager(c client.Client, logger logr.Logger, topologies []rolloutv1alpha
 				}
 				m.topoligies[ref] = topo
 			}
-			topo.routings = append(topo.routings, &routing)
+			topo.routings = append(topo.routings, routing)
 		}
 	}
 
 	return m, nil
 }
 
-func (m *Manager) With(logger logr.Logger, workloads []rolloutv1alpha1.RolloutRunStepTarget, strategy *rolloutv1alpha1.TrafficStrategy) {
-	m.logger = logger.WithName("trafficrouting")
+func (m *Manager) With(workloads []rolloutv1alpha1.RolloutRunStepTarget, strategy *rolloutv1alpha1.TrafficStrategy) {
 	m.targets = workloads
 	m.strategy = strategy
 }
 
-func (m *Manager) ForkBackends() (controllerutil.OperationResult, error) {
-	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+func (m *Manager) ForkBackends(ctx context.Context) (controllerutil.OperationResult, error) {
+	return m.mutateRouting(ctx, func(routing *rolloutv1alpha1.BackendRouting) error {
 		if routing.Spec.ForkedBackends == nil {
 			routing.Spec.ForkedBackends = &rolloutv1alpha1.ForkedBackends{}
 		}
@@ -92,15 +93,15 @@ func (m *Manager) ForkBackends() (controllerutil.OperationResult, error) {
 	})
 }
 
-func (m *Manager) DeleteForkedBackends() (controllerutil.OperationResult, error) {
-	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+func (m *Manager) DeleteForkedBackends(ctx context.Context) (controllerutil.OperationResult, error) {
+	return m.mutateRouting(ctx, func(routing *rolloutv1alpha1.BackendRouting) error {
 		routing.Spec.ForkedBackends = nil
 		return nil
 	})
 }
 
-func (m *Manager) InitializeRoute() (controllerutil.OperationResult, error) {
-	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+func (m *Manager) InitializeRoute(ctx context.Context) (controllerutil.OperationResult, error) {
+	return m.mutateRouting(ctx, func(routing *rolloutv1alpha1.BackendRouting) error {
 		if routing.Spec.Forwarding == nil {
 			routing.Spec.Forwarding = &rolloutv1alpha1.BackendForwarding{
 				HTTP: &rolloutv1alpha1.HTTPForwarding{},
@@ -120,15 +121,15 @@ func (m *Manager) InitializeRoute() (controllerutil.OperationResult, error) {
 	})
 }
 
-func (m *Manager) ResetRoute() (controllerutil.OperationResult, error) {
-	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+func (m *Manager) ResetRoute(ctx context.Context) (controllerutil.OperationResult, error) {
+	return m.mutateRouting(ctx, func(routing *rolloutv1alpha1.BackendRouting) error {
 		routing.Spec.Forwarding = nil
 		return nil
 	})
 }
 
-func (m *Manager) AddCanaryRoute() (controllerutil.OperationResult, error) {
-	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+func (m *Manager) AddCanaryRoute(ctx context.Context) (controllerutil.OperationResult, error) {
+	return m.mutateRouting(ctx, func(routing *rolloutv1alpha1.BackendRouting) error {
 		if routing.Spec.Forwarding == nil {
 			routing.Spec.Forwarding = &rolloutv1alpha1.BackendForwarding{
 				HTTP: &rolloutv1alpha1.HTTPForwarding{},
@@ -142,8 +143,8 @@ func (m *Manager) AddCanaryRoute() (controllerutil.OperationResult, error) {
 	})
 }
 
-func (m *Manager) DeleteCanaryRoute() (controllerutil.OperationResult, error) {
-	return m.mutateRouting(func(routing *rolloutv1alpha1.BackendRouting) error {
+func (m *Manager) DeleteCanaryRoute(ctx context.Context) (controllerutil.OperationResult, error) {
+	return m.mutateRouting(ctx, func(routing *rolloutv1alpha1.BackendRouting) error {
 		if routing.Spec.Forwarding != nil &&
 			routing.Spec.Forwarding.HTTP != nil &&
 			routing.Spec.Forwarding.HTTP.Canary != nil {
@@ -153,18 +154,19 @@ func (m *Manager) DeleteCanaryRoute() (controllerutil.OperationResult, error) {
 	})
 }
 
-func (m *Manager) mutateRouting(mutateFn func(routing *rolloutv1alpha1.BackendRouting) error) (controllerutil.OperationResult, error) {
+func (m *Manager) mutateRouting(ctx context.Context, mutateFn func(routing *rolloutv1alpha1.BackendRouting) error) (controllerutil.OperationResult, error) {
+	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
+	logger := logr.FromContextOrDiscard(ctx)
 	operation := controllerutil.OperationResultNone
 	if m.strategy == nil {
-		m.logger.Info("no trafficrouting strategy found, skip it")
+		logger.Info("no trafficrouting strategy found, skip it")
 		return operation, nil
 	}
-	ctx := clusterinfo.WithCluster(context.Background(), clusterinfo.Fed)
 
 	for _, workload := range m.targets {
 		topo, ok := m.topoligies[workload.CrossClusterObjectNameReference]
 		if !ok {
-			m.logger.Info("no trafficrouting topology found for workload", "workload", workload.CrossClusterObjectNameReference)
+			logger.Info("no trafficrouting topology found for workload", "workload", workload.CrossClusterObjectNameReference)
 			continue
 		}
 		for i := range topo.routings {
@@ -184,7 +186,7 @@ func (m *Manager) mutateRouting(mutateFn func(routing *rolloutv1alpha1.BackendRo
 	return operation, nil
 }
 
-func (m *Manager) CheckReady() bool {
+func (m *Manager) CheckReady(ctx context.Context) bool {
 	for _, workload := range m.targets {
 		topo, ok := m.topoligies[workload.CrossClusterObjectNameReference]
 		if !ok {
@@ -195,6 +197,8 @@ func (m *Manager) CheckReady() bool {
 				meta.IsStatusConditionTrue(routing.Status.Conditions, rolloutv1alpha1.BackendRoutingReady) {
 				continue
 			}
+			logger := logr.FromContextOrDiscard(ctx)
+			logger.Info("backendRouting is not ready", "backendrouting", routing.Name)
 			return false
 		}
 	}

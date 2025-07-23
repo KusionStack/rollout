@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -71,7 +72,7 @@ func (e *canaryExecutor) init(ctx *ExecutorContext) (done bool) {
 		ctx.SkipCurrentRelease()
 		return true
 	}
-	ctx.TrafficManager.With(logger, ctx.RolloutRun.Spec.Canary.Targets, ctx.RolloutRun.Spec.Canary.Traffic)
+	ctx.TrafficManager.With(ctx.RolloutRun.Spec.Canary.Targets, ctx.RolloutRun.Spec.Canary.Traffic)
 	return false
 }
 
@@ -133,25 +134,26 @@ func (e *canaryExecutor) modifyTraffic(ctx *ExecutorContext, op string) (bool, t
 	opResult := controllerutil.OperationResultNone
 
 	if rolloutRun.Spec.Canary.Traffic == nil {
-		logger.Info("traffic is nil, skip modify traffic")
+		logger.V(3).Info("traffic is nil, skip modify traffic")
 		return true, retryImmediately
 	}
 
+	goctx := logr.NewContext(ctx.Context, logger)
 	// 1.a. do traffic initialization
 	var err error
 	switch op {
 	case "forkBackends":
-		opResult, err = ctx.TrafficManager.ForkBackends()
+		opResult, err = ctx.TrafficManager.ForkBackends(goctx)
 	case "initializeRoute":
-		opResult, err = ctx.TrafficManager.InitializeRoute()
+		opResult, err = ctx.TrafficManager.InitializeRoute(goctx)
 	case "addCanaryRoute":
-		opResult, err = ctx.TrafficManager.AddCanaryRoute()
+		opResult, err = ctx.TrafficManager.AddCanaryRoute(goctx)
 	case "deleteCanaryRoute":
-		opResult, err = ctx.TrafficManager.DeleteCanaryRoute()
+		opResult, err = ctx.TrafficManager.DeleteCanaryRoute(goctx)
 	case "resetRoute":
-		opResult, err = ctx.TrafficManager.ResetRoute()
+		opResult, err = ctx.TrafficManager.ResetRoute(goctx)
 	case "deleteForkedBackends":
-		opResult, err = ctx.TrafficManager.DeleteForkedBackends()
+		opResult, err = ctx.TrafficManager.DeleteForkedBackends(goctx)
 	}
 	if err != nil {
 		logger.Error(err, "failed to modify traffic", "operation", op)
@@ -165,9 +167,8 @@ func (e *canaryExecutor) modifyTraffic(ctx *ExecutorContext, op string) (bool, t
 	}
 
 	// 1.b. waiting for traffic
-	ready := ctx.TrafficManager.CheckReady()
+	ready := ctx.TrafficManager.CheckReady(ctx)
 	if !ready {
-		logger.Info("waiting for BackendRouting ready")
 		return false, retryDefault
 	}
 
