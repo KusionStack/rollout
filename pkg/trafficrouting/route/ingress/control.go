@@ -150,8 +150,7 @@ func (c *ingressControl) AddCanary(ctx context.Context) error {
 		if canaryIgs.Labels == nil {
 			canaryIgs.Labels = make(map[string]string)
 		}
-		canaryIgs.Labels[rolloutapi.LabelCanary] = "true"
-		canaryIgs.Labels[rolloutapi.LabelTemporaryResource] = "true"
+		canaryIgs.Labels[rolloutapi.LabelCanaryResource] = "true"
 		return nil
 	})
 

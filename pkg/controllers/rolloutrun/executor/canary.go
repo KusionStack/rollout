@@ -195,7 +195,7 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 	logger.Info("about to create canary resources and check")
 	canaryWorkloads := make([]*workload.Info, 0)
 
-	patch := appendBuiltinPodTemplateMetadataPatch(rolloutRun.Spec.Canary.TemplateMetadataPatch)
+	patch := appendBuiltinTemplateMetadataPatch(rolloutRun.Spec.Canary.TemplateMetadataPatch)
 
 	changed := false
 	releaseControl := control.NewCanaryReleaseControl(ctx.Accessor, ctx.Client)
@@ -245,7 +245,7 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 	return true, retryImmediately, nil
 }
 
-func appendBuiltinPodTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch) *rolloutv1alpha1.MetadataPatch {
+func appendBuiltinTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch) *rolloutv1alpha1.MetadataPatch {
 	if patch == nil {
 		patch = &rolloutv1alpha1.MetadataPatch{}
 	}
@@ -254,7 +254,7 @@ func appendBuiltinPodTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch)
 		patch.Labels = map[string]string{}
 	}
 
-	patch.Labels[rolloutapi.LabelCanary] = "true"
+	patch.Labels[rolloutapi.LabelCanaryResource] = "true"
 	patch.Labels[rolloutapi.LabelTrafficLane] = rolloutapi.LabelValueTrafficLaneCanary
 	return patch
 }

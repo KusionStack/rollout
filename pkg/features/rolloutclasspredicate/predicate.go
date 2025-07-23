@@ -4,10 +4,11 @@ import (
 	"os"
 
 	"kusionstack.io/kube-api/rollout"
-	"kusionstack.io/rollout/pkg/features"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	"kusionstack.io/rollout/pkg/features"
 )
 
 var RolloutClassMatchesPredicate = predicate.Funcs{

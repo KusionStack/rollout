@@ -15,10 +15,8 @@
 package service
 
 import (
-	"maps"
-
+	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
-	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -45,19 +43,10 @@ func (s *accessorImpl) Fork(origin client.Object, config rolloutv1alpha1.ForkedB
 	forkedObj := &corev1.Service{}
 	// fork metadata
 	forkedObj.ObjectMeta = backend.ForkObjectMeta(obj, config.Name)
-	if forkedObj.Labels == nil {
-		forkedObj.Labels = make(map[string]string)
-	}
-	maps.Copy(forkedObj.Labels, config.ExtraLabelSelector)
-	forkedObj.Labels[rolloutapi.LabelTemporaryResource] = "true"
 	// fork spec
 	forkedObj.Spec.Ports = obj.Spec.Ports
 	forkedObj.Spec.Type = obj.Spec.Type
-	forkedObj.Spec.Selector = obj.Spec.Selector
-	if forkedObj.Spec.Selector == nil {
-		forkedObj.Spec.Selector = make(map[string]string)
-	}
-	// change selector
-	maps.Copy(forkedObj.Spec.Selector, config.ExtraLabelSelector)
+	// merge selector
+	forkedObj.Spec.Selector = lo.Assign(obj.Spec.Selector, config.ExtraLabelSelector)
 	return forkedObj
 }

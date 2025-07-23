@@ -105,7 +105,7 @@ func IsProgressing(workload client.Object) bool {
 }
 
 func IsCanary(workload client.Object) bool {
-	canaryValue := workload.GetLabels()[rolloutapi.LabelCanary]
+	canaryValue := workload.GetLabels()[rolloutapi.LabelCanaryResource]
 	return canaryValue == "true"
 }
 

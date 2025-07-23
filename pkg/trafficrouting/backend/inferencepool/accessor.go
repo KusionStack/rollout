@@ -1,7 +1,6 @@
 package inferencepool
 
 import (
-	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwapiv1alpha2 "sigs.k8s.io/gateway-api-inference-extension/api/v1alpha2"
@@ -30,10 +29,6 @@ func (b *accessorImpl) Fork(origin client.Object, config rolloutv1alpha1.ForkedB
 	forkedObj := &gwapiv1alpha2.InferencePool{}
 	// fork metadata
 	forkedObj.ObjectMeta = backend.ForkObjectMeta(obj, config.Name)
-	if forkedObj.Labels == nil {
-		forkedObj.Labels = make(map[string]string)
-	}
-	forkedObj.Labels[rolloutapi.LabelTemporaryResource] = "true"
 	// fork spec
 	forkedObj.Spec = *obj.Spec.DeepCopy()
 	// change spec
@@ -42,7 +37,6 @@ func (b *accessorImpl) Fork(origin client.Object, config rolloutv1alpha1.ForkedB
 	}
 	for k, v := range config.ExtraLabelSelector {
 		forkedObj.Spec.Selector[gwapiv1alpha2.LabelKey(k)] = gwapiv1alpha2.LabelValue(v)
-		forkedObj.Labels[k] = v
 	}
 	return forkedObj
 }
