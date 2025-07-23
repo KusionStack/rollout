@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -257,10 +258,9 @@ func (b *BackendRoutingReconciler) syncInClusterBackends(ctx context.Context, sy
 
 	// ensure canary and stable backends
 	canaryConfig := obj.Spec.ForkedBackends.Canary.DeepCopy()
-	if canaryConfig.ExtraLabelSelector == nil {
-		canaryConfig.ExtraLabelSelector = make(map[string]string)
-	}
-	canaryConfig.ExtraLabelSelector[rolloutapi.LabelTrafficLane] = rolloutapi.LabelValueTrafficLaneCanary
+	canaryConfig.ExtraLabelSelector = lo.Assign(canaryConfig.ExtraLabelSelector, map[string]string{
+		rolloutapi.LabelTrafficLane: rolloutapi.LabelValueTrafficLaneCanary,
+	})
 	err := b.ensureBackendResource(ctx, syncCtx, *canaryConfig)
 	if err != nil {
 		return err
@@ -269,10 +269,9 @@ func (b *BackendRoutingReconciler) syncInClusterBackends(ctx context.Context, sy
 	syncCtx.NewStatus.Backends.Canary.Conditions.Ready = ptr.To(true)
 
 	stableConfig := obj.Spec.ForkedBackends.Stable.DeepCopy()
-	if stableConfig.ExtraLabelSelector == nil {
-		stableConfig.ExtraLabelSelector = make(map[string]string)
-	}
-	stableConfig.ExtraLabelSelector[rolloutapi.LabelTrafficLane] = rolloutapi.LabelValueTrafficLaneStable
+	stableConfig.ExtraLabelSelector = lo.Assign(stableConfig.ExtraLabelSelector, map[string]string{
+		rolloutapi.LabelTrafficLane: rolloutapi.LabelValueTrafficLaneStable,
+	})
 	err = b.ensureBackendResource(ctx, syncCtx, *stableConfig)
 	if err != nil {
 		return err
@@ -346,12 +345,13 @@ func (b *BackendRoutingReconciler) ensureBackendResource(ctx context.Context, sy
 	// need to create
 	newBackendObj := backendStore.Fork(syncCtx.BackendObject, config)
 	// add label
-	labels := newBackendObj.GetLabels()
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-	labels[rolloutapi.LabelTemporaryResource] = "true"
-	newBackendObj.SetLabels(labels)
+	newBackendObj.SetLabels(lo.Assign(
+		newBackendObj.GetLabels(),
+		config.ExtraLabelSelector,
+		map[string]string{
+			rolloutapi.LabelCanaryResource: "true",
+		},
+	))
 
 	err = b.Client.Create(ctx, newBackendObj)
 	if err != nil {

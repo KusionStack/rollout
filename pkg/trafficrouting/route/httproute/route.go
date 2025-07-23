@@ -29,7 +29,6 @@ func New() route.Route {
 	}
 }
 
-
 func (r *routeImpl) GetController(client client.Client, br *rolloutv1alpha1.BackendRouting, route client.Object, routeStatus rolloutv1alpha1.BackendRouteStatus) (route.RouteController, error) {
 	routeObj, ok := route.(*gatewayapiv1.HTTPRoute)
 	if !ok {
