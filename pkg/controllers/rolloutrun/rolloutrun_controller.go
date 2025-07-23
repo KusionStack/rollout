@@ -237,7 +237,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 		result ctrl.Result
 	)
 
-	trafficManager, err := trafficcontrol.NewManager(r.Client, r.Logger, topologies)
+	trafficManager, err := trafficcontrol.NewManager(ctx, r.Client, topologies)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
