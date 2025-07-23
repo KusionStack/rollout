@@ -46,11 +46,6 @@ func (r *ingressControl) GetRoute() client.Object {
 	return r.routeObj
 }
 
-func (r *ingressControl) GetCondition(_ context.Context) ([]metav1.Condition, error) {
-	// nil means ready and synced
-	return nil, nil
-}
-
 func (c *ingressControl) getCluster() string {
 	return c.routeStatus.Cluster
 }

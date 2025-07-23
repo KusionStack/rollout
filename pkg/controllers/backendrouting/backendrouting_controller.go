@@ -371,12 +371,8 @@ func (b *BackendRoutingReconciler) syncInClusterRoutes(ctx context.Context, sync
 			syncCtx.setRouteCondition(i, metav1.ConditionFalse, "SyncFailed", err.Error())
 			return err
 		}
-		// TODO: add synced logic, read condition from annotations
-		// syncCtx.setRouteCondition(i, metav1.ConditionTrue, "Synced", "")
 		return nil
 	}
-
-	logger := logr.FromContextOrDiscard(ctx)
 
 	for i, routeStatus := range syncCtx.NewStatus.Routes {
 		needCreate, needDelete := syncCtx.checkOriginRoute(routeStatus.Forwarding)
@@ -431,52 +427,56 @@ func (b *BackendRoutingReconciler) syncInClusterRoutes(ctx context.Context, sync
 		}
 
 		ctrl := syncCtx.Routes[i]
-		conditions, err := ctrl.GetCondition(ctx)
-		if err != nil {
-			logger.Error(err, "failed to get route condition", "route", routeStatus.CrossClusterObjectReference)
-			continue
-		}
-
-		// check ready according to condition extension
-		status, reason, message := b.checkRouteReady(ctx, ctrl.GetRoute().GetGeneration(), conditions)
+		status, reason, message := b.checkReadyExtension(ctx, ctrl)
 		syncCtx.setRouteCondition(i, status, reason, message)
 	}
 	return nil
 }
 
-func (b *BackendRoutingReconciler) checkRouteReady(_ context.Context, generation int64, conditions []metav1.Condition) (metav1.ConditionStatus, string, string) {
-	if len(conditions) == 0 {
-		return metav1.ConditionTrue, "NoConditionExtension", ""
+func (b *BackendRoutingReconciler) checkReadyExtension(_ context.Context, routeCtl route.RouteController) (metav1.ConditionStatus, string, string) {
+	routeObj := routeCtl.GetRoute()
+
+	conditionExt, err := route.GetConditionExtension(routeObj)
+	if err != nil {
+		return metav1.ConditionUnknown, "GetConditionsFailed", err.Error()
 	}
-	cond := meta.FindStatusCondition(conditions, "Ready")
-	if cond != nil {
-		if generation != cond.ObservedGeneration {
-			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Ready condition is out of synced, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, cond.ObservedGeneration)
+
+	// if no condition extension found, return True
+	if conditionExt == nil {
+		return metav1.ConditionTrue, "NoConditionExtension", "route condition extension is not set"
+	}
+
+	generation := routeObj.GetGeneration()
+	readCond := meta.FindStatusCondition(conditionExt.Conditions, rolloutv1alpha1.RouteConditionTypeReady)
+	if readCond != nil {
+		if generation != readCond.ObservedGeneration {
+			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Ready condition is out of sync, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, readCond.ObservedGeneration)
 		}
-		switch cond.Status {
+		switch readCond.Status {
 		case metav1.ConditionTrue:
-			return cond.Status, "ConditionExtensionReady", cond.Message
+			return readCond.Status, "ConditionExtensionReady", readCond.Message
 		default:
-			return metav1.ConditionFalse, "ConditionExtensionNotReady", cond.Message
+			return metav1.ConditionFalse, "ConditionExtensionNotReady", readCond.Message
 		}
 	}
-	cond = meta.FindStatusCondition(conditions, "Synced")
-	if cond != nil {
-		if generation != cond.ObservedGeneration {
-			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Scyned condition is out of synced, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, cond.ObservedGeneration)
+	syncedCond := meta.FindStatusCondition(conditionExt.Conditions, rolloutv1alpha1.RouteConditionTypeSynced)
+	if syncedCond != nil {
+		if generation != syncedCond.ObservedGeneration {
+			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Scyned condition is out of sync, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, syncedCond.ObservedGeneration)
 		}
-		switch cond.Status {
+		switch syncedCond.Status {
 		case metav1.ConditionTrue:
-			if !cond.LastTransitionTime.IsZero() && !metav1.Now().After(cond.LastTransitionTime.Time.Add(30*time.Second)) {
+			if !syncedCond.LastTransitionTime.IsZero() && !metav1.Now().After(syncedCond.LastTransitionTime.Time.Add(30*time.Second)) {
 				// if synced is true, we need to wait for 30 seconds
 				return metav1.ConditionFalse, "SufficientDelayTime", "waiting 30 seconds to ensure sufficient time for routing rules to take effect."
 			}
-			return cond.Status, "ConditionExtensionSynced", cond.Message
+			return syncedCond.Status, "ConditionExtensionSynced", syncedCond.Message
 		default:
-			return metav1.ConditionFalse, "ConditionExtensionNotSynced", cond.Message
+			return metav1.ConditionFalse, "ConditionExtensionNotSynced", syncedCond.Message
 		}
 	}
-	return metav1.ConditionUnknown, "NoConditionExtension", "no Ready or Synced condition found in conditions extension"
+	// no ready or synced condition found, return unknown
+	return metav1.ConditionUnknown, "Unknown", "no Ready or Synced condition found in route condition extension"
 }
 
 func (b *BackendRoutingReconciler) findAllRouteControllers(ctx context.Context, syncCtx *syncContext) error {
