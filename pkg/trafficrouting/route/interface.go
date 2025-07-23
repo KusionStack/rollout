@@ -18,7 +18,6 @@ package route
 import (
 	"context"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -34,8 +33,6 @@ type Route interface {
 
 type RouteController interface {
 	GetRoute() client.Object
-
-	GetCondition(ctx context.Context) ([]metav1.Condition, error)
 
 	Initialize(ctx context.Context) error
 	Reset(ctx context.Context) error

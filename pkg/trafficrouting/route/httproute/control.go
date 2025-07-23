@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/samber/lo"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	rolloutapi "kusionstack.io/kube-api/rollout"
@@ -30,33 +29,6 @@ type httpRouteControl struct {
 
 func (r *httpRouteControl) GetRoute() client.Object {
 	return r.routeObj
-}
-
-func (r *httpRouteControl) GetCondition(ctx context.Context) ([]metav1.Condition, error) {
-	routeObj := r.routeObj
-
-	annotations := routeObj.GetAnnotations()
-	if len(annotations) == 0 {
-		return nil, nil
-	}
-	annoCond, ok := annotations[rolloutapi.AnnoRouteConditions]
-	if !ok {
-		return nil, nil
-	}
-	if len(annoCond) == 0 {
-		return nil, fmt.Errorf("annotaions[%s] value is empty", rolloutapi.AnnoRouteConditions)
-	}
-
-	routeConds := struct {
-		Conditions []metav1.Condition `json:"conditions"`
-	}{}
-
-	err := json.Unmarshal([]byte(annoCond), &routeConds)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal annotations[%s] value: %w", rolloutapi.AnnoRouteConditions, err)
-	}
-
-	return routeConds.Conditions, nil
 }
 
 // Initialize implements route.RouteControl.
