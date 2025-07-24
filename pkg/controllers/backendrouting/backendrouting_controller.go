@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -498,18 +499,18 @@ func (b *BackendRoutingReconciler) findAllRouteControllers(ctx context.Context, 
 		return routeAccessor, routeObj, nil
 	}
 
+	errList := []error{}
 	for i, routeInfo := range syncCtx.Object.Spec.Routes {
 		accessor, routeObj, err := fn(routeInfo)
 		if err != nil {
 			syncCtx.setRouteCondition(i, metav1.ConditionUnknown, "Unknown", err.Error())
-			return err
-		}
-		if syncCtx.NewStatus.Routes[i].Condition.Status == metav1.ConditionUnknown {
-			syncCtx.setRouteCondition(i, metav1.ConditionTrue, "RouteExists", "")
+			errList = append(errList, err)
+			continue
 		}
 
 		rctl, _ := accessor.GetController(b.Client, syncCtx.Object, routeObj, syncCtx.NewStatus.Routes[i])
 		syncCtx.Routes[i] = rctl
 	}
-	return nil
+
+	return utilerrors.NewAggregate(errList)
 }
