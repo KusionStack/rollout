@@ -135,6 +135,15 @@ func decodeHTTPRouteSpec(in string) (*gatewayapiv1.HTTPRouteSpec, error) {
 }
 
 func addHTTPRouteRules(in []gatewayapiv1.HTTPRouteRule, gvk schema.GroupVersionKind, targetBackend, canaryBackend string, newRule *rolloutv1alpha1.CanaryHTTPRouteRule) []gatewayapiv1.HTTPRouteRule {
+	// pre check: if canary backendRef already exists, skip it
+	for i := range in {
+		rule := &in[i]
+		_, canaryBackendRef := findBackendRef(rule, gvk, canaryBackend)
+		if canaryBackendRef != nil {
+			return in
+		}
+	}
+
 	if newRule.Weight != nil {
 		return addWeightedBackendRefs(in, gvk, targetBackend, canaryBackend, newRule)
 	}
@@ -152,7 +161,7 @@ func addMatchesBackendRefs(oldRules []gatewayapiv1.HTTPRouteRule, gvk schema.Gro
 	newMatches := []gatewayapiv1.HTTPRouteMatch{}
 	for _, match := range newRule.Matches {
 		newMatches = append(newMatches, gatewayapiv1.HTTPRouteMatch{
-			// Path: match.Path,
+			Path:        match.Path,
 			Headers:     match.Headers,
 			QueryParams: match.QueryParams,
 		})
@@ -160,6 +169,13 @@ func addMatchesBackendRefs(oldRules []gatewayapiv1.HTTPRouteRule, gvk schema.Gro
 
 	for i := range oldRules {
 		rule := &oldRules[i]
+
+		_, canaryBackendRef := findBackendRef(rule, gvk, canaryBackend)
+		if canaryBackendRef != nil {
+			// canary backendRef already exists, skip it
+			continue
+		}
+
 		index, targetBackendRef := findBackendRef(rule, gvk, targetBackend)
 		if targetBackendRef == nil {
 			continue
@@ -167,14 +183,14 @@ func addMatchesBackendRefs(oldRules []gatewayapiv1.HTTPRouteRule, gvk schema.Gro
 
 		canaryRule := rule.DeepCopy()
 		canaryRule.BackendRefs[index].Name = gatewayapiv1.ObjectName(canaryBackend)
-		canaryRule.Matches = append(canaryRule.Matches, newMatches...)
-		canaryRule.Filters = append(canaryRule.Filters, newRule.Filters...)
+		canaryRule.Matches = mergeHTTPRouteMatches(canaryRule.Matches, newMatches)
+		canaryRule.Filters = mergeHTTPRouteFilter(canaryRule.Filters, newRule.Filters)
 		canaryRules = append(canaryRules, *canaryRule)
 	}
 
 	outputRules = append(outputRules, oldRules...)
 	for i := range canaryRules {
-		canaryRules[i].Name = ptr.To(gatewayapiv1.SectionName(fmt.Sprintf("%d.canary.rollout.kusionstack.io", i)))
+		canaryRules[i].Name = ptr.To(gatewayapiv1.SectionName(getCanaryRuleName(i)))
 		outputRules = append(outputRules, canaryRules[i])
 	}
 	return outputRules
@@ -200,7 +216,7 @@ func addWeightedBackendRefs(oldRules []gatewayapiv1.HTTPRouteRule, gvk schema.Gr
 
 		canaryBackendRef.Name = gatewayapiv1.ObjectName(canaryBackend)
 		canaryBackendRef.Weight = newRule.Weight
-		canaryBackendRef.Filters = newRule.Filters
+		canaryBackendRef.Filters = mergeHTTPRouteFilter(canaryBackendRef.Filters, newRule.Filters)
 
 		targetBackendRef.Weight = ptr.To(100 - *canaryBackendRef.Weight)
 
@@ -211,12 +227,18 @@ func addWeightedBackendRefs(oldRules []gatewayapiv1.HTTPRouteRule, gvk schema.Gr
 	return outputRules
 }
 
-func deleteBackendRefRules(oldRules []gatewayapiv1.HTTPRouteRule, gvk schema.GroupVersionKind, targetBackend, _ string) []gatewayapiv1.HTTPRouteRule {
+func deleteBackendRefRules(oldRules []gatewayapiv1.HTTPRouteRule, gvk schema.GroupVersionKind, targetBackend, canaryBackend string) []gatewayapiv1.HTTPRouteRule {
 	outputRules := make([]gatewayapiv1.HTTPRouteRule, 0)
 	for i := range oldRules {
+		_, canaryBackendRef := findBackendRef(&oldRules[i], gvk, canaryBackend)
+		if canaryBackendRef == nil {
+			// no canary backend ref found, skip it
+			outputRules = append(outputRules, oldRules[i])
+			continue
+		}
 		rule := oldRules[i].DeepCopy()
 		// delete canary backendRef
-		filterOutBackendRef(rule, gvk, targetBackend)
+		filterOutBackendRef(rule, gvk, canaryBackend)
 		// find target backendRef and reset weight to 1
 		index, targetBackend := findBackendRef(rule, gvk, targetBackend)
 		if targetBackend != nil {
@@ -235,7 +257,6 @@ func filterOutBackendRef(rule *gatewayapiv1.HTTPRouteRule, gvk schema.GroupVersi
 	newBackends := lo.Reject(rule.BackendRefs, func(ref gatewayapiv1.HTTPBackendRef, _ int) bool {
 		return isBackendMatches(ref, gvk, name)
 	})
-
 	rule.BackendRefs = newBackends
 }
 
@@ -261,4 +282,84 @@ func isBackendMatches(backendRef gatewayapiv1.HTTPBackendRef, gvk schema.GroupVe
 	return gvk.Group == string(ptr.Deref(backendRef.Group, "")) &&
 		gvk.Kind == string(ptr.Deref(backendRef.Kind, "Service")) &&
 		name == string(backendRef.Name)
+}
+
+func mergeHTTPRouteMatches(oldMatches, canaryMatches []gatewayapiv1.HTTPRouteMatch) []gatewayapiv1.HTTPRouteMatch {
+	if len(oldMatches) == 0 {
+		return canaryMatches
+	}
+
+	canaryPathMatches := lo.Filter(canaryMatches, func(match gatewayapiv1.HTTPRouteMatch, _ int) bool {
+		return match.Path != nil
+	})
+	canarnNonPathMatches := lo.Filter(canaryMatches, func(match gatewayapiv1.HTTPRouteMatch, _ int) bool {
+		return match.Path == nil
+	})
+	// remain all canary path matches
+	newMatches := []gatewayapiv1.HTTPRouteMatch{}
+	newMatches = append(newMatches, canaryPathMatches...)
+	for i := range oldMatches {
+		for j := range canarnNonPathMatches {
+			// add headers and query params matches to old match
+			if len(canarnNonPathMatches[j].Headers) == 0 && len(canarnNonPathMatches[j].QueryParams) == 0 {
+				continue
+			}
+			oldMatch := oldMatches[i].DeepCopy()
+			oldMatch.Headers = append(oldMatch.Headers, canarnNonPathMatches[j].Headers...)
+			oldMatch.QueryParams = append(oldMatch.QueryParams, canarnNonPathMatches[j].QueryParams...)
+			newMatches = append(newMatches, *oldMatch)
+		}
+	}
+	return newMatches
+}
+
+func mergeHTTPRouteFilter(oldFilters, canaryFilters []gatewayapiv1.HTTPRouteFilter) []gatewayapiv1.HTTPRouteFilter {
+	if len(oldFilters) == 0 {
+		return canaryFilters
+	}
+
+	newFilters := []gatewayapiv1.HTTPRouteFilter{}
+	newFilters = append(newFilters, oldFilters...)
+	// HTTPRouteFilters validation rules
+	//
+	// +kubebuilder:validation:XValidation:message="May specify either httpRouteFilterRequestRedirect or httpRouteFilterRequestRewrite, but not both",rule="!(self.exists(f, f.type == 'RequestRedirect') && self.exists(f, f.type == 'URLRewrite'))"
+	// +kubebuilder:validation:XValidation:message="RequestHeaderModifier filter cannot be repeated",rule="self.filter(f, f.type == 'RequestHeaderModifier').size() <= 1"
+	// +kubebuilder:validation:XValidation:message="ResponseHeaderModifier filter cannot be repeated",rule="self.filter(f, f.type == 'ResponseHeaderModifier').size() <= 1"
+	// +kubebuilder:validation:XValidation:message="RequestRedirect filter cannot be repeated",rule="self.filter(f, f.type == 'RequestRedirect').size() <= 1"
+	// +kubebuilder:validation:XValidation:message="URLRewrite filter cannot be repeated",rule="self.filter(f, f.type == 'URLRewrite').size() <= 1"
+	for _, canaryFiler := range canaryFilters {
+		// request header modifier can not be repeated
+		if canaryFiler.RequestHeaderModifier != nil {
+			newFilters = lo.Reject(newFilters, func(filter gatewayapiv1.HTTPRouteFilter, _ int) bool {
+				return filter.RequestHeaderModifier != nil
+			})
+		}
+		// response header modifier can not be repeated
+		if canaryFiler.ResponseHeaderModifier != nil {
+			newFilters = lo.Reject(newFilters, func(filter gatewayapiv1.HTTPRouteFilter, _ int) bool {
+				return filter.ResponseHeaderModifier != nil
+			})
+		}
+		// request redirect can not be repeated
+		// RequestRedirect can not set URLRewrite
+		if canaryFiler.RequestRedirect != nil {
+			newFilters = lo.Reject(newFilters, func(filter gatewayapiv1.HTTPRouteFilter, _ int) bool {
+				return filter.RequestRedirect != nil || filter.URLRewrite != nil
+			})
+		}
+		// URLRewrite can not be repeated
+		// URLRewrite can not set with RequestRedirect
+		if canaryFiler.URLRewrite != nil {
+			newFilters = lo.Reject(newFilters, func(filter gatewayapiv1.HTTPRouteFilter, _ int) bool {
+				return filter.URLRewrite != nil || filter.RequestRedirect != nil
+			})
+		}
+		newFilters = append(newFilters, canaryFiler)
+	}
+
+	return newFilters
+}
+
+func getCanaryRuleName(i int) string {
+	return fmt.Sprintf("%d.canary.rollout.kusionstack.io", i)
 }
