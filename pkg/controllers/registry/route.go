@@ -45,3 +45,8 @@ func InitRouteRegistry(mgr manager.Manager) (bool, error) {
 	Routes.Register(httproute.GVK, httproute.New())
 	return true, nil
 }
+
+func IsSupportedRoute(gvk schema.GroupVersionKind) bool {
+	_, err := Routes.Get(gvk)
+	return err == nil
+}
