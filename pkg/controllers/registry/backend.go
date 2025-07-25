@@ -45,3 +45,8 @@ func InitBackendRegistry(mgr manager.Manager) (bool, error) {
 	Backends.Register(inferencepool.GVK, inferencepool.New())
 	return true, nil
 }
+
+func IsSupportedBackend(gvk schema.GroupVersionKind) bool {
+	_, err := Backends.Get(gvk)
+	return err == nil
+}

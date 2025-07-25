@@ -80,7 +80,9 @@ func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) erro
 	case *rolloutv1alpha1.RolloutRun:
 		errs = rolloutvalidation.ValidateRolloutRun(t)
 	case *rolloutv1alpha1.TrafficTopology:
-		errs = rolloutvalidation.ValidateTrafficTopology(t)
+		errs = rolloutvalidation.ValidateTrafficTopology(t, registry.IsSupportedWorkload, registry.IsSupportedRoute, registry.IsSupportedBackend)
+	case *rolloutv1alpha1.BackendRouting:
+		errs = rolloutvalidation.ValidateBackendRouting(t, registry.IsSupportedRoute, registry.IsSupportedBackend)
 	default:
 		return fmt.Errorf("unexpected object type %T", obj)
 	}
@@ -109,7 +111,11 @@ func (v *Validator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.O
 			errs = rolloutvalidation.ValidateRolloutRunUpdate(newV, oldObj.(*rolloutv1alpha1.RolloutRun))
 		}
 	case *rolloutv1alpha1.TrafficTopology:
-		errs = rolloutvalidation.ValidateTrafficTopology(newV)
+		errs = rolloutvalidation.ValidateTrafficTopology(newV, registry.IsSupportedWorkload, registry.IsSupportedRoute, registry.IsSupportedBackend)
+		// TODO: validate traffic topology update
+	case *rolloutv1alpha1.BackendRouting:
+		errs = rolloutvalidation.ValidateBackendRouting(newV, registry.IsSupportedRoute, registry.IsSupportedBackend)
+		// TODO: validate backend routing update
 	default:
 		return fmt.Errorf("unexpected object type %T", newObj)
 	}

@@ -28,17 +28,17 @@ func supportAllGVK(gvk schema.GroupVersionKind) bool {
 	return true
 }
 
-func supportNonGVK(gvk schema.GroupVersionKind) bool {
+func denyAllGVK(gvk schema.GroupVersionKind) bool {
 	return false
 }
 
-func TestValidateRollout(t *testing.T) {
-	validMetadata := metav1.ObjectMeta{
+var (
+	validMetadata = metav1.ObjectMeta{
 		Name:      "test",
 		Namespace: "default",
 	}
 
-	validWorkloadRef := rolloutv1alpha1.WorkloadRef{
+	validWorkloadRef = rolloutv1alpha1.WorkloadRef{
 		APIVersion: "apps/v1",
 		Kind:       "StatefulSet",
 		Match: rolloutv1alpha1.ResourceMatch{
@@ -51,7 +51,7 @@ func TestValidateRollout(t *testing.T) {
 		},
 	}
 
-	validRollout := &rolloutv1alpha1.Rollout{
+	validRollout = &rolloutv1alpha1.Rollout{
 		ObjectMeta: validMetadata,
 		Spec: rolloutv1alpha1.RolloutSpec{
 			TriggerPolicy: "Auto",
@@ -59,6 +59,9 @@ func TestValidateRollout(t *testing.T) {
 			WorkloadRef:   validWorkloadRef,
 		},
 	}
+)
+
+func TestValidateRollout(t *testing.T) {
 	tests := []struct {
 		name           string
 		obj            *rolloutv1alpha1.Rollout
@@ -94,7 +97,7 @@ func TestValidateRollout(t *testing.T) {
 		{
 			name:           "invalid GVK",
 			obj:            validRollout,
-			isSupportedGVK: supportNonGVK,
+			isSupportedGVK: denyAllGVK,
 			wantErr:        true,
 		},
 		{

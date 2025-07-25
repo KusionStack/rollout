@@ -353,6 +353,7 @@ func (b *BackendRoutingReconciler) ensureBackendResource(ctx context.Context, sy
 			rolloutapi.LabelCanaryResource: "true",
 		},
 	))
+	// TODO: add canary-release finalizer to protect resource from deletion
 
 	err = b.Client.Create(ctx, newBackendObj)
 	if err != nil {
