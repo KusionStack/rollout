@@ -449,7 +449,7 @@ func (b *BackendRoutingReconciler) checkReadyExtension(_ context.Context, routeC
 	}
 
 	generation := routeObj.GetGeneration()
-	readCond := meta.FindStatusCondition(conditionExt.Conditions, rolloutv1alpha1.RouteConditionTypeReady)
+	readCond := meta.FindStatusCondition(conditionExt.Conditions, rolloutv1alpha1.ConditionTypeReady)
 	if readCond != nil {
 		if generation != readCond.ObservedGeneration {
 			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Ready condition is out of sync, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, readCond.ObservedGeneration)
@@ -461,7 +461,7 @@ func (b *BackendRoutingReconciler) checkReadyExtension(_ context.Context, routeC
 			return metav1.ConditionFalse, "ConditionExtensionNotReady", readCond.Message
 		}
 	}
-	syncedCond := meta.FindStatusCondition(conditionExt.Conditions, rolloutv1alpha1.RouteConditionTypeSynced)
+	syncedCond := meta.FindStatusCondition(conditionExt.Conditions, rolloutv1alpha1.ConditionTypeSynced)
 	if syncedCond != nil {
 		if generation != syncedCond.ObservedGeneration {
 			return metav1.ConditionFalse, "OutOfSync", fmt.Sprintf("Scyned condition is out of sync, route.Generation(%d) != condition.ObservedGeneration(%d)", generation, syncedCond.ObservedGeneration)

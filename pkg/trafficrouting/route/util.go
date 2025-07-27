@@ -22,19 +22,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func GetConditionExtension(routeObj client.Object) (*rolloutv1alpha1.RouteConditionExtension, error) {
-	annoCond, ok := routeObj.GetAnnotations()[rolloutapi.AnnoRouteConditions]
+func GetConditionExtension(obj client.Object) (*rolloutv1alpha1.ConditionExtension, error) {
+	annoCond, ok := obj.GetAnnotations()[rolloutapi.ConditionExtensionAnnoKey]
 	if !ok {
 		// no route-conditions annotation measn ready
 		return nil, nil
 	}
 	if len(annoCond) == 0 {
-		return nil, fmt.Errorf("annotaions[%s] value is empty", rolloutapi.AnnoRouteConditions)
+		return nil, fmt.Errorf("annotaions[%s] value is empty", rolloutapi.ConditionExtensionAnnoKey)
 	}
-	routeCond := &rolloutv1alpha1.RouteConditionExtension{}
+	routeCond := &rolloutv1alpha1.ConditionExtension{}
 	err := json.Unmarshal([]byte(annoCond), routeCond)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal annotations[%s] value: %w", rolloutapi.AnnoRouteConditions, err)
+		return nil, fmt.Errorf("failed to unmarshal annotations[%s] value: %w", rolloutapi.ConditionExtensionAnnoKey, err)
 	}
 	return routeCond, nil
 }
