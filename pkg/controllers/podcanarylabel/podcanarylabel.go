@@ -18,6 +18,7 @@ package podcanarylabel
 
 import (
 	"context"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	rolloutapi "kusionstack.io/kube-api/rollout"
@@ -111,7 +112,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		// this workload is not controlled by rollout, we need to make sure pod revision label is not added
 		updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
 			utils.MutateLabels(pod, func(labels map[string]string) {
-				delete(labels, rolloutapi.LabelTrafficLane)
+				delete(labels, rolloutapi.TrafficLaneLabelKey)
 			})
 			return nil
 		})
@@ -127,37 +128,27 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 		return reconcile.Result{}, nil
 	}
 
-	trafficLane := recognizeTrafficLane(pc, r.Client, workloadObj.Object, pod)
+	trafficLane := workload.RecognizeTrafficLane(ctx, workloadObj.Accessor, pc, r.Client, workloadObj.Object, pod)
 
 	// patch pod label
 	updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
 		utils.MutateLabels(pod, func(labels map[string]string) {
-			labels[rolloutapi.LabelTrafficLane] = trafficLane
+			labels[rolloutapi.TrafficLaneLabelKey] = trafficLane
 		})
 		return nil
 	})
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 
 	if updated {
 		logger.V(2).Info("updated pod traffic lane label value", "traffic-lane", trafficLane)
 	}
 
+	if trafficLane == rolloutapi.UnknownTrafficLane {
+		// unknown traffic lane, requeue after 5 seconds
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+
 	return reconcile.Result{}, err
-}
-
-func recognizeTrafficLane(pc workload.ReplicaObjectControl, reader client.Reader, workloadObj client.Object, pod *corev1.Pod) string {
-	if workload.IsCanary(workloadObj) {
-		// canary workload, always set pod revision to canary
-		return rolloutapi.LabelValueTrafficLaneCanary
-	}
-
-	if !workload.IsProgressing(workloadObj) {
-		// workload is not progressing, set pod revision to base
-		return rolloutapi.LabelValueTrafficLaneStable
-	}
-
-	// workload is progressing, set updated pod revision to canary
-	if updated, _ := pc.IsUpdateObject(context.TODO(), reader, workloadObj, pod); updated {
-		return rolloutapi.LabelValueTrafficLaneCanary
-	}
-	return rolloutapi.LabelValueTrafficLaneStable
 }

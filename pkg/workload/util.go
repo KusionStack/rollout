@@ -15,6 +15,7 @@
 package workload
 
 import (
+	"context"
 	"maps"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -105,7 +106,7 @@ func IsProgressing(workload client.Object) bool {
 }
 
 func IsCanary(workload client.Object) bool {
-	canaryValue := workload.GetLabels()[rolloutapi.LabelCanaryResource]
+	canaryValue := workload.GetLabels()[rolloutapi.CanaryResourceLabelKey]
 	return canaryValue == "true"
 }
 
@@ -144,4 +145,43 @@ func GetOwnersOf(controllee client.Object) ([]*Owner, error) {
 		})
 	}
 	return result, nil
+}
+
+func RecognizeTrafficLane(
+	ctx context.Context,
+	accessor Accessor,
+	pc ReplicaObjectControl,
+	reader client.Reader,
+	workloadObj, replicaObj client.Object,
+) string {
+	if IsCanary(workloadObj) {
+		// the workload canary resource, always set object revision to canary
+		return rolloutapi.CanaryTrafficLane
+	}
+	if !IsProgressing(workloadObj) {
+		// workload is not progressing, set the object revision to stable
+		return rolloutapi.StableTrafficLane
+	}
+
+	// workload is progressing, check revision
+	isCurrent, isUpdated, _ := pc.RecognizeRevision(ctx, reader, workloadObj, replicaObj)
+	// sometimes the object can be both current and updated,
+	// we must to set revision to stable if it is current
+	if isCurrent {
+		return rolloutapi.StableTrafficLane
+	}
+	// if workload and object is all updated, set revision to canary
+	if isUpdated {
+		return rolloutapi.CanaryTrafficLane
+	}
+	// if workload status is out of date, set revision to unknown
+	info, _ := accessor.GetInfo("", workloadObj)
+	if info.Generation != info.Status.ObservedGeneration {
+		return rolloutapi.UnknownTrafficLane
+	}
+
+	// This is a special case that but the replicaObj is is neither current nor updated.
+	// During the process of updating the workload from v2 to v2 version, another update to v3 occurred.
+	// We need to treat the v2 replica object as stable.
+	return rolloutapi.StableTrafficLane
 }

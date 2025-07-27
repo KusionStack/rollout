@@ -254,8 +254,8 @@ func appendBuiltinTemplateMetadataPatch(patch *rolloutv1alpha1.MetadataPatch) *r
 		patch.Labels = map[string]string{}
 	}
 
-	patch.Labels[rolloutapi.LabelCanaryResource] = "true"
-	patch.Labels[rolloutapi.LabelTrafficLane] = rolloutapi.LabelValueTrafficLaneCanary
+	patch.Labels[rolloutapi.CanaryResourceLabelKey] = "true"
+	patch.Labels[rolloutapi.TrafficLaneLabelKey] = rolloutapi.CanaryTrafficLane
 	return patch
 }
 
