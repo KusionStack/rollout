@@ -41,11 +41,11 @@ func (c *httpRouteControl) Initialize(ctx context.Context) error {
 		if in.Annotations == nil {
 			in.Annotations = make(map[string]string)
 		}
-		got := in.Annotations[rolloutapi.AnnoRouteSpecBackup]
+		got := in.Annotations[rolloutapi.OriginRouteSpecAnnoKey]
 		if len(got) == 0 {
 			// backup origin spec
 			origin := encodeHTTPRouteSpec(&in.Spec)
-			in.Annotations[rolloutapi.AnnoRouteSpecBackup] = origin
+			in.Annotations[rolloutapi.OriginRouteSpecAnnoKey] = origin
 		}
 
 		// change origin backend name
@@ -69,7 +69,7 @@ func (c *httpRouteControl) Reset(ctx context.Context) error {
 		if in.Annotations == nil {
 			in.Annotations = make(map[string]string)
 		}
-		originSpec := in.Annotations[rolloutapi.AnnoRouteSpecBackup]
+		originSpec := in.Annotations[rolloutapi.OriginRouteSpecAnnoKey]
 		if len(originSpec) == 0 {
 			return fmt.Errorf("failed to find origin spec in HTTPRoute annotations")
 		}
@@ -78,7 +78,7 @@ func (c *httpRouteControl) Reset(ctx context.Context) error {
 			return err
 		}
 		in.Spec = *origin
-		delete(in.Annotations, rolloutapi.AnnoRouteSpecBackup)
+		delete(in.Annotations, rolloutapi.OriginRouteSpecAnnoKey)
 		return nil
 	})
 	return err
