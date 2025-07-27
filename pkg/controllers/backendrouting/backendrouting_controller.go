@@ -260,7 +260,7 @@ func (b *BackendRoutingReconciler) syncInClusterBackends(ctx context.Context, sy
 	// ensure canary and stable backends
 	canaryConfig := obj.Spec.ForkedBackends.Canary.DeepCopy()
 	canaryConfig.ExtraLabelSelector = lo.Assign(canaryConfig.ExtraLabelSelector, map[string]string{
-		rolloutapi.LabelTrafficLane: rolloutapi.LabelValueTrafficLaneCanary,
+		rolloutapi.TrafficLaneLabelKey: rolloutapi.CanaryTrafficLane,
 	})
 	err := b.ensureBackendResource(ctx, syncCtx, *canaryConfig)
 	if err != nil {
@@ -271,7 +271,7 @@ func (b *BackendRoutingReconciler) syncInClusterBackends(ctx context.Context, sy
 
 	stableConfig := obj.Spec.ForkedBackends.Stable.DeepCopy()
 	stableConfig.ExtraLabelSelector = lo.Assign(stableConfig.ExtraLabelSelector, map[string]string{
-		rolloutapi.LabelTrafficLane: rolloutapi.LabelValueTrafficLaneStable,
+		rolloutapi.TrafficLaneLabelKey: rolloutapi.StableTrafficLane,
 	})
 	err = b.ensureBackendResource(ctx, syncCtx, *stableConfig)
 	if err != nil {
@@ -350,7 +350,7 @@ func (b *BackendRoutingReconciler) ensureBackendResource(ctx context.Context, sy
 		newBackendObj.GetLabels(),
 		config.ExtraLabelSelector,
 		map[string]string{
-			rolloutapi.LabelCanaryResource: "true",
+			rolloutapi.CanaryResourceLabelKey: "true",
 		},
 	))
 	// TODO: add canary-release finalizer to protect resource from deletion

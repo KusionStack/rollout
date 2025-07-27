@@ -415,10 +415,10 @@ func (s *BackendRoutingControllerTestSuite) Test_ForBackends() {
 			return false
 		}
 
-		s.Require().Equal(rolloutapi.LabelValueTrafficLaneStable, stableSVC.Spec.Selector[rolloutapi.LabelTrafficLane])
-		s.Require().Contains(stableSVC.Labels, rolloutapi.LabelCanaryResource)
-		s.Require().Equal(rolloutapi.LabelValueTrafficLaneCanary, canarySVC.Spec.Selector[rolloutapi.LabelTrafficLane])
-		s.Require().Contains(canarySVC.Labels, rolloutapi.LabelCanaryResource)
+		s.Require().Equal(rolloutapi.StableTrafficLane, stableSVC.Spec.Selector[rolloutapi.TrafficLaneLabelKey])
+		s.Require().Contains(stableSVC.Labels, rolloutapi.CanaryResourceLabelKey)
+		s.Require().Equal(rolloutapi.CanaryTrafficLane, canarySVC.Spec.Selector[rolloutapi.TrafficLaneLabelKey])
+		s.Require().Contains(canarySVC.Labels, rolloutapi.CanaryResourceLabelKey)
 
 		return true
 	}, 60*time.Second, 5*time.Second, "stable and canary should be created")
@@ -577,7 +577,7 @@ func (s *BackendRoutingControllerTestSuite) Test_Route() {
 		if err != nil {
 			return false
 		}
-		s.Require().Contains(ingress.Labels, rolloutapi.LabelCanaryResource)
+		s.Require().Contains(ingress.Labels, rolloutapi.CanaryResourceLabelKey)
 		return true
 	}, 60*time.Second, 5*time.Second, "canary ingress should be ready")
 

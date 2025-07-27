@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -37,23 +36,24 @@ func (c *accessorImpl) ReplicaType() schema.GroupVersionKind {
 	return corev1.SchemeGroupVersion.WithKind("Pod")
 }
 
-func (c *accessorImpl) IsUpdateObject(_ context.Context, _ client.Reader, workload, obj client.Object) (bool, error) {
+func (c *accessorImpl) RecognizeRevision(_ context.Context, _ client.Reader, workload, obj client.Object) (isCurrent, isUpdated bool, err error) {
 	cls, err := checkObj(workload)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
-		return false, fmt.Errorf("object must be Pod")
+		return false, false, fmt.Errorf("object must be Pod")
 	}
-	revision := utils.GetMapValueByDefault(pod.Labels, appsv1.ControllerRevisionHashLabelKey, cls.Status.CurrentRevision)
+	revision := pod.Labels[appsv1.ControllerRevisionHashLabelKey]
 	if revision == cls.Status.CurrentRevision {
-		return false, nil
+		isCurrent = true
 	}
-	if revision == cls.Status.UpdatedRevision {
-		return true, nil
+	if cls.Generation == cls.Status.ObservedGeneration &&
+		revision == cls.Status.UpdatedRevision {
+		isUpdated = true
 	}
-	return false, nil
+	return isCurrent, isUpdated, nil
 }
 
 func (c *accessorImpl) GetReplicObjects(ctx context.Context, reader client.Reader, workload client.Object) ([]client.Object, error) {

@@ -60,8 +60,8 @@ type CanaryReleaseControl interface {
 type ReplicaObjectControl interface {
 	// RepliceType returns the type of replica object
 	ReplicaType() schema.GroupVersionKind
-	// IsUpdateObject checks if the replica object revision is updated of the workload
-	IsUpdateObject(ctx context.Context, reader client.Reader, workload, object client.Object) (bool, error)
+	// RecognizeRevision checks if the replica object revision is crrent or updated of the workload
+	RecognizeRevision(ctx context.Context, reader client.Reader, workload, object client.Object) (current, updated bool, err error)
 	// GetReplicObjects gets the pod selector of the workload
 	GetReplicObjects(ctx context.Context, reader client.Reader, workload client.Object) ([]client.Object, error)
 }
