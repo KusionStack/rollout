@@ -108,6 +108,7 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	err := r.Client.Get(clusterinfo.WithCluster(ctx, clusterinfo.Fed), req.NamespacedName, obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			r.rvExpectation.DeleteExpectations(req.String())
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
@@ -120,6 +121,11 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err = r.handleFinalizer(ctx, obj); err != nil {
 		logger.Error(err, "handleFinalizer failed")
 		return ctrl.Result{}, nil
+	}
+
+	if obj.IsCompleted() {
+		// rolloutRun is completed, skip syncing
+		return reconcile.Result{}, nil
 	}
 
 	newStatus := obj.Status.DeepCopy()
