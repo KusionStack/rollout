@@ -36,6 +36,7 @@ import (
 // +kubebuilder:webhook:path=/webhooks/validating/rolloutstrategy,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=rolloutstrategies,verbs=create;update,versions=v1alpha1,name=rolloutstrategies.rollout.kusionstack.io
 // +kubebuilder:webhook:path=/webhooks/validating/rollout,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=rollouts,verbs=create;update,versions=v1alpha1,name=rollouts.rollout.kusionstack.io
 // +kubebuilder:webhook:path=/webhooks/validating/traffictopology,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=traffictopologies,verbs=create;update,versions=v1alpha1,name=traffictopologies.rollout.kusionstack.io
+// +kubebuilder:webhook:path=/webhooks/validating/backendrouting,mutating=false,failurePolicy=fail,sideEffects=None,admissionReviewVersions=v1;v1beta1,groups="rollout.kusionstack.io",resources=backendroutings,verbs=create;update,versions=v1alpha1,name=backendroutings.rollout.kusionstack.io
 
 const (
 	WebhookInitializerName = "validate-rollout.kusionstack.io"
@@ -48,6 +49,7 @@ func NewValidatingHandlers(mgr manager.Manager) map[schema.GroupKind]admission.H
 		&rolloutv1alpha1.RolloutStrategy{},
 		&rolloutv1alpha1.RolloutRun{},
 		&rolloutv1alpha1.TrafficTopology{},
+		&rolloutv1alpha1.BackendRouting{},
 	}
 	handlers := make(map[schema.GroupKind]admission.Handler, len(objs))
 	for _, obj := range objs {

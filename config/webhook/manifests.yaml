@@ -98,6 +98,27 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /webhooks/validating/backendrouting
+  failurePolicy: Fail
+  name: backendroutings.rollout.kusionstack.io
+  rules:
+  - apiGroups:
+    - rollout.kusionstack.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - backendroutings
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /webhooks/validating/rolloutrun
   failurePolicy: Fail
   name: rolloutruns.rollout.kusionstack.io
