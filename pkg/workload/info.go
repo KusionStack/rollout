@@ -175,7 +175,17 @@ func (o *Info) GetPreviousRevision(ctx context.Context, c client.Client) (*appsv
 		return revisions[i].Revision > revisions[j].Revision
 	})
 
-	return revisions[len(revisions)-2], nil
+	if o.Status.StableRevision == o.Status.UpdatedRevision {
+		return revisions[len(revisions)-2], nil
+	} else {
+		for _, revision := range revisions {
+			if revision.Name == o.Status.StableRevision {
+				return revision, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no previous available controllerrevision found for workload %s/%s", o.Kind, o.Name)
 }
 
 func IsWaitingRollout(info Info) bool {

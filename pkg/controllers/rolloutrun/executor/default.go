@@ -70,7 +70,8 @@ func (r *Executor) lifecycle(executorContext *ExecutorContext) (done bool, resul
 		return false, result, nil
 	}
 
-	if rolloutRun.Spec.Rollback != nil && len(rolloutRun.Spec.Rollback.Batches) > 0 && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseRollbacking {
+	if rolloutRun.Spec.Rollback != nil && rolloutRun.DeletionTimestamp.IsZero() && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling &&
+	 len(rolloutRun.Spec.Rollback.Batches) > 0 && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseRollbacking {
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseRollbacking
 		return false, result, nil
 	}
