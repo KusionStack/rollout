@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -274,6 +275,92 @@ func (c *CanaryReleaseControl) applyCanaryDefaults(canaryObj client.Object) {
 	utils.MutateLabels(canaryObj, func(labels map[string]string) {
 		labels[rolloutapi.CanaryResourceLabelKey] = "true"
 	})
+}
+
+type RollbackReleaseControl struct {
+	workload workload.Accessor
+	control  workload.RollbackReleaseControl
+	client   client.Client
+}
+
+func NewRollbackReleaseControl(impl workload.Accessor, c client.Client) *RollbackReleaseControl {
+	return &RollbackReleaseControl{
+		workload: impl,
+		control:  impl.(workload.RollbackReleaseControl),
+		client:   c,
+	}
+}
+
+func (c *RollbackReleaseControl) Initialize(ctx context.Context, info *workload.Info, ownerKind, ownerName, rolloutRun string, batchIndex int32) error {
+	// pre-check
+	if !c.control.Rollbackable() {
+		return fmt.Errorf("workload is not support rollback")
+	}
+
+	if err := c.control.RollbackPreCheck(info.Object); err != nil {
+		return TerminalError(err)
+	}
+
+	// add progressing annotation
+	pInfo := rolloutv1alpha1.ProgressingInfo{
+		Kind:        ownerKind,
+		RolloutName: ownerName,
+		RolloutID:   rolloutRun,
+		Rollback: &rolloutv1alpha1.BatchProgressingInfo{
+			CurrentBatchIndex: batchIndex,
+		},
+	}
+	progress, _ := json.Marshal(pInfo)
+
+	_, err := info.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
+		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+			annotations[rolloutapi.AnnoRolloutProgressingInfo] = string(progress)
+		})
+		return nil
+	})
+
+	return err
+}
+
+func (c *RollbackReleaseControl) Revert(ctx context.Context, info *workload.Info) error {
+	// pre-check
+	if !c.control.Rollbackable() {
+		return fmt.Errorf("workload is not support rollback")
+	}
+
+	if err := c.control.RollbackPreCheck(info.Object); err != nil {
+		return TerminalError(err)
+	}
+
+	_, err := info.UpdateForRevisionOnConflict(ctx, c.client, func(obj client.Object, revison *appsv1.ControllerRevision) error {
+		return c.control.RevertRevision(obj, revison)
+	})
+
+	return err
+}
+
+func (c *RollbackReleaseControl) UpdatePartition(ctx context.Context, info *workload.Info, expectedUpdated int32) (bool, error) {
+	ctx = clusterinfo.WithCluster(ctx, info.ClusterName)
+	obj := info.Object
+	return utils.UpdateOnConflict(ctx, c.client, c.client, obj, func() error {
+		return c.control.ApplyPartition(obj, expectedUpdated)
+	})
+}
+
+func (c *RollbackReleaseControl) Finalize(ctx context.Context, info *workload.Info) error {
+	// delete progressing annotation
+	changed, err := info.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
+		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+			delete(annotations, rolloutapi.AnnoRolloutProgressingInfo)
+		})
+		return nil
+	})
+
+	if changed {
+		logger := logr.FromContextOrDiscard(ctx)
+		logger.Info("delete progressing info on workload", "name", info.Name, "gvk", info.GroupVersionKind.String())
+	}
+	return err
 }
 
 // TerminalError is an error that will not be retried but still be logged

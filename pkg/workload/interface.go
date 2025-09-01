@@ -17,6 +17,7 @@ package workload
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,6 +56,17 @@ type CanaryReleaseControl interface {
 	Scale(obj client.Object, replicas int32) error
 	// ApplyCanaryPatch applies canary to the workload.
 	ApplyCanaryPatch(canary client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error
+}
+
+type RollbackReleaseControl interface {
+	// Rollbackable indicates whether this workload type can be rollbacked.
+	Rollbackable() bool
+	// RollbackPreCheck checks object before rollback release.
+	RollbackPreCheck(obj client.Object) error
+	// Revert the workload revision to the stable.
+	RevertRevision(obj client.Object, revision *appsv1.ControllerRevision) error
+	// ApplyPartition use expectedUpdated replicas to calculate partition and apply it to the workload.
+	ApplyPartition(obj client.Object, expectedUpdatedReplicas int32) error
 }
 
 type ReplicaObjectControl interface {

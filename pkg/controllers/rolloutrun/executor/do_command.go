@@ -23,7 +23,11 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePausing
 	case rolloutapis.AnnoManualCommandResume, rolloutapis.AnnoManualCommandContinue: // nolint
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
-			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+			if rolloutRun.Spec.Rollback != nil && len(rolloutRun.Spec.Rollback.Batches) > 0 {
+				newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseRollbacking
+			} else {
+				newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+			}
 		}
 	case rolloutapis.AnnoManualCommandRetry:
 		if batchError != nil {

@@ -19,13 +19,15 @@ package executor
 import rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 
 const (
-	StepNone               = rolloutv1alpha1.RolloutStepNone
-	StepPending            = rolloutv1alpha1.RolloutStepPending
-	StepPreCanaryStepHook  = rolloutv1alpha1.RolloutStepPreCanaryStepHook
-	StepPreBatchStepHook   = rolloutv1alpha1.RolloutStepPreBatchStepHook
-	StepRunning            = rolloutv1alpha1.RolloutStepRunning
-	StepPostCanaryStepHook = rolloutv1alpha1.RolloutStepPostCanaryStepHook
-	StepPostBatchStepHook  = rolloutv1alpha1.RolloutStepPostBatchStepHook
-	StepSucceeded          = rolloutv1alpha1.RolloutStepSucceeded
-	StepResourceRecycling  = rolloutv1alpha1.RolloutStepResourceRecycling
+	StepNone                 = rolloutv1alpha1.RolloutStepNone
+	StepPending              = rolloutv1alpha1.RolloutStepPending
+	StepPreCanaryStepHook    = rolloutv1alpha1.RolloutStepPreCanaryStepHook
+	StepPreBatchStepHook     = rolloutv1alpha1.RolloutStepPreBatchStepHook
+	StepPreRollbackStepHook  = rolloutv1alpha1.RolloutStepPreRollbackStepHook
+	StepRunning              = rolloutv1alpha1.RolloutStepRunning
+	StepPostCanaryStepHook   = rolloutv1alpha1.RolloutStepPostCanaryStepHook
+	StepPostBatchStepHook    = rolloutv1alpha1.RolloutStepPostBatchStepHook
+	StepPostRollbackStepHook = rolloutv1alpha1.RolloutStepPostRollbackStepHook
+	StepSucceeded            = rolloutv1alpha1.RolloutStepSucceeded
+	StepResourceRecycling    = rolloutv1alpha1.RolloutStepResourceRecycling
 )

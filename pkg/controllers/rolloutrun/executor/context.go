@@ -86,6 +86,28 @@ func (c *ExecutorContext) Initialize() {
 				newStatus.BatchStatus.Records = newStatus.BatchStatus.Records[:specBatchSize]
 			}
 		}
+
+		// init RollbackStatus
+		if c.RolloutRun.Spec.Rollback != nil {
+			if newStatus.RollbackStatus == nil {
+				newStatus.RollbackStatus = &rolloutv1alpha1.RolloutRunBatchStatus{}
+			}
+			// resize records
+			specBatchSize := len(c.RolloutRun.Spec.Rollback.Batches)
+			statusBatchSize := len(newStatus.RollbackStatus.Records)
+			if specBatchSize > statusBatchSize {
+				for i := 0; i < specBatchSize-statusBatchSize; i++ {
+					newStatus.RollbackStatus.Records = append(newStatus.RollbackStatus.Records,
+						rolloutv1alpha1.RolloutRunStepStatus{
+							Index: ptr.To(int32(statusBatchSize + i)),
+							State: StepNone,
+						},
+					)
+				}
+			} else if specBatchSize < statusBatchSize {
+				newStatus.RollbackStatus.Records = newStatus.RollbackStatus.Records[:specBatchSize]
+			}
+		}
 	})
 }
 
@@ -109,6 +131,9 @@ func (c *ExecutorContext) GetWebhooksAndLatestStatusBy(hookType rolloutv1alpha1.
 	var webhookStatuses []rolloutv1alpha1.RolloutWebhookStatus
 	if c.inCanary() {
 		webhookStatuses = newStatus.CanaryStatus.Webhooks
+	} else if c.inRollback() {
+		index := newStatus.RollbackStatus.CurrentBatchIndex
+		webhookStatuses = newStatus.RollbackStatus.Records[index].Webhooks
 	} else {
 		index := newStatus.BatchStatus.CurrentBatchIndex
 		webhookStatuses = newStatus.BatchStatus.Records[index].Webhooks
@@ -129,6 +154,9 @@ func (c *ExecutorContext) SetWebhookStatus(status rolloutv1alpha1.RolloutWebhook
 	newStatus := c.NewStatus
 	if c.inCanary() {
 		newStatus.CanaryStatus.Webhooks = appendWebhookStatus(newStatus.CanaryStatus.Webhooks, status)
+	} else if c.inRollback() {
+		index := newStatus.RollbackStatus.CurrentBatchIndex
+		newStatus.RollbackStatus.Records[index].Webhooks = appendWebhookStatus(newStatus.RollbackStatus.Records[index].Webhooks, status)
 	} else {
 		index := newStatus.BatchStatus.CurrentBatchIndex
 		newStatus.BatchStatus.Records[index].Webhooks = appendWebhookStatus(newStatus.BatchStatus.Records[index].Webhooks, status)
@@ -142,6 +170,8 @@ func isFinalStepState(state rolloutv1alpha1.RolloutStepState) bool {
 func (c *ExecutorContext) GetCurrentState() (string, rolloutv1alpha1.RolloutStepState) {
 	if c.inCanary() {
 		return "canary", c.NewStatus.CanaryStatus.State
+	} else if c.inRollback() {
+		return "rollback", c.NewStatus.RollbackStatus.CurrentBatchState
 	} else {
 		return "batch", c.NewStatus.BatchStatus.CurrentBatchState
 	}
@@ -157,6 +187,15 @@ func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutStepS
 			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
 		} else if isFinalStepState(nextState) {
 			newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
+		}
+	} else if c.inRollback() {
+		index := newStatus.RollbackStatus.CurrentBatchIndex
+		newStatus.RollbackStatus.CurrentBatchState = nextState
+		newStatus.RollbackStatus.Records[index].State = nextState
+		if nextState == StepPreRollbackStepHook {
+			newStatus.RollbackStatus.Records[index].StartTime = ptr.To(metav1.Now())
+		} else if isFinalStepState(nextState) {
+			newStatus.RollbackStatus.Records[index].FinishTime = ptr.To(metav1.Now())
 		}
 	} else {
 		index := newStatus.BatchStatus.CurrentBatchIndex
@@ -180,6 +219,21 @@ func (c *ExecutorContext) SkipCurrentRelease() {
 			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
 		}
 		newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
+	} else if c.inRollback() {
+		newStatus.RollbackStatus.CurrentBatchIndex = int32(len(c.RolloutRun.Spec.Rollback.Batches) - 1)
+		newStatus.RollbackStatus.CurrentBatchState = StepSucceeded
+		for i := range newStatus.RollbackStatus.Records {
+			if newStatus.RollbackStatus.Records[i].State == StepNone ||
+				newStatus.RollbackStatus.Records[i].State == StepPending {
+				newStatus.RollbackStatus.Records[i].State = StepSucceeded
+			}
+			if newStatus.RollbackStatus.Records[i].StartTime == nil {
+				newStatus.RollbackStatus.Records[i].StartTime = ptr.To(metav1.Now())
+			}
+			if newStatus.RollbackStatus.Records[i].FinishTime == nil {
+				newStatus.RollbackStatus.Records[i].FinishTime = ptr.To(metav1.Now())
+			}
+		}
 	} else {
 		newStatus.BatchStatus.CurrentBatchIndex = int32(len(c.RolloutRun.Spec.Batch.Batches) - 1)
 		newStatus.BatchStatus.CurrentBatchState = StepSucceeded
@@ -258,6 +312,51 @@ func (r *ExecutorContext) inCanary() bool {
 	return false
 }
 
+func (r *ExecutorContext) inBatchGray() bool {
+	// todo: need to consider case of every batch gray
+	r.Initialize()
+	run := r.RolloutRun
+	newStatus := r.NewStatus
+	if newStatus.BatchStatus == nil {
+		return false
+	}
+
+	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
+	currentBatch := run.Spec.Batch.Batches[currentBatchIndex]
+	if currentBatch.Traffic == nil || int(currentBatchIndex+1) == len(run.Spec.Batch.Batches) {
+		return false
+	}
+
+	currentBatchState := newStatus.BatchStatus.CurrentBatchState
+	if !isFinalStepState(currentBatchState) {
+		return true
+	}
+
+	if int(currentBatchIndex+1) < len(run.Spec.Batch.Batches) {
+		nextBatch := run.Spec.Batch.Batches[currentBatchIndex+1]
+		if nextBatch.Traffic != nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *ExecutorContext) inRollback() bool {
+	r.Initialize()
+	run := r.RolloutRun
+	newStatus := r.NewStatus
+	if newStatus.RollbackStatus == nil {
+		return false
+	}
+	if run.Spec.Rollback != nil {
+		if newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseRollbacked {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *ExecutorContext) makeRolloutWebhookReview(hookType rolloutv1alpha1.HookType, webhook rolloutv1alpha1.RolloutWebhook) rolloutv1alpha1.RolloutWebhookReview {
 	r.Initialize()
 
@@ -283,6 +382,12 @@ func (r *ExecutorContext) makeRolloutWebhookReview(hookType rolloutv1alpha1.Hook
 		review.Spec.Canary = &rolloutv1alpha1.RolloutWebhookReviewCanary{
 			Targets:    rolloutRun.Spec.Canary.Targets,
 			Properties: rolloutRun.Spec.Canary.Properties,
+		}
+	} else if r.inRollback() {
+		review.Spec.Rollback = &rolloutv1alpha1.RolloutWebhookReviewBatch{
+			BatchIndex: newStatus.RollbackStatus.CurrentBatchIndex,
+			Targets:    rolloutRun.Spec.Rollback.Batches[newStatus.RollbackStatus.CurrentBatchIndex].Targets,
+			Properties: rolloutRun.Spec.Rollback.Batches[newStatus.RollbackStatus.CurrentBatchIndex].Properties,
 		}
 	} else {
 		review.Spec.Batch = &rolloutv1alpha1.RolloutWebhookReviewBatch{
@@ -321,4 +426,13 @@ func (e *ExecutorContext) GetBatchLogger() logr.Logger {
 
 func (e *ExecutorContext) GetCanaryLogger() logr.Logger {
 	return e.GetLogger().WithValues("step", "canary")
+}
+
+func (e *ExecutorContext) GetRollbackLogger() logr.Logger {
+	e.Initialize()
+	l := e.GetLogger().WithValues("step", "rollback")
+	if e.NewStatus != nil && e.NewStatus.RollbackStatus != nil {
+		l = l.WithValues("rollbackIndex", e.NewStatus.RollbackStatus.CurrentBatchIndex)
+	}
+	return l
 }

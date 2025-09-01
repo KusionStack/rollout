@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
@@ -125,6 +127,55 @@ func (o *Info) UpdateOnConflict(ctx context.Context, c client.Client, mutateFn f
 		o.Object = obj
 	}
 	return updated, nil
+}
+
+func (o *Info) UpdateForRevisionOnConflict(ctx context.Context, c client.Client, mutateFn func(client.Object, *appsv1.ControllerRevision) error) (bool, error) {
+	ctx = clusterinfo.WithCluster(ctx, o.ClusterName)
+	obj := o.Object
+	lastRevision, err := o.GetPreviousRevision(ctx, c)
+	if err != nil {
+		return false, err
+	}
+	updated, err := utils.UpdateOnConflict(ctx, c, c, obj, func() error {
+		return mutateFn(obj, lastRevision)
+	})
+	if err != nil {
+		return false, err
+	}
+	if updated {
+		o.Object = obj
+	}
+	return updated, nil
+}
+
+func (o *Info) GetPreviousRevision(ctx context.Context, c client.Client) (*appsv1.ControllerRevision, error) {
+	crs := &appsv1.ControllerRevisionList{}
+	err := c.List(clusterinfo.WithCluster(ctx, o.GetClusterName()), crs, &client.ListOptions{
+		Namespace: o.GetNamespace(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	revisions := make([]*appsv1.ControllerRevision, 0)
+	for _, revision := range crs.Items {
+		for _, owner := range revision.OwnerReferences {
+			if owner.Kind == o.Kind && owner.Name == o.Name {
+				revisions = append(revisions, &revision)
+				break
+			}
+		}
+	}
+
+	if len(revisions) < 2 {
+		return nil, fmt.Errorf("no previous available controllerrevision found for workload %s/%s", o.Kind, o.Name)
+	}
+
+	sort.Slice(revisions, func(i, j int) bool {
+		return revisions[i].Revision > revisions[j].Revision
+	})
+
+	return revisions[len(revisions)-2], nil
 }
 
 func IsWaitingRollout(info Info) bool {

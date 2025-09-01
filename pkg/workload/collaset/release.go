@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -29,8 +30,9 @@ import (
 )
 
 var (
-	_ workload.CanaryReleaseControl = &accessorImpl{}
-	_ workload.BatchReleaseControl  = &accessorImpl{}
+	_ workload.CanaryReleaseControl   = &accessorImpl{}
+	_ workload.BatchReleaseControl    = &accessorImpl{}
+	_ workload.RollbackReleaseControl = &accessorImpl{}
 )
 
 func (c *accessorImpl) BatchPreCheck(object client.Object) error {
@@ -92,6 +94,18 @@ func (c *accessorImpl) ApplyCanaryPatch(object client.Object, podTemplatePatch *
 		return err
 	}
 	applyPodTemplateMetadataPatch(obj, podTemplatePatch)
+	return nil
+}
+
+func (c *accessorImpl) Rollbackable() bool {
+	return false
+}
+
+func (c *accessorImpl) RollbackPreCheck(object client.Object) error {
+	return nil
+}
+
+func (c *accessorImpl) RevertRevision(object client.Object, revision *appsv1.ControllerRevision) error {
 	return nil
 }
 
