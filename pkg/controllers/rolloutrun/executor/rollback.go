@@ -152,6 +152,8 @@ func (e *rollbackExecutor) isSupported(ctx *ExecutorContext) bool {
 }
 
 func (e *rollbackExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, error) {
+	logger := ctx.GetRollbackLogger()
+	
 	rolloutRunName := ctx.RolloutRun.Name
 	newStatus := ctx.NewStatus
 	currentBatchIndex := newStatus.RollbackStatus.CurrentBatchIndex
@@ -171,6 +173,7 @@ func (e *rollbackExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration,
 	}
 
 	if ctx.RolloutRun.Spec.Rollback.Batches[currentBatchIndex].Breakpoint {
+		logger.Info("current batch has breakpoint, set status phase to Paused")
 		ctx.Pause()
 	}
 	return true, retryImmediately, nil
@@ -181,11 +184,7 @@ func (e *rollbackExecutor) doPreStepHook(ctx *ExecutorContext) (bool, time.Durat
 }
 
 func (e *rollbackExecutor) doPostStepHook(ctx *ExecutorContext) (bool, time.Duration, error) {
-	done, retry, err := e.webhook.Do(ctx, rolloutv1alpha1.PostRollbackStepHook)
-	if done {
-		ctx.Pause()
-	}
-	return done, retry, err
+	return e.webhook.Do(ctx, rolloutv1alpha1.PostRollbackStepHook)
 }
 
 // doBatchUpgrading process upgrading state

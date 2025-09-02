@@ -181,14 +181,7 @@ func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutStepS
 	c.Initialize()
 
 	newStatus := c.NewStatus
-	if c.inCanary() {
-		newStatus.CanaryStatus.State = nextState
-		if nextState == StepPreCanaryStepHook {
-			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
-		} else if isFinalStepState(nextState) {
-			newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
-		}
-	} else if c.inRollback() {
+	if c.inRollback() {
 		index := newStatus.RollbackStatus.CurrentBatchIndex
 		newStatus.RollbackStatus.CurrentBatchState = nextState
 		newStatus.RollbackStatus.Records[index].State = nextState
@@ -196,6 +189,13 @@ func (c *ExecutorContext) MoveToNextState(nextState rolloutv1alpha1.RolloutStepS
 			newStatus.RollbackStatus.Records[index].StartTime = ptr.To(metav1.Now())
 		} else if isFinalStepState(nextState) {
 			newStatus.RollbackStatus.Records[index].FinishTime = ptr.To(metav1.Now())
+		}
+	} else if c.inCanary() {
+		newStatus.CanaryStatus.State = nextState
+		if nextState == StepPreCanaryStepHook {
+			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
+		} else if isFinalStepState(nextState) {
+			newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
 		}
 	} else {
 		index := newStatus.BatchStatus.CurrentBatchIndex
