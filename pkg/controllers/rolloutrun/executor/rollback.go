@@ -96,9 +96,6 @@ func (e *rollbackExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Resu
 			return false, ctrl.Result{}, err
 		}
 
-		//mark rollout into rollback
-		ctx.RolloutRun.Annotations[rollout.AnnoRolloutPhaseRollbacking] = "true"
-
 		done, retry := e.deleteCanaryRoute(ctx)
 		if !done {
 			return false, ctrl.Result{RequeueAfter: retry}, nil
@@ -116,6 +113,9 @@ func (e *rollbackExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Resu
 				return false, result, err
 			}
 		}
+
+		//mark rollout into rollback
+		ctx.RolloutRun.Annotations[rollout.AnnoRolloutPhaseRollbacking] = "true"
 	}
 
 	stepDone, result, err := e.stateEngine.do(ctx, currentState)

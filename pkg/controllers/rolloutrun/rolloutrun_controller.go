@@ -138,6 +138,7 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	var result ctrl.Result
 	result, err = r.syncRolloutRun(ctx, obj, newStatus, accessor, workloads)
 
+	logger.Info("current rolloutrun annotations: ", obj.Annotations)
 	if tempErr := r.cleanupAnnotation(ctx, obj); tempErr != nil {
 		logger.Error(tempErr, "failed to clean up annotation")
 	}
