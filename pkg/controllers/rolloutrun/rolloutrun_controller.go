@@ -138,7 +138,14 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	var result ctrl.Result
 	result, err = r.syncRolloutRun(ctx, obj, newStatus, accessor, workloads)
 
-	logger.Info("current rolloutrun annotations", "rollbacking", utils.GetMapValueByDefault(obj.Annotations, rollout.AnnoRolloutPhaseRollbacking, "false"))
+	// add rollback annotations to mark rolloutrun entering rollbacking phase
+	rollback := utils.GetMapValueByDefault(obj.Annotations, rollout.AnnoRolloutPhaseRollbacking, "false")
+	if rollback == "true" {
+		if tempErr := r.addRollbackAnnotation(ctx, obj); tempErr != nil {
+			logger.Error(tempErr, "failed to add rollback annotation")
+		}
+	}
+
 	if tempErr := r.cleanupAnnotation(ctx, obj); tempErr != nil {
 		logger.Error(tempErr, "failed to clean up annotation")
 	}
@@ -188,6 +195,20 @@ func (r *RolloutRunReconciler) cleanupAnnotation(ctx context.Context, obj *rollo
 	// delete manual command annotations from rollout
 	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func() error {
 		delete(obj.Annotations, rollout.AnnoManualCommandKey)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	key := utils.ObjectKeyString(obj)
+	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
+	return nil
+}
+
+func (r *RolloutRunReconciler) addRollbackAnnotation(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) error {
+	// delete manual command annotations from rollout
+	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func() error {
+		obj.Annotations[rollout.AnnoRolloutPhaseRollbacking] = "true"
 		return nil
 	})
 	if err != nil {
