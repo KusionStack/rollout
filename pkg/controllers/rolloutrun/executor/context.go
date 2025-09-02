@@ -129,11 +129,11 @@ func (c *ExecutorContext) GetWebhooksAndLatestStatusBy(hookType rolloutv1alpha1.
 		return nil, nil
 	}
 	var webhookStatuses []rolloutv1alpha1.RolloutWebhookStatus
-	if c.inCanary() {
-		webhookStatuses = newStatus.CanaryStatus.Webhooks
-	} else if c.inRollback() {
+	if c.inRollback() {
 		index := newStatus.RollbackStatus.CurrentBatchIndex
 		webhookStatuses = newStatus.RollbackStatus.Records[index].Webhooks
+	} else if c.inCanary() {
+		webhookStatuses = newStatus.CanaryStatus.Webhooks
 	} else {
 		index := newStatus.BatchStatus.CurrentBatchIndex
 		webhookStatuses = newStatus.BatchStatus.Records[index].Webhooks
@@ -152,11 +152,11 @@ func (c *ExecutorContext) SetWebhookStatus(status rolloutv1alpha1.RolloutWebhook
 	c.Initialize()
 
 	newStatus := c.NewStatus
-	if c.inCanary() {
-		newStatus.CanaryStatus.Webhooks = appendWebhookStatus(newStatus.CanaryStatus.Webhooks, status)
-	} else if c.inRollback() {
+	if c.inRollback() {
 		index := newStatus.RollbackStatus.CurrentBatchIndex
 		newStatus.RollbackStatus.Records[index].Webhooks = appendWebhookStatus(newStatus.RollbackStatus.Records[index].Webhooks, status)
+	} else if c.inCanary() {
+		newStatus.CanaryStatus.Webhooks = appendWebhookStatus(newStatus.CanaryStatus.Webhooks, status)
 	} else {
 		index := newStatus.BatchStatus.CurrentBatchIndex
 		newStatus.BatchStatus.Records[index].Webhooks = appendWebhookStatus(newStatus.BatchStatus.Records[index].Webhooks, status)
@@ -168,10 +168,10 @@ func isFinalStepState(state rolloutv1alpha1.RolloutStepState) bool {
 }
 
 func (c *ExecutorContext) GetCurrentState() (string, rolloutv1alpha1.RolloutStepState) {
-	if c.inCanary() {
-		return "canary", c.NewStatus.CanaryStatus.State
-	} else if c.inRollback() {
+	if c.inRollback() {
 		return "rollback", c.NewStatus.RollbackStatus.CurrentBatchState
+	} else if c.inCanary() {
+		return "canary", c.NewStatus.CanaryStatus.State
 	} else {
 		return "batch", c.NewStatus.BatchStatus.CurrentBatchState
 	}
@@ -213,13 +213,7 @@ func (c *ExecutorContext) SkipCurrentRelease() {
 	c.Initialize()
 
 	newStatus := c.NewStatus
-	if c.inCanary() {
-		newStatus.CanaryStatus.State = StepSucceeded
-		if newStatus.CanaryStatus.StartTime == nil {
-			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
-		}
-		newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
-	} else if c.inRollback() {
+	if c.inRollback() {
 		newStatus.RollbackStatus.CurrentBatchIndex = int32(len(c.RolloutRun.Spec.Rollback.Batches) - 1)
 		newStatus.RollbackStatus.CurrentBatchState = StepSucceeded
 		for i := range newStatus.RollbackStatus.Records {
@@ -234,6 +228,12 @@ func (c *ExecutorContext) SkipCurrentRelease() {
 				newStatus.RollbackStatus.Records[i].FinishTime = ptr.To(metav1.Now())
 			}
 		}
+	} else if c.inCanary() {
+		newStatus.CanaryStatus.State = StepSucceeded
+		if newStatus.CanaryStatus.StartTime == nil {
+			newStatus.CanaryStatus.StartTime = ptr.To(metav1.Now())
+		}
+		newStatus.CanaryStatus.FinishTime = ptr.To(metav1.Now())
 	} else {
 		newStatus.BatchStatus.CurrentBatchIndex = int32(len(c.RolloutRun.Spec.Batch.Batches) - 1)
 		newStatus.BatchStatus.CurrentBatchState = StepSucceeded
@@ -378,16 +378,16 @@ func (r *ExecutorContext) makeRolloutWebhookReview(hookType rolloutv1alpha1.Hook
 		},
 	}
 
-	if r.inCanary() {
-		review.Spec.Canary = &rolloutv1alpha1.RolloutWebhookReviewCanary{
-			Targets:    rolloutRun.Spec.Canary.Targets,
-			Properties: rolloutRun.Spec.Canary.Properties,
-		}
-	} else if r.inRollback() {
+	if r.inRollback() {
 		review.Spec.Rollback = &rolloutv1alpha1.RolloutWebhookReviewBatch{
 			BatchIndex: newStatus.RollbackStatus.CurrentBatchIndex,
 			Targets:    rolloutRun.Spec.Rollback.Batches[newStatus.RollbackStatus.CurrentBatchIndex].Targets,
 			Properties: rolloutRun.Spec.Rollback.Batches[newStatus.RollbackStatus.CurrentBatchIndex].Properties,
+		}
+	} else if r.inCanary() {
+		review.Spec.Canary = &rolloutv1alpha1.RolloutWebhookReviewCanary{
+			Targets:    rolloutRun.Spec.Canary.Targets,
+			Properties: rolloutRun.Spec.Canary.Properties,
 		}
 	} else {
 		review.Spec.Batch = &rolloutv1alpha1.RolloutWebhookReviewBatch{

@@ -70,10 +70,19 @@ func (r *Executor) lifecycle(executorContext *ExecutorContext) (done bool, resul
 		return false, result, nil
 	}
 
-	if rolloutRun.Spec.Rollback != nil && rolloutRun.DeletionTimestamp.IsZero() && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling &&
-	 len(rolloutRun.Spec.Rollback.Batches) > 0 && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseRollbacking {
-		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseRollbacking
-		return false, result, nil
+	// determine whether to transit rolloutrun phase to rollbacking or not
+	if rolloutRun.Spec.Rollback != nil && len(rolloutRun.Spec.Rollback.Batches) > 0 && rolloutRun.DeletionTimestamp.IsZero() &&
+	 newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseRollbacking {
+		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
+			rollback, ok := utils.GetMapValue(rolloutRun.Annotations, rolloutapis.AnnoRolloutPhaseRollbacking)
+			if !ok || rollback != "true" {
+				newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseRollbacking
+				return false, result, nil
+			}
+		} else {
+			newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseRollbacking
+			return false, result, nil
+		}
 	}
 
 	switch newStatus.Phase {

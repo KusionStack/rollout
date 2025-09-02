@@ -22,6 +22,7 @@ import (
 
 	"github.com/go-logr/logr"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -95,6 +96,9 @@ func (e *rollbackExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Resu
 			return false, ctrl.Result{}, err
 		}
 
+		//mark rollout into rollback
+		ctx.RolloutRun.Annotations[rollout.AnnoRolloutPhaseRollbacking] = "true"
+
 		done, retry := e.deleteCanaryRoute(ctx)
 		if !done {
 			return false, ctrl.Result{RequeueAfter: retry}, nil
@@ -152,8 +156,6 @@ func (e *rollbackExecutor) isSupported(ctx *ExecutorContext) bool {
 }
 
 func (e *rollbackExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, error) {
-	logger := ctx.GetRollbackLogger()
-	
 	rolloutRunName := ctx.RolloutRun.Name
 	newStatus := ctx.NewStatus
 	currentBatchIndex := newStatus.RollbackStatus.CurrentBatchIndex
@@ -173,7 +175,6 @@ func (e *rollbackExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration,
 	}
 
 	if ctx.RolloutRun.Spec.Rollback.Batches[currentBatchIndex].Breakpoint {
-		logger.Info("current batch has breakpoint, set status phase to Paused")
 		ctx.Pause()
 	}
 	return true, retryImmediately, nil
