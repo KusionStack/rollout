@@ -20,10 +20,13 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -125,6 +128,51 @@ func (o *Info) UpdateOnConflict(ctx context.Context, c client.Client, mutateFn f
 		o.Object = obj
 	}
 	return updated, nil
+}
+
+func (o *Info) GetPreviousRevision(ctx context.Context, c client.Client, matchLabels map[string]string) (*appsv1.ControllerRevision, error) {
+	crs := &appsv1.ControllerRevisionList{}
+	err := c.List(clusterinfo.WithCluster(ctx, o.GetClusterName()), crs, &client.ListOptions{
+		Namespace:     o.GetNamespace(),
+		LabelSelector: labels.SelectorFromSet(matchLabels),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	revisions := make([]*appsv1.ControllerRevision, 0)
+	for _, revision := range crs.Items {
+		for _, owner := range revision.OwnerReferences {
+			if owner.Kind == o.Kind && owner.Name == o.Name {
+				revisions = append(revisions, &revision)
+				break
+			}
+		}
+	}
+
+	if len(revisions) < 2 {
+		return nil, fmt.Errorf("no previous available controllerrevision found for workload %s/%s", o.Kind, o.Name)
+	}
+
+	sort.Slice(revisions, func(i, j int) bool {
+		return revisions[i].Revision > revisions[j].Revision
+	})
+
+	for idx, revision := range revisions {
+		if revision.Name == o.Status.StableRevision {
+			if o.Status.StableRevision != o.Status.UpdatedRevision {
+				return revision, nil
+			} else {
+				if idx+1 > len(revisions)-1 {
+					return nil, fmt.Errorf("no previous available controllerrevision found for workload %s/%s", o.Kind, o.Name)
+				} else {
+					return revisions[idx+1], nil
+				}
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no previous available controllerrevision found for workload %s/%s", o.Kind, o.Name)
 }
 
 func IsWaitingRollout(info Info) bool {

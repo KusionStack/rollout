@@ -270,10 +270,22 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 			rolloutv1alpha1.RolloutReasonProgressingCompleted,
 			"rolloutRun is completed",
 		)
-		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseCanceled {
-			newCondition.Reason = rolloutv1alpha1.RolloutReasonProgressingCanceled
-			newCondition.Message = "rolloutRun is canceled"
-		}
+		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
+	} else if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseCanceled {
+		newCondition := condition.NewCondition(
+			rolloutv1alpha1.RolloutConditionProgressing,
+			metav1.ConditionFalse,
+			rolloutv1alpha1.RolloutReasonProgressingCanceled,
+			"rolloutRun is canceled",
+		)
+		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
+	} else if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseRollbacked {
+		newCondition := condition.NewCondition(
+			rolloutv1alpha1.RolloutConditionProgressing,
+			metav1.ConditionFalse,
+			rolloutv1alpha1.RolloutReasonProgressingRollbacked,
+			"rolloutRun is rollbacked",
+		)
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
 	} else if newStatus.Error != nil {
 		newCondition := condition.NewCondition(
@@ -283,7 +295,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 			"rolloutRun stop rolling since error exist",
 		)
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
-	} else {
+	} else if obj.Spec.Rollback == nil || len(obj.Spec.Rollback.Batches) == 0 {
 		newCondition := condition.NewCondition(
 			rolloutv1alpha1.RolloutConditionProgressing,
 			metav1.ConditionTrue,

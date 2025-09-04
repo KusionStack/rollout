@@ -57,6 +57,17 @@ type CanaryReleaseControl interface {
 	ApplyCanaryPatch(canary client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error
 }
 
+type RollbackReleaseControl interface {
+	// Rollbackable indicates whether this workload type can be rollbacked.
+	Rollbackable() bool
+	// RollbackPreCheck checks object before rollback release.
+	RollbackPreCheck(obj client.Object) error
+	// Revert the workload revision to the stable.
+	RevertRevision(ctx context.Context, c client.Client, obj client.Object) error
+	// ApplyPartition use expectedUpdated replicas to calculate partition and apply it to the workload.
+	ApplyPartition(obj client.Object, expectedUpdatedReplicas int32) error
+}
+
 type ReplicaObjectControl interface {
 	// RepliceType returns the type of replica object
 	ReplicaType() schema.GroupVersionKind

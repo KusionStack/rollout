@@ -17,10 +17,13 @@
 package statefulset
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,8 +32,9 @@ import (
 )
 
 var (
-	_ workload.CanaryReleaseControl = &accessorImpl{}
-	_ workload.BatchReleaseControl  = &accessorImpl{}
+	_ workload.CanaryReleaseControl   = &accessorImpl{}
+	_ workload.BatchReleaseControl    = &accessorImpl{}
+	_ workload.RollbackReleaseControl = &accessorImpl{}
 )
 
 func (c *accessorImpl) BatchPreCheck(object client.Object) error {
@@ -91,6 +95,49 @@ func (c *accessorImpl) ApplyCanaryPatch(object client.Object, podTemplatePatch *
 		return err
 	}
 	applyPodTemplateMetadataPatch(obj, podTemplatePatch)
+	return nil
+}
+
+func (c *accessorImpl) Rollbackable() bool {
+	return true
+}
+
+func (c *accessorImpl) RollbackPreCheck(object client.Object) error {
+	obj, err := checkObj(object)
+	if err != nil {
+		return err
+	}
+	if obj.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {
+		return fmt.Errorf("rollout can not upgrade partition of StatefulSet in rollback if the upgrade strategy type is not RollingUpdate")
+	}
+	return nil
+}
+
+func (c *accessorImpl) RevertRevision(ctx context.Context, cc client.Client, object client.Object) error {
+	obj, err := checkObj(object)
+	if err != nil {
+		return err
+	}
+
+	workloadInfo := workload.NewInfo(workload.GetClusterFromLabel(obj.GetLabels()), GVK, obj, c.getStatus(obj))
+	lastRevision, err := workloadInfo.GetPreviousRevision(ctx, cc, nil)
+	if err != nil {
+		return err
+	}
+
+	var oldTemplate corev1.PodTemplateSpec
+	if err := json.Unmarshal(lastRevision.Data.Raw, &oldTemplate); err != nil {
+		return fmt.Errorf("failed to unmarshal old statefulset template: %w", err)
+	}
+
+	// 更新 StatefulSet.spec.template
+	obj.Spec.Template = oldTemplate
+
+	// partition设置为副本数
+	obj.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
+		Partition: obj.Spec.Replicas,
+	}
+
 	return nil
 }
 

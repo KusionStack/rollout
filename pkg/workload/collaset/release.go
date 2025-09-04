@@ -17,6 +17,7 @@
 package collaset
 
 import (
+	"context"
 	"fmt"
 	"maps"
 
@@ -29,8 +30,9 @@ import (
 )
 
 var (
-	_ workload.CanaryReleaseControl = &accessorImpl{}
-	_ workload.BatchReleaseControl  = &accessorImpl{}
+	_ workload.CanaryReleaseControl   = &accessorImpl{}
+	_ workload.BatchReleaseControl    = &accessorImpl{}
+	_ workload.RollbackReleaseControl = &accessorImpl{}
 )
 
 func (c *accessorImpl) BatchPreCheck(object client.Object) error {
@@ -92,6 +94,18 @@ func (c *accessorImpl) ApplyCanaryPatch(object client.Object, podTemplatePatch *
 		return err
 	}
 	applyPodTemplateMetadataPatch(obj, podTemplatePatch)
+	return nil
+}
+
+func (c *accessorImpl) Rollbackable() bool {
+	return false
+}
+
+func (c *accessorImpl) RollbackPreCheck(object client.Object) error {
+	return nil
+}
+
+func (c *accessorImpl) RevertRevision(ctx context.Context, cc client.Client, object client.Object) error {
 	return nil
 }
 

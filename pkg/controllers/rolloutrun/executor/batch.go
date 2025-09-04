@@ -221,7 +221,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		allWorkloadReady = false
 		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference)
 
-		expectedReplicas, err := e.calculateExpectedReplicasBySlidingWindow(status, currentBatchExpectedReplicas, item.ReplicaSlidingWindow)
+		expectedReplicas, err := calculateExpectedReplicasBySlidingWindow(status, currentBatchExpectedReplicas, item.ReplicaSlidingWindow)
 		if err != nil {
 			return false, retryStop, err
 		}
@@ -250,7 +250,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 // calculateExpectedReplicasBySlidingWindow calculate expected replicas by sliding window
 // if window is nil, return currentBatchExpectedReplicas
 // if window is not nil, return min(currentBatchExpectedReplicas, updatedAvailableReplicas + increment)
-func (e *batchExecutor) calculateExpectedReplicasBySlidingWindow(status rolloutv1alpha1.RolloutWorkloadStatus, currentBatchExpectedReplicas int32, window *intstr.IntOrString) (int32, error) {
+func calculateExpectedReplicasBySlidingWindow(status rolloutv1alpha1.RolloutWorkloadStatus, currentBatchExpectedReplicas int32, window *intstr.IntOrString) (int32, error) {
 	if window == nil {
 		return currentBatchExpectedReplicas, nil
 	}
