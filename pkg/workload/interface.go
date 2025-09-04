@@ -17,7 +17,6 @@ package workload
 import (
 	"context"
 
-	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,7 +63,7 @@ type RollbackReleaseControl interface {
 	// RollbackPreCheck checks object before rollback release.
 	RollbackPreCheck(obj client.Object) error
 	// Revert the workload revision to the stable.
-	RevertRevision(obj client.Object, revision *appsv1.ControllerRevision) error
+	RevertRevision(ctx context.Context, c client.Client, obj client.Object) error
 	// ApplyPartition use expectedUpdated replicas to calculate partition and apply it to the workload.
 	ApplyPartition(obj client.Object, expectedUpdatedReplicas int32) error
 }

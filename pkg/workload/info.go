@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -129,29 +130,11 @@ func (o *Info) UpdateOnConflict(ctx context.Context, c client.Client, mutateFn f
 	return updated, nil
 }
 
-func (o *Info) UpdateForRevisionOnConflict(ctx context.Context, c client.Client, mutateFn func(client.Object, *appsv1.ControllerRevision) error) (bool, error) {
-	ctx = clusterinfo.WithCluster(ctx, o.ClusterName)
-	obj := o.Object
-	lastRevision, err := o.GetPreviousRevision(ctx, c)
-	if err != nil {
-		return false, err
-	}
-	updated, err := utils.UpdateOnConflict(ctx, c, c, obj, func() error {
-		return mutateFn(obj, lastRevision)
-	})
-	if err != nil {
-		return false, err
-	}
-	if updated {
-		o.Object = obj
-	}
-	return updated, nil
-}
-
-func (o *Info) GetPreviousRevision(ctx context.Context, c client.Client) (*appsv1.ControllerRevision, error) {
+func (o *Info) GetPreviousRevision(ctx context.Context, c client.Client, matchLabels map[string]string) (*appsv1.ControllerRevision, error) {
 	crs := &appsv1.ControllerRevisionList{}
 	err := c.List(clusterinfo.WithCluster(ctx, o.GetClusterName()), crs, &client.ListOptions{
-		Namespace: o.GetNamespace(),
+		Namespace:     o.GetNamespace(),
+		LabelSelector: labels.SelectorFromSet(matchLabels),
 	})
 	if err != nil {
 		return nil, err
@@ -175,12 +158,16 @@ func (o *Info) GetPreviousRevision(ctx context.Context, c client.Client) (*appsv
 		return revisions[i].Revision > revisions[j].Revision
 	})
 
-	if o.Status.StableRevision == o.Status.UpdatedRevision {
-		return revisions[len(revisions)-2], nil
-	} else {
-		for _, revision := range revisions {
-			if revision.Name == o.Status.StableRevision {
+	for idx, revision := range revisions {
+		if revision.Name == o.Status.StableRevision {
+			if o.Status.StableRevision != o.Status.UpdatedRevision {
 				return revision, nil
+			} else {
+				if idx+1 > len(revisions)-1 {
+					return nil, fmt.Errorf("no previous available controllerrevision found for workload %s/%s", o.Kind, o.Name)
+				} else {
+					return revisions[idx+1], nil
+				}
 			}
 		}
 	}

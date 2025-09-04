@@ -17,10 +17,10 @@
 package collaset
 
 import (
+	"context"
 	"fmt"
 	"maps"
 
-	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/utils/ptr"
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -105,7 +105,7 @@ func (c *accessorImpl) RollbackPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *accessorImpl) RevertRevision(object client.Object, revision *appsv1.ControllerRevision) error {
+func (c *accessorImpl) RevertRevision(ctx context.Context, cc client.Client, object client.Object) error {
 	return nil
 }
 

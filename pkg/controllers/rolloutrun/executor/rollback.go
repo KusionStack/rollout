@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	"kusionstack.io/kube-api/rollout/v1alpha1/condition"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -85,25 +86,41 @@ func (e *rollbackExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Resu
 		return true, ctrl.Result{Requeue: true}, nil
 	}
 
+	logger := ctx.GetRollbackLogger()
 	newStatus := ctx.NewStatus
 	currentBatchIndex := newStatus.RollbackStatus.CurrentBatchIndex
 	currentState := newStatus.RollbackStatus.CurrentBatchState
 
 	// revert workload version and reset canary route before rollback stateEngine start
 	if currentBatchIndex == 0 && currentState == StepNone {
+		// revert revision
 		done, err := e.revert(ctx)
 		if !done {
+			logger.Error(err, "revert workload revision failed")
 			return false, ctrl.Result{}, err
 		}
+		// modify condition reason to rollbacking for progressing condition type after reverting revision, to prevent repeated revision reverting in each reconcile
+		newCondition := condition.NewCondition(
+			rolloutv1alpha1.RolloutConditionProgressing,
+			metav1.ConditionTrue,
+			rolloutv1alpha1.RolloutReasonProgressingRollbacking,
+			"rolloutRun is rollbacking",
+		)
+		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
 
+		// delete canary route
 		done, retry := e.deleteCanaryRoute(ctx)
 		if !done {
 			return false, ctrl.Result{RequeueAfter: retry}, nil
 		}
 
+		// if in canary release, recycle canary resource before rollback batch progress
 		if ctx.inCanary() {
 			done, retry, err = e.recycle(ctx)
 			if !done {
+				if err != nil {
+					logger.Error(err, "recyle canary resource in canary batch failed")
+				}
 				switch retry {
 				case retryStop:
 					result = ctrl.Result{}
@@ -113,9 +130,6 @@ func (e *rollbackExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Resu
 				return false, result, err
 			}
 		}
-
-		//mark rollout into rollback
-		ctx.RolloutRun.Annotations[rollout.AnnoRolloutPhaseRollbacking] = "true"
 	}
 
 	stepDone, result, err := e.stateEngine.do(ctx, currentState)
@@ -133,8 +147,10 @@ func (e *rollbackExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Resu
 		return false, result, nil
 	}
 
+	// recyle cananry resource after rollback batch progress
 	recycleDone, retry := e.recyleCanaryResource(ctx)
 	if !recycleDone {
+		logger.Info("recyle canary resource after rollbacking failed, retry later", "rolloutrun", ctx.RolloutRun.Name)
 		return false, ctrl.Result{RequeueAfter: retry}, nil
 	}
 
@@ -250,6 +266,11 @@ func (e *rollbackExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Du
 
 func (e *rollbackExecutor) revert(ctx *ExecutorContext) (bool, error) {
 	newStatus := ctx.NewStatus
+	progressingCond := condition.GetCondition(ctx.RolloutRun.Status.Conditions, rolloutv1alpha1.RolloutConditionProgressing)
+	if progressingCond != nil && progressingCond.Reason == rolloutv1alpha1.RolloutReasonProgressingRollbacking {
+		return true, nil
+	}
+
 	currentBatchIndex := newStatus.RollbackStatus.CurrentBatchIndex
 	currentBatch := ctx.RolloutRun.Spec.Rollback.Batches[currentBatchIndex]
 

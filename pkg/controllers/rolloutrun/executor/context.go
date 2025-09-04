@@ -349,7 +349,7 @@ func (r *ExecutorContext) inRollback() bool {
 	if newStatus.RollbackStatus == nil {
 		return false
 	}
-	if run.Spec.Rollback != nil {
+	if run.Spec.Rollback != nil && len(run.Spec.Rollback.Batches) > 0 {
 		if newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseRollbacked {
 			return true
 		}

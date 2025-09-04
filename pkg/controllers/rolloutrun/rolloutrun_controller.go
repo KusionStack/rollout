@@ -138,14 +138,6 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	var result ctrl.Result
 	result, err = r.syncRolloutRun(ctx, obj, newStatus, accessor, workloads)
 
-	// add rollback annotations to mark rolloutrun entering rollbacking phase
-	rollback := utils.GetMapValueByDefault(obj.Annotations, rollout.AnnoRolloutPhaseRollbacking, "false")
-	if rollback == "true" {
-		if tempErr := r.addRollbackAnnotation(ctx, obj); tempErr != nil {
-			logger.Error(tempErr, "failed to add rollback annotation")
-		}
-	}
-
 	if tempErr := r.cleanupAnnotation(ctx, obj); tempErr != nil {
 		logger.Error(tempErr, "failed to clean up annotation")
 	}
@@ -195,20 +187,6 @@ func (r *RolloutRunReconciler) cleanupAnnotation(ctx context.Context, obj *rollo
 	// delete manual command annotations from rollout
 	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func() error {
 		delete(obj.Annotations, rollout.AnnoManualCommandKey)
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	key := utils.ObjectKeyString(obj)
-	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
-	return nil
-}
-
-func (r *RolloutRunReconciler) addRollbackAnnotation(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) error {
-	// delete manual command annotations from rollout
-	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func() error {
-		obj.Annotations[rollout.AnnoRolloutPhaseRollbacking] = "true"
 		return nil
 	})
 	if err != nil {
@@ -292,10 +270,22 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 			rolloutv1alpha1.RolloutReasonProgressingCompleted,
 			"rolloutRun is completed",
 		)
-		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseCanceled {
-			newCondition.Reason = rolloutv1alpha1.RolloutReasonProgressingCanceled
-			newCondition.Message = "rolloutRun is canceled"
-		}
+		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
+	} else if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseCanceled {
+		newCondition := condition.NewCondition(
+			rolloutv1alpha1.RolloutConditionProgressing,
+			metav1.ConditionFalse,
+			rolloutv1alpha1.RolloutReasonProgressingCanceled,
+			"rolloutRun is canceled",
+		)
+		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
+	} else if newStatus.Phase == rolloutv1alpha1.RolloutRunPhaseRollbacked {
+		newCondition := condition.NewCondition(
+			rolloutv1alpha1.RolloutConditionProgressing,
+			metav1.ConditionFalse,
+			rolloutv1alpha1.RolloutReasonProgressingRollbacked,
+			"rolloutRun is rollbacked",
+		)
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
 	} else if newStatus.Error != nil {
 		newCondition := condition.NewCondition(
@@ -305,7 +295,7 @@ func (r *RolloutRunReconciler) syncRolloutRun(
 			"rolloutRun stop rolling since error exist",
 		)
 		newStatus.Conditions = condition.SetCondition(newStatus.Conditions, *newCondition)
-	} else {
+	} else if obj.Spec.Rollback == nil || len(obj.Spec.Rollback.Batches) == 0 {
 		newCondition := condition.NewCondition(
 			rolloutv1alpha1.RolloutConditionProgressing,
 			metav1.ConditionTrue,

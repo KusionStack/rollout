@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -332,8 +331,8 @@ func (c *RollbackReleaseControl) Revert(ctx context.Context, info *workload.Info
 		return TerminalError(err)
 	}
 
-	_, err := info.UpdateForRevisionOnConflict(ctx, c.client, func(obj client.Object, revison *appsv1.ControllerRevision) error {
-		return c.control.RevertRevision(obj, revison)
+	_, err := info.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
+		return c.control.RevertRevision(ctx, c.client, obj)
 	})
 
 	return err

@@ -6,6 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	rolloutapis "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	"kusionstack.io/kube-api/rollout/v1alpha1/condition"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"kusionstack.io/rollout/pkg/utils"
@@ -72,10 +73,10 @@ func (r *Executor) lifecycle(executorContext *ExecutorContext) (done bool, resul
 
 	// determine whether to transit rolloutrun phase to rollbacking or not
 	if rolloutRun.Spec.Rollback != nil && len(rolloutRun.Spec.Rollback.Batches) > 0 && rolloutRun.DeletionTimestamp.IsZero() &&
-	 newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseRollbacking {
+		newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseCanceling && newStatus.Phase != rolloutv1alpha1.RolloutRunPhaseRollbacking {
 		if newStatus.Phase == rolloutv1alpha1.RolloutRunPhasePaused {
-			rollback, ok := utils.GetMapValue(rolloutRun.Annotations, rolloutapis.AnnoRolloutPhaseRollbacking)
-			if !ok || rollback != "true" {
+			progressingCond := condition.GetCondition(rolloutRun.Status.Conditions, rolloutv1alpha1.RolloutConditionProgressing)
+			if progressingCond == nil || progressingCond.Reason != rolloutv1alpha1.RolloutReasonProgressingRollbacking {
 				newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseRollbacking
 				return false, result, nil
 			}
@@ -173,19 +174,19 @@ func (r *Executor) doCanceling(ctx *ExecutorContext) (bool, ctrl.Result, error) 
 	rolloutRun := ctx.RolloutRun
 	newStatus := ctx.NewStatus
 
+	if ctx.inRollback() {
+		// init RollbackStatus
+		if len(newStatus.RollbackStatus.CurrentBatchState) == 0 {
+			newStatus.RollbackStatus.CurrentBatchState = StepNone
+		}
+		return r.rollback.Cancel(ctx)
+	}
 	if ctx.inCanary() {
 		canceled, result, err := r.canary.Cancel(ctx)
 		if err != nil {
 			return false, result, err
 		}
 		return canceled, result, nil
-	}
-	if rolloutRun.Spec.Rollback != nil && len(rolloutRun.Spec.Rollback.Batches) > 0 {
-		// init RollbackStatus
-		if len(newStatus.RollbackStatus.CurrentBatchState) == 0 {
-			newStatus.RollbackStatus.CurrentBatchState = StepNone
-		}
-		return r.rollback.Cancel(ctx)
 	}
 	if rolloutRun.Spec.Batch != nil && len(rolloutRun.Spec.Batch.Batches) > 0 {
 		// init BatchStatus

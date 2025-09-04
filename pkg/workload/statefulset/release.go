@@ -17,6 +17,7 @@
 package statefulset
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -112,14 +113,20 @@ func (c *accessorImpl) RollbackPreCheck(object client.Object) error {
 	return nil
 }
 
-func (c *accessorImpl) RevertRevision(object client.Object, revision *appsv1.ControllerRevision) error {
+func (c *accessorImpl) RevertRevision(ctx context.Context, cc client.Client, object client.Object) error {
 	obj, err := checkObj(object)
 	if err != nil {
 		return err
 	}
 
+	workloadInfo := workload.NewInfo(workload.GetClusterFromLabel(obj.GetLabels()), GVK, obj, c.getStatus(obj))
+	lastRevision, err := workloadInfo.GetPreviousRevision(ctx, cc, nil)
+	if err != nil {
+		return err
+	}
+
 	var oldTemplate corev1.PodTemplateSpec
-	if err := json.Unmarshal(revision.Data.Raw, &oldTemplate); err != nil {
+	if err := json.Unmarshal(lastRevision.Data.Raw, &oldTemplate); err != nil {
 		return fmt.Errorf("failed to unmarshal old statefulset template: %w", err)
 	}
 
@@ -127,11 +134,8 @@ func (c *accessorImpl) RevertRevision(object client.Object, revision *appsv1.Con
 	obj.Spec.Template = oldTemplate
 
 	// partition设置为副本数
-	obj.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
-		Type: appsv1.RollingUpdateStatefulSetStrategyType,
-		RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
-			Partition: obj.Spec.Replicas,
-		},
+	obj.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
+		Partition: obj.Spec.Replicas,
 	}
 
 	return nil
