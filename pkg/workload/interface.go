@@ -65,3 +65,13 @@ type ReplicaObjectControl interface {
 	// GetReplicObjects gets the pod selector of the workload
 	GetReplicObjects(ctx context.Context, reader client.Reader, workload client.Object) ([]client.Object, error)
 }
+
+// BatchScaleControl defines the control functions for workload batch scale
+type BatchScaleControl interface {
+	// BatchPreCheck checks object before batch scale.
+	ScalePreCheck(obj client.Object) error
+	// ApplyReplicas use updatedReplicas to update replicas of the workload.
+	ApplyReplicas(obj client.Object, updatedReplicas int32) error
+	// ApplyMultipleReplicas use updatedReplicas to update replicas of different groups in workload.
+	ApplyMultipleReplicas(obj client.Object, updatedReplicas []v1alpha1.MultipleReplia) error
+}
