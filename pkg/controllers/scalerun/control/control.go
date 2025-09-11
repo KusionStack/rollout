@@ -53,6 +53,7 @@ func (c *BatchScaleControl) Initialize(ctx context.Context, info *workload.Info,
 
 	// add progressing annotation
 	pInfo := rolloutv1alpha1.ProgressingInfo{
+		Kind: "RollingScale",
 		RolloutID: scaleRun,
 		Batch: &rolloutv1alpha1.BatchProgressingInfo{
 			CurrentBatchIndex: batchIndex,
