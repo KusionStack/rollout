@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -216,16 +217,28 @@ func (r *ExecutorContext) makeRolloutWebhookReview(hookType rolloutv1alpha1.Hook
 			Name:      webhook.Name,
 		},
 		Spec: rolloutv1alpha1.RolloutWebhookReviewSpec{
-			RolloutID:   scaleRun.Name,
-			HookType:    hookType,
-			Properties:  webhook.Properties,
-			TargetType:  scaleRun.Spec.TargetType,
+			RolloutID:  scaleRun.Name,
+			HookType:   hookType,
+			Properties: webhook.Properties,
+			TargetType: scaleRun.Spec.TargetType,
 		},
 	}
 
-	review.Spec.Scale = &rolloutv1alpha1.ScaleWebhookReviewBatch{
+	scaleTargets := scaleRun.Spec.Batch.Batches[newStatus.Batches.CurrentBatchIndex].Targets
+	targets := make([]rolloutv1alpha1.RolloutRunStepTarget, len(scaleTargets))
+	for _, target := range scaleTargets {
+		targets = append(targets, rolloutv1alpha1.RolloutRunStepTarget{
+			CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+				Cluster: target.Cluster,
+				Name:    target.Name,
+			},
+			Replicas: intstr.FromInt(int(target.Replicas)),
+		})
+	}
+
+	review.Spec.Batch = &rolloutv1alpha1.RolloutWebhookReviewBatch{
 		BatchIndex: newStatus.Batches.CurrentBatchIndex,
-		Targets:    scaleRun.Spec.Batch.Batches[newStatus.Batches.CurrentBatchIndex].Targets,
+		Targets:    targets,
 		Properties: scaleRun.Spec.Batch.Batches[newStatus.Batches.CurrentBatchIndex].Properties,
 	}
 

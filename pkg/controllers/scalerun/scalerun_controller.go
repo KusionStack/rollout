@@ -137,7 +137,7 @@ func (r *ScaleRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Error(tempErr, "failed to clean up scalerun annotation")
 	}
 
-	updateStatus := r.updateStatusOnly(ctx, obj, newStatus, workloads)
+	updateStatus := r.updateStatusOnly(ctx, obj, newStatus)
 	if updateStatus != nil {
 		logger.Error(updateStatus, "failed to update scalerun status")
 		return reconcile.Result{}, updateStatus
@@ -278,7 +278,7 @@ func (r *ScaleRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj 
 	return accessor, workload.NewSet(list...), nil
 }
 
-func (r *ScaleRunReconciler) updateStatusOnly(ctx context.Context, obj *rolloutv1alpha1.ScaleRun, newStatus *rolloutv1alpha1.ScaleRunStatus, workloads *workload.Set) error {
+func (r *ScaleRunReconciler) updateStatusOnly(ctx context.Context, obj *rolloutv1alpha1.ScaleRun, newStatus *rolloutv1alpha1.ScaleRunStatus) error {
 	if equality.Semantic.DeepEqual(obj.Status, *newStatus) {
 		// no change
 		return nil
