@@ -414,7 +414,7 @@ func (r *RolloutReconciler) syncRun(
 		}
 		// apply one time strategy
 		if features.DefaultFeatureGate.Enabled(features.OneTimeStrategy) {
-			err := r.applyOneTimeStrategy(obj, curRun, workloads, newStatus)
+			err := r.applyOneTimeStrategy(ctx, obj, curRun, workloads, newStatus)
 			if err != nil {
 				return err
 			}
@@ -440,7 +440,7 @@ func (r *RolloutReconciler) syncRun(
 	//       that the creation event comes so fast that we don't have time to set it
 	r.expectation.ExpectCreations(key, 1) // nolint
 
-	if err := r.Client.Create(clusterinfo.ContextFed, curRun); err != nil {
+	if err := r.Client.Create(clusterinfo.WithCluster(ctx, clusterinfo.Fed), curRun); err != nil {
 		r.expectation.DeleteExpectations(key)
 		// do not change status phase here if rolloutRun is not created
 		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedCreate", fmt.Sprintf("failed to create a new rolloutRun %s: %v", curRun.Name, err))
@@ -647,7 +647,7 @@ func (r *RolloutReconciler) cleanupAnnotation(ctx context.Context, obj *rolloutv
 	return nil
 }
 
-func (r *RolloutReconciler) applyOneTimeStrategy(obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
+func (r *RolloutReconciler) applyOneTimeStrategy(ctx context.Context, obj *rolloutv1alpha1.Rollout, run *rolloutv1alpha1.RolloutRun, workloads []*workload.Info, newStatus *rolloutv1alpha1.RolloutStatus) error {
 	if run == nil || run.IsCompleted() {
 		return nil
 	}
@@ -681,7 +681,7 @@ func (r *RolloutReconciler) applyOneTimeStrategy(obj *rolloutv1alpha1.Rollout, r
 	}
 
 	// update rolloutRun
-	_, err = utils.UpdateOnConflict(clusterinfo.ContextFed, r.Client, r.Client, run, func() error {
+	_, err = utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, run, func() error {
 		if run.Annotations == nil {
 			run.Annotations = make(map[string]string)
 		}
