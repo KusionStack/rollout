@@ -209,17 +209,17 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		needApplyReplicas := true
+		needApplyReplicas := false
 
 		workloadStatus := info.ScaleWorkloadStatus()
 		currentWorkloadStatus := e.findCurrentWorkloadStatus(currentBatchWorkloadStatus, item.Cluster, item.Name)
 		if currentWorkloadStatus == nil {
 			workloadStatus.ScaleFrom = info.Status.Replicas
 			workloadStatus.ScaleTo = item.Replicas
+			needApplyReplicas = true
 		} else {
 			workloadStatus.ScaleFrom = currentWorkloadStatus.ScaleFrom
 			workloadStatus.ScaleTo = currentWorkloadStatus.ScaleTo
-			needApplyReplicas = info.Status.Replicas != item.Replicas
 		}
 		batchTargetStatuses = append(batchTargetStatuses, workloadStatus)
 
