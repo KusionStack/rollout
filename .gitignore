@@ -29,5 +29,3 @@ go.work.sum
 .idea
 .vscode
 .DS_Store
-
-vendor
