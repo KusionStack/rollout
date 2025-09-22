@@ -26,6 +26,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/control"
+	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -180,7 +181,7 @@ func (e *batchExecutor) doPostStepHook(ctx *ExecutorContext) (bool, time.Duratio
 }
 
 func newWorkloadNotFoundError(ref rolloutv1alpha1.CrossClusterObjectNameReference) error {
-	return control.TerminalError(&rolloutv1alpha1.CodeReasonMessage{
+	return utils.TerminalError(&rolloutv1alpha1.CodeReasonMessage{
 		Code:    "WorkloadNotFound",
 		Reason:  "WorkloadNotFound",
 		Message: fmt.Sprintf("workload (%s) not found ", ref.String()),

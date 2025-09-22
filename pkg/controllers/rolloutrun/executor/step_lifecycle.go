@@ -26,7 +26,7 @@ import (
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"kusionstack.io/rollout/pkg/controllers/rolloutrun/control"
+	"kusionstack.io/rollout/pkg/utils"
 )
 
 const (
@@ -106,7 +106,7 @@ func (e *stepStateEngine) process(ctx *ExecutorContext, currentState rolloutv1al
 	stateDone, retry, err := fn(ctx)
 	if err != nil {
 		ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeWarning, "FailedRunStep", "step failed, currentState %s, err: %v", currentState, err)
-		if errors.Is(err, control.TerminalError(nil)) {
+		if errors.Is(err, utils.TerminalError(nil)) {
 			// we will stop retry if err is CodeReasonMessage
 			// TODO: change err to reconcile.TerminalError when controller-runtime supports it
 			ctx.Fail(err)

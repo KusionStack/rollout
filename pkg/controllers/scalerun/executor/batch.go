@@ -26,6 +26,7 @@ import (
 
 	rorexecutor "kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
 	"kusionstack.io/rollout/pkg/controllers/scalerun/control"
+	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -96,7 +97,7 @@ func (e *batchExecutor) Cancel(ctx *ExecutorContext) (done bool, result ctrl.Res
 }
 
 func (e *batchExecutor) isSupported(ctx *ExecutorContext) bool {
-	_, ok := ctx.Accessor.(workload.BatchScaleControl)
+	_, ok := ctx.Accessor.(workload.ScaleControl)
 	return ok
 }
 
@@ -180,7 +181,7 @@ func (e *batchExecutor) doPostStepHook(ctx *ExecutorContext) (bool, time.Duratio
 }
 
 func newWorkloadNotFoundError(ref rolloutv1alpha1.CrossClusterObjectNameReference) error {
-	return control.TerminalError(&rolloutv1alpha1.CodeReasonMessage{
+	return utils.TerminalError(&rolloutv1alpha1.CodeReasonMessage{
 		Code:    "WorkloadNotFound",
 		Reason:  "WorkloadNotFound",
 		Message: fmt.Sprintf("workload (%s) not found ", ref.String()),
@@ -235,7 +236,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		}
 
 		logger.Info("need to apply target replicas", "target", item.CrossClusterObjectNameReference)
-		changed, err := batchControl.UpdateReplicas(ctx, info, item.Replicas)
+		changed, err := batchControl.Scale(ctx, info, item.Replicas)
 		if err != nil {
 			return false, retryStop, err
 		}

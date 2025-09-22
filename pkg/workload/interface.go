@@ -49,10 +49,9 @@ type BatchReleaseControl interface {
 
 // CanaryReleaseControl defines the control functions for workload canary release
 type CanaryReleaseControl interface {
+	ScaleControl
 	// CanaryPreCheck checks object before canary release.
 	CanaryPreCheck(obj client.Object) error
-	// Scale scales the workload replicas.
-	Scale(obj client.Object, replicas int32) error
 	// ApplyCanaryPatch applies canary to the workload.
 	ApplyCanaryPatch(canary client.Object, podTemplatePatch *v1alpha1.MetadataPatch) error
 }
@@ -66,12 +65,8 @@ type ReplicaObjectControl interface {
 	GetReplicObjects(ctx context.Context, reader client.Reader, workload client.Object) ([]client.Object, error)
 }
 
-// BatchScaleControl defines the control functions for workload batch scale
-type BatchScaleControl interface {
-	// BatchPreCheck checks object before batch scale.
-	ScalePreCheck(obj client.Object) error
-	// ApplyReplicas use updatedReplicas to update replicas of the workload.
-	ApplyReplicas(obj client.Object, updatedReplicas int32) error
-	// ApplyMultipleReplicas use updatedReplicas to update replicas of different groups in workload.
-	ApplyMultipleReplicas(obj client.Object, updatedReplicas []v1alpha1.MultipleReplia) error
+// ScaleControl defines the control functions for workload scale
+type ScaleControl interface {
+	// Scale use replicas to update replicas of the workload.
+	Scale(obj client.Object, replicas int32) error
 }
