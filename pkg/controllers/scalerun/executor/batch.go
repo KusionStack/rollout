@@ -21,11 +21,11 @@ import (
 	"time"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"kusionstack.io/rollout/pkg/controllers/rolloutrun/control"
+	rorexecutor "kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
+	"kusionstack.io/rollout/pkg/controllers/scalerun/control"
 	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
@@ -41,21 +41,21 @@ func newBatchExecutor(webhook webhookExecutor) *batchExecutor {
 		stateEngine: newStepStateEngine(),
 	}
 
-	e.stateEngine.add(StepNone, StepPending, e.doPausing, e.release)
-	e.stateEngine.add(StepPending, StepPreBatchStepHook, skipStep, e.release)
-	e.stateEngine.add(StepPreBatchStepHook, StepRunning, e.doPreStepHook, e.release)
-	e.stateEngine.add(StepRunning, StepPostBatchStepHook, e.doBatchUpgrading, e.release)
-	e.stateEngine.add(StepPostBatchStepHook, StepResourceRecycling, e.doPostStepHook, e.release)
-	e.stateEngine.add(StepResourceRecycling, StepSucceeded, e.doRecycle, e.release)
-	e.stateEngine.add(StepSucceeded, "", skipStep, skipStep)
+	e.stateEngine.add(rorexecutor.StepNone, rorexecutor.StepPending, e.doPausing, e.release)
+	e.stateEngine.add(rorexecutor.StepPending, rorexecutor.StepPreBatchStepHook, skipStep, e.release)
+	e.stateEngine.add(rorexecutor.StepPreBatchStepHook, rorexecutor.StepRunning, e.doPreStepHook, e.release)
+	e.stateEngine.add(rorexecutor.StepRunning, rorexecutor.StepPostBatchStepHook, e.doBatchUpgrading, e.release)
+	e.stateEngine.add(rorexecutor.StepPostBatchStepHook, rorexecutor.StepResourceRecycling, e.doPostStepHook, e.release)
+	e.stateEngine.add(rorexecutor.StepResourceRecycling, rorexecutor.StepSucceeded, e.doRecycle, e.release)
+	e.stateEngine.add(rorexecutor.StepSucceeded, "", skipStep, skipStep)
 	return e
 }
 
 func (e *batchExecutor) init(ctx *ExecutorContext) bool {
 	logger := ctx.GetBatchLogger()
 	if !e.isSupported(ctx) {
-		// skip batch release if workload accessor don't support it.
-		logger.Info("workload accessor don't support batch release, skip it")
+		// skip batch scale if workload accessor don't support it.
+		logger.Info("workload accessor don't support batch scale, skip it")
 		ctx.SkipCurrentRelease()
 		return true
 	}
@@ -67,8 +67,8 @@ func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result,
 		return true, ctrl.Result{Requeue: true}, nil
 	}
 	newStatus := ctx.NewStatus
-	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
-	currentState := newStatus.BatchStatus.CurrentBatchState
+	currentBatchIndex := newStatus.Batches.CurrentBatchIndex
+	currentState := newStatus.Batches.CurrentBatchState
 
 	stepDone, result, err := e.stateEngine.do(ctx, currentState)
 	if err != nil {
@@ -78,10 +78,10 @@ func (e *batchExecutor) Do(ctx *ExecutorContext) (done bool, result ctrl.Result,
 		return false, result, nil
 	}
 
-	if int(currentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
+	if int(currentBatchIndex+1) < len(ctx.ScaleRun.Spec.Batch.Batches) {
 		// move to next batch
-		newStatus.BatchStatus.CurrentBatchState = StepNone
-		newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
+		newStatus.Batches.CurrentBatchState = rorexecutor.StepNone
+		newStatus.Batches.CurrentBatchIndex = currentBatchIndex + 1
 		return false, result, nil
 	}
 
@@ -93,11 +93,11 @@ func (e *batchExecutor) Cancel(ctx *ExecutorContext) (done bool, result ctrl.Res
 	if done {
 		return true, ctrl.Result{Requeue: true}, nil
 	}
-	return e.stateEngine.cancel(ctx, ctx.NewStatus.BatchStatus.CurrentBatchState)
+	return e.stateEngine.cancel(ctx, ctx.NewStatus.Batches.CurrentBatchState)
 }
 
 func (e *batchExecutor) isSupported(ctx *ExecutorContext) bool {
-	_, ok := ctx.Accessor.(workload.BatchReleaseControl)
+	_, ok := ctx.Accessor.(workload.ScaleControl)
 	return ok
 }
 
@@ -108,9 +108,9 @@ func (e *batchExecutor) release(ctx *ExecutorContext) (bool, time.Duration, erro
 	// try to finalize all workloads
 	allTargets := map[rolloutv1alpha1.CrossClusterObjectNameReference]bool{}
 	// finalize batch release
-	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
+	batchControl := control.NewBatchScaleControl(ctx.Accessor, ctx.Client)
 
-	for _, item := range ctx.RolloutRun.Spec.Batch.Batches {
+	for _, item := range ctx.ScaleRun.Spec.Batch.Batches {
 		for _, target := range item.Targets {
 			allTargets[target.CrossClusterObjectNameReference] = true
 		}
@@ -141,32 +141,32 @@ func (e *batchExecutor) release(ctx *ExecutorContext) (bool, time.Duration, erro
 
 func (e *batchExecutor) doRecycle(ctx *ExecutorContext) (bool, time.Duration, error) {
 	// recycling only work on last batch now
-	if int(ctx.NewStatus.BatchStatus.CurrentBatchIndex+1) < len(ctx.RolloutRun.Spec.Batch.Batches) {
+	if int(ctx.NewStatus.Batches.CurrentBatchIndex+1) < len(ctx.ScaleRun.Spec.Batch.Batches) {
 		return true, retryImmediately, nil
 	}
 	return e.release(ctx)
 }
 
 func (e *batchExecutor) doPausing(ctx *ExecutorContext) (bool, time.Duration, error) {
-	rolloutRunName := ctx.RolloutRun.Name
+	scaleRunName := ctx.ScaleRun.Name
 	newStatus := ctx.NewStatus
-	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
-	currentBatch := ctx.RolloutRun.Spec.Batch.Batches[currentBatchIndex]
+	currentBatchIndex := newStatus.Batches.CurrentBatchIndex
+	currentBatch := ctx.ScaleRun.Spec.Batch.Batches[currentBatchIndex]
 
-	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
+	batchControl := control.NewBatchScaleControl(ctx.Accessor, ctx.Client)
 
 	for _, item := range currentBatch.Targets {
 		wi := ctx.Workloads.Get(item.Cluster, item.Name)
 		if wi == nil {
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
-		err := batchControl.Initialize(ctx, wi, ctx.OwnerKind, ctx.OwnerName, rolloutRunName, currentBatchIndex)
+		err := batchControl.Initialize(ctx, wi, scaleRunName, currentBatchIndex)
 		if err != nil {
 			return false, retryStop, err
 		}
 	}
 
-	if ctx.RolloutRun.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
+	if ctx.ScaleRun.Spec.Batch.Batches[currentBatchIndex].Breakpoint {
 		ctx.Pause()
 	}
 	return true, retryImmediately, nil
@@ -190,16 +190,17 @@ func newWorkloadNotFoundError(ref rolloutv1alpha1.CrossClusterObjectNameReferenc
 
 // doBatchUpgrading process upgrading state
 func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Duration, error) {
-	rolloutRun := ctx.RolloutRun
+	scaleRun := ctx.ScaleRun
 	newStatus := ctx.NewStatus
-	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
-	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
+	currentBatchIndex := newStatus.Batches.CurrentBatchIndex
+	currentBatch := scaleRun.Spec.Batch.Batches[currentBatchIndex]
+	currentBatchWorkloadStatus := newStatus.Batches.Records[currentBatchIndex].Targets
 
 	logger := ctx.GetBatchLogger()
 
-	batchControl := control.NewBatchReleaseControl(ctx.Accessor, ctx.Client)
+	batchControl := control.NewBatchScaleControl(ctx.Accessor, ctx.Client)
 
-	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
+	batchTargetStatuses := make([]rolloutv1alpha1.ScaleWorkloadStatus, 0)
 
 	allWorkloadReady := true
 	for _, item := range currentBatch.Targets {
@@ -209,36 +210,43 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 			return false, retryStop, newWorkloadNotFoundError(item.CrossClusterObjectNameReference)
 		}
 
-		status := info.APIStatus()
-		batchTargetStatuses = append(batchTargetStatuses, info.APIStatus())
+		needApplyReplicas := false
 
-		currentBatchExpectedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
+		workloadStatus := info.ScaleWorkloadStatus()
+		currentWorkloadStatus := e.findCurrentWorkloadStatus(currentBatchWorkloadStatus, item.Cluster, item.Name)
+		if currentWorkloadStatus == nil {
+			workloadStatus.ScaleFrom = info.Status.Replicas
+			workloadStatus.ScaleTo = item.Replicas
+			needApplyReplicas = true
+		} else {
+			workloadStatus.ScaleFrom = currentWorkloadStatus.ScaleFrom
+			workloadStatus.ScaleTo = currentWorkloadStatus.ScaleTo
+		}
+		batchTargetStatuses = append(batchTargetStatuses, workloadStatus)
 
-		if info.CheckUpdatedReady(currentBatchExpectedReplicas) {
-			// if the target is ready, we will not change partition
+		if e.checkScaledReady(info, workloadStatus.ScaleFrom, workloadStatus.ScaleTo) && !needApplyReplicas {
+			// if the target is ready, we will not change replicas
 			continue
 		}
 
 		allWorkloadReady = false
-		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference)
-
-		expectedReplicas, err := e.calculateExpectedReplicasBySlidingWindow(status, currentBatchExpectedReplicas, item.ReplicaSlidingWindow)
-		if err != nil {
-			return false, retryStop, err
+		if !needApplyReplicas {
+			// if the target's replicas has been updated, we will not change replicas
+			continue
 		}
 
-		// ensure partition: upgradePartition is an idempotent function
-		changed, err := batchControl.UpdatePartition(ctx, info, expectedReplicas)
+		logger.Info("need to apply target replicas", "target", item.CrossClusterObjectNameReference)
+		changed, err := batchControl.Scale(ctx, info, item.Replicas)
 		if err != nil {
 			return false, retryStop, err
 		}
 		if changed {
-			logger.V(2).Info("upgrade target partition", "target", item.CrossClusterObjectNameReference, "partition", expectedReplicas)
+			logger.V(2).Info("upgrade target replicas", "target", item.CrossClusterObjectNameReference, "replicas", item.Replicas)
 		}
 	}
 
 	// update target status in batch
-	newStatus.BatchStatus.Records[currentBatchIndex].Targets = batchTargetStatuses
+	newStatus.Batches.Records[currentBatchIndex].Targets = batchTargetStatuses
 
 	if allWorkloadReady {
 		return true, retryImmediately, nil
@@ -248,19 +256,23 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	return false, retryDefault, nil
 }
 
-// calculateExpectedReplicasBySlidingWindow calculate expected replicas by sliding window
-// if window is nil, return currentBatchExpectedReplicas
-// if window is not nil, return min(currentBatchExpectedReplicas, updatedAvailableReplicas + increment)
-func (e *batchExecutor) calculateExpectedReplicasBySlidingWindow(status rolloutv1alpha1.RolloutWorkloadStatus, currentBatchExpectedReplicas int32, window *intstr.IntOrString) (int32, error) {
-	if window == nil {
-		return currentBatchExpectedReplicas, nil
+func (e *batchExecutor) checkScaledReady(info *workload.Info, scaledFrom, scaledTo int32) bool {
+	if info.Status.ObservedGeneration != info.Generation {
+		return false
 	}
-	increment, err := workload.CalculateUpdatedReplicas(&status.Replicas, *window)
-	if err != nil {
-		return currentBatchExpectedReplicas, err
+
+	if scaledFrom > scaledTo {
+		return info.Status.CurrentReplicas <= info.Status.Replicas
+	} else {
+		return info.Status.AvailableReplicas >= info.Status.Replicas
 	}
-	expected := status.UpdatedAvailableReplicas + increment
-	// limit expected replicas to currentBatchExpectedReplicas
-	expected = min(currentBatchExpectedReplicas, expected)
-	return expected, nil
+}
+
+func (e *batchExecutor) findCurrentWorkloadStatus(status []rolloutv1alpha1.ScaleWorkloadStatus, cluster, name string) *rolloutv1alpha1.ScaleWorkloadStatus {
+	for _, workloadStatus := range status {
+		if workloadStatus.Cluster == cluster && workloadStatus.Name == name {
+			return &workloadStatus
+		}
+	}
+	return nil
 }

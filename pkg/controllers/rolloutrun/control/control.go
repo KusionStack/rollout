@@ -19,7 +19,6 @@ package control
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -56,7 +55,7 @@ func NewBatchReleaseControl(impl workload.Accessor, c client.Client) *BatchRelea
 func (c *BatchReleaseControl) Initialize(ctx context.Context, info *workload.Info, ownerKind, ownerName, rolloutRun string, batchIndex int32) error {
 	// pre-check
 	if err := c.control.BatchPreCheck(info.Object); err != nil {
-		return TerminalError(err)
+		return utils.TerminalError(err)
 	}
 
 	// add progressing annotation
@@ -120,7 +119,7 @@ func NewCanaryReleaseControl(impl workload.Accessor, c client.Client) *CanaryRel
 func (c *CanaryReleaseControl) Initialize(ctx context.Context, stable *workload.Info, ownerKind, ownerName, rolloutRun string) error {
 	// pre check
 	if err := c.control.CanaryPreCheck(stable.Object); err != nil {
-		return TerminalError(err)
+		return utils.TerminalError(err)
 	}
 
 	// add progressing annotation
@@ -274,33 +273,4 @@ func (c *CanaryReleaseControl) applyCanaryDefaults(canaryObj client.Object) {
 	utils.MutateLabels(canaryObj, func(labels map[string]string) {
 		labels[rolloutapi.CanaryResourceLabelKey] = "true"
 	})
-}
-
-// TerminalError is an error that will not be retried but still be logged
-// and recorded in metrics.
-//
-// TODO: delete this error when controller-runtime version is grather than v0.15
-func TerminalError(wrapped error) error {
-	return &terminalError{err: wrapped}
-}
-
-type terminalError struct {
-	err error
-}
-
-// This function will return nil if te.err is nil.
-func (te *terminalError) Unwrap() error {
-	return te.err
-}
-
-func (te *terminalError) Error() string {
-	if te.err == nil {
-		return "nil terminal error"
-	}
-	return "terminal error: " + te.err.Error()
-}
-
-func (te *terminalError) Is(target error) bool {
-	tp := &terminalError{}
-	return errors.As(target, &tp)
 }

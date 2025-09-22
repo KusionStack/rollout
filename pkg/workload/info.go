@@ -54,6 +54,10 @@ type InfoStatus struct {
 	UpdatedRevision string
 	// Replicas is the desired number of pods targeted by workload
 	Replicas int32
+	// CurrentReplicas is the current number of existed pods targeted by workload
+	CurrentReplicas int32
+	// AvailableReplicas is the number of service available pods targeted by workload.
+	AvailableReplicas int32
 	// UpdatedReplicas is the number of pods targeted by workload that have the updated template spec.
 	UpdatedReplicas int32
 	// UpdatedReadyReplicas is the number of ready pods targeted by workload that have the updated template spec.
@@ -109,6 +113,16 @@ func (o *Info) APIStatus() rolloutv1alpha1.RolloutWorkloadStatus {
 		UpdatedRevision:    o.Status.UpdatedRevision,
 		Cluster:            o.ClusterName,
 		Name:               o.Name,
+	}
+}
+
+func (o *Info) ScaleWorkloadStatus() rolloutv1alpha1.ScaleWorkloadStatus {
+	return rolloutv1alpha1.ScaleWorkloadStatus{
+		Cluster:           o.ClusterName,
+		Name:              o.Name,
+		Replicas:          o.Status.Replicas,
+		CurrentReplicas:   o.Status.CurrentReplicas,
+		AvailableReplicas: o.Status.AvailableReplicas,
 	}
 }
 

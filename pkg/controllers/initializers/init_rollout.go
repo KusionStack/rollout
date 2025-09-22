@@ -21,6 +21,7 @@ import (
 
 	"kusionstack.io/rollout/pkg/controllers/rollout"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun"
+	"kusionstack.io/rollout/pkg/controllers/scalerun"
 )
 
 func init() {
@@ -29,4 +30,7 @@ func init() {
 
 	// init rolloutRun controller
 	utilruntime.Must(Controllers.Add(rolloutrun.ControllerName, rolloutrun.InitFunc))
+
+	// init scaleRun controller
+	utilruntime.Must(Controllers.Add(scalerun.ControllerName, scalerun.InitFunc))
 }

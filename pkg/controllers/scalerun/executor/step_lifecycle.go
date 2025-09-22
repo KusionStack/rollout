@@ -105,7 +105,7 @@ func (e *stepStateEngine) process(ctx *ExecutorContext, currentState rolloutv1al
 	}
 	stateDone, retry, err := fn(ctx)
 	if err != nil {
-		ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeWarning, "FailedRunStep", "step failed, currentState %s, err: %v", currentState, err)
+		ctx.Recorder.Eventf(ctx.ScaleRun, corev1.EventTypeWarning, "FailedRunStep", "step failed, currentState %s, err: %v", currentState, err)
 		if errors.Is(err, utils.TerminalError(nil)) {
 			// we will stop retry if err is CodeReasonMessage
 			// TODO: change err to reconcile.TerminalError when controller-runtime supports it
@@ -117,7 +117,7 @@ func (e *stepStateEngine) process(ctx *ExecutorContext, currentState rolloutv1al
 	if stateDone {
 		if cancel {
 			// if cancel is true, we stop at this state
-			ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeNormal, "StepCanceled", "step canceled, currentState %s", currentState)
+			ctx.Recorder.Eventf(ctx.ScaleRun, corev1.EventTypeNormal, "StepCanceled", "step canceled, currentState %s", currentState)
 			done = true
 		} else if len(lifecycle.next) == 0 {
 			// final state
