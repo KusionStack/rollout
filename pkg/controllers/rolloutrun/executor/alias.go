@@ -28,4 +28,5 @@ const (
 	StepPostBatchStepHook  = rolloutv1alpha1.RolloutStepPostBatchStepHook
 	StepSucceeded          = rolloutv1alpha1.RolloutStepSucceeded
 	StepResourceRecycling  = rolloutv1alpha1.RolloutStepResourceRecycling
+	StepSkipped            = rolloutv1alpha1.RolloutStepSkipped
 )
