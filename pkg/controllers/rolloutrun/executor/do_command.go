@@ -14,10 +14,7 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 	logger.Info("processing manual command", "command", cmd)
 
 	newStatus := ctx.NewStatus
-	newBatchStatus := ctx.NewStatus.BatchStatus
-
 	batchError := newStatus.Error
-	currentBatchIndex := newBatchStatus.CurrentBatchIndex
 	switch cmd {
 	case rolloutapis.AnnoManualCommandPause:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePausing
@@ -31,33 +28,31 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		}
 	case rolloutapis.AnnoManualCommandSkip:
 		if batchError != nil {
-			newStatus.Error = nil
-
-			if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
-				currentBatchIndex++
-				newBatchStatus.CurrentBatchIndex = currentBatchIndex
-				newBatchStatus.CurrentBatchState = StepNone
-			} else {
-				newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
-			}
+			handleBatchStatusWhenSkipped(newStatus, len(rolloutRun.Spec.Batch.Batches))
 		}
 	case rolloutapis.AnnoManualCommandCancel:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
 	case rolloutapis.AnnoManualCommandForceSkipCurrentBatch:
-		if batchError != nil {
-			newStatus.Error = nil
-		}
-		if (len(newStatus.BatchStatus.Records) - 1) >= int(currentBatchIndex) {
-			newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
-		}
-		if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
-			currentBatchIndex++
-			newBatchStatus.CurrentBatchIndex = currentBatchIndex
-			newBatchStatus.CurrentBatchState = StepNone
-		} else {
-			newBatchStatus.CurrentBatchState = StepPostBatchStepHook
-		}
+		handleBatchStatusWhenSkipped(newStatus, len(rolloutRun.Spec.Batch.Batches))
 	}
 
 	return ctrl.Result{Requeue: true}
+}
+
+func handleBatchStatusWhenSkipped(newStatus *rolloutv1alpha1.RolloutRunStatus, batchSize int) {
+	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
+	if newStatus.Error != nil {
+		newStatus.Error = nil
+	}
+
+	if (len(newStatus.BatchStatus.Records) - 1) >= int(currentBatchIndex) {
+		newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
+	}
+	if int(currentBatchIndex) < (batchSize - 1) {
+		currentBatchIndex++
+		newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex
+		newStatus.BatchStatus.CurrentBatchState = StepNone
+	} else {
+		newStatus.BatchStatus.CurrentBatchState = StepPostBatchStepHook
+	}
 }
