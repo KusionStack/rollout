@@ -47,6 +47,9 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		if batchError != nil {
 			newStatus.Error = nil
 		}
+		if (len(newStatus.BatchStatus.Records) - 1) >= int(currentBatchIndex) {
+			newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
+		}
 		if int(currentBatchIndex) < (len(rolloutRun.Spec.Batch.Batches) - 1) {
 			currentBatchIndex++
 			newBatchStatus.CurrentBatchIndex = currentBatchIndex
