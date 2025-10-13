@@ -45,14 +45,10 @@ func handleBatchStatusWhenSkipped(newStatus *rolloutv1alpha1.RolloutRunStatus, b
 		newStatus.Error = nil
 	}
 
-	if (len(newStatus.BatchStatus.Records) - 1) >= int(currentBatchIndex) {
-		newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
-	}
+	// only skip when current batch is not the last batch
 	if int(currentBatchIndex) < (batchSize - 1) {
-		currentBatchIndex++
-		newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex
+		newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
+		newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
 		newStatus.BatchStatus.CurrentBatchState = StepNone
-	} else {
-		newStatus.BatchStatus.CurrentBatchState = StepPostBatchStepHook
 	}
 }
