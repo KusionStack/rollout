@@ -261,7 +261,7 @@ func (e *batchExecutor) checkScaledReady(info *workload.Info, scaledFrom, scaled
 		return false
 	}
 
-	if scaledFrom > scaledTo {
+	if scaledFrom >= scaledTo {
 		return info.Status.CurrentReplicas <= info.Status.Replicas
 	} else {
 		return info.Status.AvailableReplicas >= info.Status.Replicas
