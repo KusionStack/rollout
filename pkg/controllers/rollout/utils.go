@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/rest"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -220,9 +221,13 @@ func NewGVKDiscovery(c client.Client, cfg *rest.Config) MemberClusterGVKDiscover
 	cc, ok := c.(multicluster.MultiClusterDiscoveryManager)
 	if ok {
 		_, members := cc.GetAllDiscoveryInterface()
-		return &multiclusterDiscovery{clients: members}
+		cached := map[string]discovery.DiscoveryInterface{}
+		for cluster, client := range members {
+			cached[cluster] = memory.NewMemCacheClient(client)
+		}
+		return &multiclusterDiscovery{clients: cached}
 	} else {
-		return &singleClusterDiscovery{client: discovery.NewDiscoveryClientForConfigOrDie(cfg)}
+		return &singleClusterDiscovery{client: memory.NewMemCacheClient(discovery.NewDiscoveryClientForConfigOrDie(cfg))}
 	}
 }
 
