@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/client-go/discovery"
-	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/rest"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -171,13 +170,7 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 }
 
 func GetWatchableWorkloads(r registry.WorkloadRegistry, logger logr.Logger, c client.Client, cfg *rest.Config) []workload.Accessor {
-	var discoveryClient multicluster.PartialCachedDiscoveryInterface
-	cc, ok := c.(multicluster.MultiClusterDiscovery)
-	if ok {
-		discoveryClient = cc.MembersCachedDiscoveryInterface()
-	} else {
-		discoveryClient = memory.NewMemCacheClient(discovery.NewDiscoveryClientForConfigOrDie(cfg))
-	}
+	discoveryClient := NewGVKDiscovery(c, cfg)
 
 	result := make([]workload.Accessor, 0)
 
@@ -188,13 +181,13 @@ func GetWatchableWorkloads(r registry.WorkloadRegistry, logger logr.Logger, c cl
 			return true
 		}
 
-		supported, err := isGVKSupportedInMembers(discoveryClient, gvk)
+		supported, msg, err := discoveryClient.IsSupported(gvk)
 		if err != nil {
 			logger.Error(err, "failed to get discovery result from member clusters, skip it", "gvk", gvk.String())
 			return true
 		}
 		if !supported {
-			logger.Info("gvk is not supported in all members clusters, skip it", "gvk", gvk.String())
+			logger.Info("skip unsupported gvk", "gvk", gvk.String(), "msg", msg)
 			return true
 		}
 
@@ -205,14 +198,28 @@ func GetWatchableWorkloads(r registry.WorkloadRegistry, logger logr.Logger, c cl
 	return result
 }
 
-func isGVKSupportedInMembers(discoveryClient multicluster.PartialCachedDiscoveryInterface, gvk schema.GroupVersionKind) (bool, error) {
-	if discoveryClient == nil {
-		return false, fmt.Errorf("member clusters discovery interface is not set, please use SetupWithManager() firstly")
-	}
+type MemberClusterGVKDiscovery interface {
+	IsSupported(gvk schema.GroupVersionKind) (bool, string, error)
+}
 
-	_, resources, err := discoveryClient.ServerGroupsAndResources()
+func NewGVKDiscovery(c client.Client, cfg *rest.Config) MemberClusterGVKDiscovery {
+	cc, ok := c.(multicluster.MultiClusterDiscoveryManager)
+	if ok {
+		_, members := cc.GetAllDiscoveryInterface()
+		return &multiclusterDiscovery{clients: members}
+	} else {
+		return &singleClusterDiscovery{client: discovery.NewDiscoveryClientForConfigOrDie(cfg)}
+	}
+}
+
+type singleClusterDiscovery struct {
+	client discovery.DiscoveryInterface
+}
+
+func (d *singleClusterDiscovery) IsSupported(gvk schema.GroupVersionKind) (bool, string, error) {
+	_, resources, err := d.client.ServerGroupsAndResources()
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
 	for _, resourceList := range resources {
@@ -223,10 +230,40 @@ func isGVKSupportedInMembers(discoveryClient multicluster.PartialCachedDiscovery
 			return value.Kind == gvk.Kind
 		})
 		if found {
-			return true, nil
+			return true, "", nil
 		}
 	}
-	return false, nil
+
+	return false, fmt.Sprintf("gvk(%s) is not supported by single cluster discovery", gvk.String()), nil
+}
+
+type multiclusterDiscovery struct {
+	clients map[string]discovery.DiscoveryInterface
+}
+
+func (d *multiclusterDiscovery) IsSupported(gvk schema.GroupVersionKind) (bool, string, error) {
+	supported := true
+	msg := ""
+	for cluster, client := range d.clients {
+		_, resources, err := client.ServerGroupsAndResources()
+		if err != nil {
+			return false, "", err
+		}
+		for _, resourceList := range resources {
+			if resourceList.GroupVersion != gvk.GroupVersion().String() {
+				continue
+			}
+			_, found := lo.Find(resourceList.APIResources, func(value metav1.APIResource) bool {
+				return value.Kind == gvk.Kind
+			})
+			if !found {
+				supported = false
+				msg = fmt.Sprintf("gvk(%s) is not supported by cluster %s", gvk.String(), cluster)
+				break
+			}
+		}
+	}
+	return supported, msg, nil
 }
 
 // RolloutRunByCreationTimestamp sorts a list of RolloutRun by creationTimestamp.
