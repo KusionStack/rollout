@@ -202,7 +202,20 @@ type MemberClusterGVKDiscovery interface {
 	IsSupported(gvk schema.GroupVersionKind) (bool, string, error)
 }
 
+type ClientWrapper interface {
+	Unwrap() client.Client
+}
+
 func NewGVKDiscovery(c client.Client, cfg *rest.Config) MemberClusterGVKDiscovery {
+	// unwrap client
+	for {
+		cw, ok := c.(ClientWrapper)
+		if !ok {
+			break
+		}
+		c = cw.Unwrap()
+	}
+
 	cc, ok := c.(multicluster.MultiClusterDiscoveryManager)
 	if ok {
 		_, members := cc.GetAllDiscoveryInterface()
