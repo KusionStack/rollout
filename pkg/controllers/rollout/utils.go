@@ -22,6 +22,7 @@ import (
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
@@ -255,9 +256,11 @@ type multiclusterDiscovery struct {
 }
 
 func (d *multiclusterDiscovery) IsSupported(gvk schema.GroupVersionKind) (bool, string, error) {
-	supported := true
-	msg := ""
+	allClusters := sets.NewString()
+	supportedCluters := sets.NewString()
 	for cluster, client := range d.clients {
+		allClusters.Insert(cluster)
+
 		_, resources, err := client.ServerGroupsAndResources()
 		if err != nil {
 			return false, "", err
@@ -269,14 +272,19 @@ func (d *multiclusterDiscovery) IsSupported(gvk schema.GroupVersionKind) (bool, 
 			_, found := lo.Find(resourceList.APIResources, func(value metav1.APIResource) bool {
 				return value.Kind == gvk.Kind
 			})
-			if !found {
-				supported = false
-				msg = fmt.Sprintf("gvk(%s) is not supported by cluster %s", gvk.String(), cluster)
-				break
+			if found {
+				supportedCluters.Insert(cluster)
 			}
 		}
 	}
-	return supported, msg, nil
+
+	unsupported := allClusters.Difference(supportedCluters)
+	if unsupported.Len() > 0 {
+		msg := fmt.Sprintf("gvk(%s) is not supported by member clusters: %s", gvk.String(), unsupported.List())
+		return false, msg, nil
+	}
+
+	return true, "", nil
 }
 
 // RolloutRunByCreationTimestamp sorts a list of RolloutRun by creationTimestamp.
