@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/utils/ptr"
@@ -88,7 +89,8 @@ func newWorker(m *manager, key types.UID, webhook rolloutv1alpha1.RolloutWebhook
 	}
 	// init result
 	w.lastResult = Result{
-		State: rolloutv1alpha1.WebhookRunning,
+		State:     rolloutv1alpha1.WebhookRunning,
+		StartTime: ptr.To(metav1.Now()),
 		CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
 			Code:    rolloutv1alpha1.WebhookReviewCodeProcessing,
 			Reason:  "Processing",
