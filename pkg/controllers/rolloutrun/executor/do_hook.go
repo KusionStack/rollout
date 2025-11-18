@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/samber/lo"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 
@@ -56,6 +57,9 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 	// shorten long message
 	hookResult.Message = utils.Abbreviate(hookResult.Message, 1024)
 
+	if hookResult.State == rolloutv1alpha1.WebhookCompleted {
+		hookResult.FinishTime = ptr.To(metav1.Now())
+	}
 	ctx.SetWebhookStatus(rolloutv1alpha1.RolloutWebhookStatus(*hookResult))
 
 	if hookResult.State == rolloutv1alpha1.WebhookOnHold &&
