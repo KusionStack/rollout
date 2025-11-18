@@ -81,8 +81,8 @@ func (c *BatchReleaseControl) Initialize(ctx context.Context, info *workload.Inf
 func (c *BatchReleaseControl) UpdatePartition(ctx context.Context, info *workload.Info, expectedUpdated int32) (bool, error) {
 	ctx = clusterinfo.WithCluster(ctx, info.ClusterName)
 	obj := info.Object
-	return utils.UpdateOnConflict(ctx, c.client, c.client, obj, func() error {
-		return c.control.ApplyPartition(obj, expectedUpdated)
+	return kubeutilclient.UpdateOnConflict(ctx, c.client, c.client, obj, func(in client.Object) error {
+		return c.control.ApplyPartition(in, expectedUpdated)
 	})
 }
 
@@ -202,7 +202,7 @@ func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workl
 	}
 
 	// update
-	updated, err := utils.UpdateOnConflict(ctx, c.client, c.client, canaryObj, func() error {
+	updated, err := kubeutilclient.UpdateOnConflict(ctx, c.client, c.client, canaryObj, func(in client.Object) error {
 		c.applyCanaryDefaults(canaryObj)
 		c.control.Scale(canaryObj, canaryReplicas) // nolint
 		return nil

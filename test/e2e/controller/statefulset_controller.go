@@ -23,14 +23,13 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/kubernetes/pkg/controller/history"
 	"k8s.io/utils/ptr"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/controller/mixin"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 // controllerKind contains the schema.GroupVersionKind for this controller type.
@@ -119,8 +118,8 @@ func (r *FakeStatefulSetController) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	logger.Info("update statefulset status", "status", newStatus)
-	_, err = utils.UpdateOnConflict(ctx, r.Client, r.Client.Status(), obj, func() error {
-		obj.Status = *newStatus
+	_, err = clientutil.UpdateOnConflict(ctx, r.Client, r.Client.Status(), obj, func(in *appsv1.StatefulSet) error {
+		in.Status = *newStatus
 		return nil
 	})
 	if err != nil {

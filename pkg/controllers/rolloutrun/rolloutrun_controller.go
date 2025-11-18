@@ -185,8 +185,8 @@ func (r *RolloutRunReconciler) handleFinalizer(ctx context.Context, rolloutRun *
 
 func (r *RolloutRunReconciler) cleanupAnnotation(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) error {
 	// delete manual command annotations from rollout
-	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func() error {
-		delete(obj.Annotations, rollout.AnnoManualCommandKey)
+	_, err := kubeutilclient.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func(in *rolloutv1alpha1.RolloutRun) error {
+		delete(in.Annotations, rollout.AnnoManualCommandKey)
 		return nil
 	})
 	if err != nil {
@@ -385,9 +385,9 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 	key := utils.ObjectKeyString(obj)
 	now := metav1.Now()
 	newStatus.LastUpdateTime = &now
-	_, err := utils.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), obj, func() error {
-		obj.Status = *newStatus
-		obj.Status.ObservedGeneration = obj.Generation
+	_, err := kubeutilclient.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), obj, func(in *rolloutv1alpha1.RolloutRun) error {
+		in.Status = *newStatus
+		in.Status.ObservedGeneration = in.Generation
 		return nil
 	})
 	if err != nil {

@@ -22,6 +22,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rolloutapi "kusionstack.io/kube-api/rollout"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -110,7 +111,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 
 	if !workload.IsControlledByRollout(workloadObj.Object) {
 		// this workload is not controlled by rollout, we need to make sure pod revision label is not added
-		updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
+		updated, err := clientutil.UpdateOnConflict(ctx, r.Client, r.Client, pod, func(in *corev1.Pod) error {
 			utils.MutateLabels(pod, func(labels map[string]string) {
 				delete(labels, rolloutapi.TrafficLaneLabelKey)
 			})
@@ -131,7 +132,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	trafficLane := workload.RecognizeTrafficLane(ctx, workloadObj.Accessor, pc, r.Client, workloadObj.Object, pod)
 
 	// patch pod label
-	updated, err := utils.UpdateOnConflict(ctx, r.Client, r.Client, pod, func() error {
+	updated, err := clientutil.UpdateOnConflict(ctx, r.Client, r.Client, pod, func(in *corev1.Pod) error {
 		utils.MutateLabels(pod, func(labels map[string]string) {
 			labels[rolloutapi.TrafficLaneLabelKey] = trafficLane
 		})

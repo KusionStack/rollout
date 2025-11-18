@@ -30,10 +30,10 @@ import (
 	operatingv1alpha1 "kusionstack.io/kube-api/apps/v1alpha1"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe/http"
-	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload/collaset"
 	"kusionstack.io/rollout/test/e2e/builder"
 )
@@ -209,16 +209,14 @@ var _ = Describe("CollaSet", func() {
 		{
 			By("HappyPath: start first batch")
 
-			_, err := utils.UpdateOnConflict(ctx, k8sClient, k8sClient, rolloutRun, func() error {
-				if err := k8sClient.Get(ctx, GetNamespacedName(rollout.Status.RolloutID, rollout.Namespace), rolloutRun); err != nil {
-					return err
-				}
+			err := k8sClient.Get(ctx, GetNamespacedName(rollout.Status.RolloutID, rollout.Namespace), rolloutRun)
+			Expect(err).NotTo(HaveOccurred())
 
-				if rolloutRun.Annotations == nil {
-					rolloutRun.Annotations = make(map[string]string)
+			_, err = clientutil.UpdateOnConflict(ctx, k8sClient, k8sClient, rolloutRun, func(in *rolloutv1alpha1.RolloutRun) error {
+				if in.Annotations == nil {
+					in.Annotations = make(map[string]string)
 				}
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
-
+				in.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -260,17 +258,15 @@ var _ = Describe("CollaSet", func() {
 		// second batch
 		{
 			By("HappyPath: start second batch")
+			err := k8sClient.Get(ctx, GetNamespacedName(rollout.Status.RolloutID, rollout.Namespace), rolloutRun)
+			Expect(err).NotTo(HaveOccurred())
 
-			_, err := utils.UpdateOnConflict(ctx, k8sClient, k8sClient, rolloutRun, func() error {
-				if err := k8sClient.Get(ctx, GetNamespacedName(rollout.Status.RolloutID, rollout.Namespace), rolloutRun); err != nil {
-					return err
+			_, err = clientutil.UpdateOnConflict(ctx, k8sClient, k8sClient, rolloutRun, func(in *rolloutv1alpha1.RolloutRun) error {
+				if in.Annotations == nil {
+					in.Annotations = make(map[string]string)
 				}
 
-				if rolloutRun.Annotations == nil {
-					rolloutRun.Annotations = make(map[string]string)
-				}
-
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
+				in.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 
 				return nil
 			})
@@ -318,16 +314,15 @@ var _ = Describe("CollaSet", func() {
 		// third batch
 		{
 			By("HappyPath: start third batch")
+			err := k8sClient.Get(ctx, GetNamespacedName(rollout.Status.RolloutID, rollout.Namespace), rolloutRun)
 
-			_, err := utils.UpdateOnConflict(ctx, k8sClient, k8sClient, rolloutRun, func() error {
-				if err := k8sClient.Get(ctx, GetNamespacedName(rollout.Status.RolloutID, rollout.Namespace), rolloutRun); err != nil {
-					return err
-				}
+			Expect(err).NotTo(HaveOccurred())
 
-				if rolloutRun.Annotations == nil {
-					rolloutRun.Annotations = make(map[string]string)
+			_, err = clientutil.UpdateOnConflict(ctx, k8sClient, k8sClient, rolloutRun, func(in *rolloutv1alpha1.RolloutRun) error {
+				if in.Annotations == nil {
+					in.Annotations = make(map[string]string)
 				}
-				rolloutRun.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
+				in.Annotations[rolloutapi.AnnoManualCommandKey] = rolloutapi.AnnoManualCommandContinue
 
 				return nil
 			})
