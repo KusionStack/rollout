@@ -80,8 +80,7 @@ func (c *BatchReleaseControl) Initialize(ctx context.Context, info *workload.Inf
 
 func (c *BatchReleaseControl) UpdatePartition(ctx context.Context, info *workload.Info, expectedUpdated int32) (bool, error) {
 	ctx = clusterinfo.WithCluster(ctx, info.ClusterName)
-	obj := info.Object
-	return kubeutilclient.UpdateOnConflict(ctx, c.client, c.client, obj, func(in client.Object) error {
+	return info.UpdateOnConflict(ctx, c.client, func(in client.Object) error {
 		return c.control.ApplyPartition(in, expectedUpdated)
 	})
 }

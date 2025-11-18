@@ -230,6 +230,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		// ensure partition: upgradePartition is an idempotent function
 		changed, err := batchControl.UpdatePartition(ctx, info, expectedReplicas)
 		if err != nil {
+			logger.Error(err, "failed to update partition", "target", item.CrossClusterObjectNameReference)
 			return false, retryStop, err
 		}
 		if changed {
