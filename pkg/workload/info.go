@@ -27,10 +27,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 // workload info
@@ -128,10 +127,8 @@ func (o *Info) ScaleWorkloadStatus() rolloutv1alpha1.ScaleWorkloadStatus {
 
 func (o *Info) UpdateOnConflict(ctx context.Context, c client.Client, mutateFn func(client.Object) error) (bool, error) {
 	ctx = clusterinfo.WithCluster(ctx, o.ClusterName)
-	obj := o.Object
-	updated, err := utils.UpdateOnConflict(ctx, c, c, obj, func() error {
-		return mutateFn(obj)
-	})
+	obj := o.Object.DeepCopyObject().(client.Object)
+	updated, err := clientutil.UpdateOnConflict(ctx, c, c, obj, mutateFn)
 	if err != nil {
 		return false, err
 	}
