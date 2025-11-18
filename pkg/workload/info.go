@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
-	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -128,14 +127,15 @@ func (o *Info) ScaleWorkloadStatus() rolloutv1alpha1.ScaleWorkloadStatus {
 func (o *Info) UpdateOnConflict(ctx context.Context, c client.Client, mutateFn func(client.Object) error) (bool, error) {
 	ctx = clusterinfo.WithCluster(ctx, o.ClusterName)
 	obj := o.Object.DeepCopyObject().(client.Object)
-	updated, err := clientutil.UpdateOnConflict(ctx, c, c, obj, mutateFn)
+
+	changed, err := UpdateByPatch(ctx, c, obj, mutateFn)
 	if err != nil {
 		return false, err
 	}
-	if updated {
+	if changed {
 		o.Object = obj
 	}
-	return updated, nil
+	return changed, nil
 }
 
 func IsWaitingRollout(info Info) bool {

@@ -24,6 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -184,4 +185,39 @@ func RecognizeTrafficLane(
 	// During the process of updating the workload from v2 to v2 version, another update to v3 occurred.
 	// We need to treat the v2 replica object as stable.
 	return rolloutapi.StableTrafficLane
+}
+
+func UpdateByPatch[T client.Object](
+	ctx context.Context,
+	writer client.Client,
+	inputObj T,
+	mutateFn clientutil.MutateFn[T],
+) (changed bool, err error) {
+	original := inputObj.DeepCopyObject().(client.Object)
+	mergePatch := client.MergeFrom(original)
+
+	// modify inputObj object
+	err = mutateFn(inputObj)
+	if err != nil {
+		return false, err
+	}
+
+	// calculate patch data
+	patchData, err := mergePatch.Data(inputObj)
+	if err != nil {
+		return false, err
+	}
+
+	if len(patchData) == 0 || string(patchData) == "{}" {
+		// nothing changed, skip update
+		return false, nil
+	}
+
+	err = writer.Patch(ctx, inputObj, mergePatch)
+	if err != nil {
+		return false, err
+	}
+
+	// patched
+	return true, nil
 }
