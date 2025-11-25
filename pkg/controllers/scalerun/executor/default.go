@@ -9,7 +9,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rorexecutor "kusionstack.io/rollout/pkg/controllers/rolloutrun/executor"
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 type Executor struct {
@@ -45,7 +44,7 @@ func (r *Executor) Do(ctx *ExecutorContext) (bool, ctrl.Result, error) {
 	}()
 
 	// if command exist, do command
-	if _, exist := utils.GetMapValue(scaleRun.Annotations, rolloutapis.AnnoManualCommandKey); exist {
+	if _, exist := scaleRun.Annotations[rolloutapis.AnnoManualCommandKey]; exist {
 		return false, r.doCommand(ctx), nil
 	}
 

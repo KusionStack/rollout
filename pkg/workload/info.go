@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -128,7 +129,7 @@ func (o *Info) UpdateOnConflict(ctx context.Context, c client.Client, mutateFn f
 	ctx = clusterinfo.WithCluster(ctx, o.ClusterName)
 	obj := o.Object.DeepCopyObject().(client.Object)
 
-	changed, err := UpdateByPatch(ctx, c, obj, mutateFn)
+	changed, err := clientutil.Patch(ctx, c, obj, mutateFn)
 	if err != nil {
 		return false, err
 	}

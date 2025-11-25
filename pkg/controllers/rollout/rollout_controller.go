@@ -277,11 +277,11 @@ func (r *RolloutReconciler) handleFinalizing(ctx context.Context, obj *rolloutv1
 	errs := []error{}
 	for _, info := range workloads {
 		_, err := info.UpdateOnConflict(ctx, r.Client, func(obj client.Object) error {
-			utils.MutateLabels(obj, func(labels map[string]string) {
+			clientutil.MutateLabels(obj, func(labels map[string]string) {
 				delete(labels, rollout.LabelWorkload)
 				delete(labels, rollout.LabelControlledBy) // for backward compatibility
 			})
-			utils.MutateAnnotations(obj, func(annotations map[string]string) {
+			clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 				delete(annotations, rollout.AnnoRolloutName)
 			})
 			return nil
@@ -362,10 +362,10 @@ func (r *RolloutReconciler) ensureWorkloadsLabelAndAnnotations(ctx context.Conte
 	for _, info := range workloads {
 		kind := strings.ToLower(info.Kind)
 		_, err := info.UpdateOnConflict(ctx, r.Client, func(obj client.Object) error {
-			utils.MutateLabels(obj, func(labels map[string]string) {
+			clientutil.MutateLabels(obj, func(labels map[string]string) {
 				labels[rollout.LabelWorkload] = kind
 			})
-			utils.MutateAnnotations(obj, func(annotations map[string]string) {
+			clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 				// The rollout name may be too long and exceed the max length (63) of label value
 				annotations[rollout.AnnoRolloutName] = name
 			})
@@ -463,7 +463,7 @@ func (r *RolloutReconciler) shouldTrigger(obj *rolloutv1alpha1.Rollout, workload
 
 	rolloutID := generateRolloutID(obj.Name)
 
-	triggerName, ok := utils.GetMapValue(obj.Annotations, rollout.AnnoRolloutTrigger)
+	triggerName, ok := obj.Annotations[rollout.AnnoRolloutTrigger]
 	if ok {
 		if len(validation.IsQualifiedName(triggerName)) == 0 {
 			// use user defined trigger name as rolloutID
@@ -614,14 +614,14 @@ func (r *RolloutReconciler) handleRunManualCommand(ctx context.Context, obj *rol
 	if run == nil || run.IsCompleted() {
 		return nil
 	}
-	command, ok := utils.GetMapValue(obj.Annotations, rollout.AnnoManualCommandKey)
+	command, ok := obj.Annotations[rollout.AnnoManualCommandKey]
 	if !ok {
 		return nil
 	}
 
 	// update manual command to rollout run
 	_, err := clientutil.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, run, func(in *rolloutv1alpha1.RolloutRun) error {
-		utils.MutateAnnotations(in, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(in, func(annotations map[string]string) {
 			annotations[rollout.AnnoManualCommandKey] = command
 		})
 		return nil
@@ -632,7 +632,7 @@ func (r *RolloutReconciler) handleRunManualCommand(ctx context.Context, obj *rol
 func (r *RolloutReconciler) cleanupAnnotation(ctx context.Context, obj *rolloutv1alpha1.Rollout) error {
 	// delete manual command annotations from rollout
 	_, err := clientutil.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func(in *rolloutv1alpha1.Rollout) error {
-		utils.MutateAnnotations(in, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(in, func(annotations map[string]string) {
 			delete(annotations, rollout.AnnoManualCommandKey)
 			delete(annotations, rollout.AnnoRolloutTrigger)
 			if features.DefaultFeatureGate.Enabled(features.OneTimeStrategy) {
@@ -654,7 +654,7 @@ func (r *RolloutReconciler) applyOneTimeStrategy(ctx context.Context, obj *rollo
 		return nil
 	}
 	// run is progressing
-	strategyStr, ok := utils.GetMapValue(obj.Annotations, ontimestrategy.AnnoOneTimeStrategy)
+	strategyStr, ok := obj.Annotations[ontimestrategy.AnnoOneTimeStrategy]
 	if !ok {
 		return nil
 	}

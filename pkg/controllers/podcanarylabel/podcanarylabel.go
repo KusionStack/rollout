@@ -34,7 +34,6 @@ import (
 
 	"kusionstack.io/rollout/pkg/controllers/registry"
 	rolloutcontroller "kusionstack.io/rollout/pkg/controllers/rollout"
-	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -112,7 +111,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	if !workload.IsControlledByRollout(workloadObj.Object) {
 		// this workload is not controlled by rollout, we need to make sure pod revision label is not added
 		updated, err := clientutil.UpdateOnConflict(ctx, r.Client, r.Client, pod, func(in *corev1.Pod) error {
-			utils.MutateLabels(pod, func(labels map[string]string) {
+			clientutil.MutateLabels(pod, func(labels map[string]string) {
 				delete(labels, rolloutapi.TrafficLaneLabelKey)
 			})
 			return nil
@@ -133,7 +132,7 @@ func (r *PodCanaryReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 
 	// patch pod label
 	updated, err := clientutil.UpdateOnConflict(ctx, r.Client, r.Client, pod, func(in *corev1.Pod) error {
-		utils.MutateLabels(pod, func(labels map[string]string) {
+		clientutil.MutateLabels(pod, func(labels map[string]string) {
 			labels[rolloutapi.TrafficLaneLabelKey] = trafficLane
 		})
 		return nil
