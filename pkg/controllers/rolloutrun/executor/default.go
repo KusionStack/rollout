@@ -7,8 +7,6 @@ import (
 	rolloutapis "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
-
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 type Executor struct {
@@ -47,7 +45,7 @@ func (r *Executor) Do(ctx *ExecutorContext) (bool, ctrl.Result, error) {
 	}()
 
 	// if command exist, do command
-	if _, exist := utils.GetMapValue(rolloutRun.Annotations, rolloutapis.AnnoManualCommandKey); exist {
+	if _, exist := rolloutRun.Annotations[rolloutapis.AnnoManualCommandKey]; exist {
 		return false, r.doCommand(ctx), nil
 	}
 

@@ -26,8 +26,6 @@ import (
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 func GetClusterFromLabel(labels map[string]string) string {
@@ -96,12 +94,12 @@ func PatchMetadata(meta *metav1.ObjectMeta, patch rolloutv1alpha1.MetadataPatch)
 }
 
 func IsControlledByRollout(workload client.Object) bool {
-	_, ok := utils.GetMapValue(workload.GetLabels(), rolloutapi.LabelWorkload)
+	_, ok := workload.GetLabels()[rolloutapi.LabelWorkload]
 	return ok
 }
 
 func IsProgressing(workload client.Object) bool {
-	_, ok := utils.GetMapValue(workload.GetAnnotations(), rolloutapi.AnnoRolloutProgressingInfo)
+	_, ok := workload.GetAnnotations()[rolloutapi.AnnoRolloutProgressingInfo]
 	return ok
 }
 

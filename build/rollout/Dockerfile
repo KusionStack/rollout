@@ -1,9 +1,9 @@
-FROM --platform=${BUILDPLATFORM} golang:1.22 AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.24 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
-ENV GOPROXY=goproxy.cn,proxy.golang.org,direct
+ENV GOPROXY=https://goproxy.cn,direct
 
 WORKDIR /workspace
 COPY . /workspace

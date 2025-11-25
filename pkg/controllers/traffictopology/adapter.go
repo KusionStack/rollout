@@ -27,6 +27,7 @@ import (
 	"k8s.io/utils/ptr"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	controllerutil "kusionstack.io/kube-utils/controller/utils"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	rsFrameController "kusionstack.io/resourceconsist/pkg/frame/controller"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -289,7 +290,7 @@ func (t *TPControllerAdapter) GetCurrentEmployer(ctx context.Context, employer c
 func (t *TPControllerAdapter) CreateEmployer(ctx context.Context, employer client.Object, toCreates []rsFrameController.IEmployer) ([]rsFrameController.IEmployer, []rsFrameController.IEmployer, error) {
 	succCreated := make([]rsFrameController.IEmployer, 0)
 	failCreated := make([]rsFrameController.IEmployer, 0)
-	_, err := utils.SlowStartBatch(len(toCreates), 1, false, func(i int, _ error) error {
+	_, err := controllerutil.SlowStartBatch(len(toCreates), 1, false, func(i int, _ error) error {
 		toCreate := toCreates[i]
 		br, ok := toCreate.(TPEmployer)
 		if !ok {
@@ -328,7 +329,7 @@ func (t *TPControllerAdapter) UpdateEmployer(ctx context.Context, employer clien
 func (t *TPControllerAdapter) DeleteEmployer(ctx context.Context, employer client.Object, toDeletes []rsFrameController.IEmployer) ([]rsFrameController.IEmployer, []rsFrameController.IEmployer, error) {
 	succDeleted := make([]rsFrameController.IEmployer, 0)
 	failDeleted := make([]rsFrameController.IEmployer, 0)
-	_, err := utils.SlowStartBatch(len(toDeletes), 1, false, func(i int, _ error) error {
+	_, err := controllerutil.SlowStartBatch(len(toDeletes), 1, false, func(i int, _ error) error {
 		toDelete := toDeletes[i]
 		br, ok := toDelete.(TPEmployer)
 		if !ok {

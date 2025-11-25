@@ -23,10 +23,10 @@ import (
 	"github.com/go-logr/logr"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"kusionstack.io/rollout/pkg/utils"
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -56,7 +56,7 @@ func (c *BatchScaleControl) Initialize(ctx context.Context, info *workload.Info,
 	progress, _ := json.Marshal(pInfo)
 
 	_, err := info.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
-		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 			annotations[rolloutapi.AnnoRolloutProgressingInfo] = string(progress)
 		})
 		return nil
@@ -66,16 +66,15 @@ func (c *BatchScaleControl) Initialize(ctx context.Context, info *workload.Info,
 
 func (c *BatchScaleControl) Scale(ctx context.Context, info *workload.Info, updatedReplicas int32) (bool, error) {
 	ctx = clusterinfo.WithCluster(ctx, info.ClusterName)
-	obj := info.Object
-	return utils.PatchOnConflict(ctx, c.client, c.client, obj, func() error {
-		return c.control.Scale(obj, updatedReplicas)
+	return info.UpdateOnConflict(ctx, c.client, func(in client.Object) error {
+		return c.control.Scale(in, updatedReplicas)
 	})
 }
 
 func (c *BatchScaleControl) Finalize(ctx context.Context, info *workload.Info) error {
 	// delete progressing annotation
 	changed, err := info.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
-		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 			delete(annotations, rolloutapi.AnnoRolloutProgressingInfo)
 		})
 		return nil

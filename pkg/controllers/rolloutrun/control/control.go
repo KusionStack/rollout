@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
-	kubeutilclient "kusionstack.io/kube-utils/client"
+	clientutil "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -70,7 +70,7 @@ func (c *BatchReleaseControl) Initialize(ctx context.Context, info *workload.Inf
 	progress, _ := json.Marshal(pInfo)
 
 	_, err := info.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
-		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 			annotations[rolloutapi.AnnoRolloutProgressingInfo] = string(progress)
 		})
 		return nil
@@ -80,16 +80,15 @@ func (c *BatchReleaseControl) Initialize(ctx context.Context, info *workload.Inf
 
 func (c *BatchReleaseControl) UpdatePartition(ctx context.Context, info *workload.Info, expectedUpdated int32) (bool, error) {
 	ctx = clusterinfo.WithCluster(ctx, info.ClusterName)
-	obj := info.Object
-	return utils.UpdateOnConflict(ctx, c.client, c.client, obj, func() error {
-		return c.control.ApplyPartition(obj, expectedUpdated)
+	return info.UpdateOnConflict(ctx, c.client, func(in client.Object) error {
+		return c.control.ApplyPartition(in, expectedUpdated)
 	})
 }
 
 func (c *BatchReleaseControl) Finalize(ctx context.Context, info *workload.Info) error {
 	// delete progressing annotation
 	changed, err := info.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
-		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 			delete(annotations, rolloutapi.AnnoRolloutProgressingInfo)
 		})
 		return nil
@@ -133,7 +132,7 @@ func (c *CanaryReleaseControl) Initialize(ctx context.Context, stable *workload.
 
 	// set progressing info
 	_, err := stable.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
-		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 			annotations[rolloutapi.AnnoRolloutProgressingInfo] = string(progress)
 		})
 		return nil
@@ -151,7 +150,7 @@ func (c *CanaryReleaseControl) Finalize(ctx context.Context, stable *workload.In
 		return nil
 	}
 
-	err = kubeutilclient.RemoveFinalizerAndDelete(
+	err = clientutil.RemoveFinalizerAndDelete(
 		clusterinfo.WithCluster(ctx, stable.ClusterName),
 		c.client,
 		canaryObj,
@@ -163,7 +162,7 @@ func (c *CanaryReleaseControl) Finalize(ctx context.Context, stable *workload.In
 
 	// delete progressing annotation
 	_, err = stable.UpdateOnConflict(ctx, c.client, func(obj client.Object) error {
-		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 			delete(annotations, rolloutapi.AnnoRolloutProgressingInfo)
 		})
 		return nil
@@ -202,7 +201,7 @@ func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workl
 	}
 
 	// update
-	updated, err := utils.UpdateOnConflict(ctx, c.client, c.client, canaryObj, func() error {
+	updated, err := clientutil.UpdateOnConflict(ctx, c.client, c.client, canaryObj, func(in client.Object) error {
 		c.applyCanaryDefaults(canaryObj)
 		c.control.Scale(canaryObj, canaryReplicas) // nolint
 		return nil
@@ -270,7 +269,7 @@ func (c *CanaryReleaseControl) canaryObject(stable *workload.Info) (client.Objec
 
 func (c *CanaryReleaseControl) applyCanaryDefaults(canaryObj client.Object) {
 	controllerutil.AddFinalizer(canaryObj, rolloutapi.FinalizerCanaryResourceProtection)
-	utils.MutateLabels(canaryObj, func(labels map[string]string) {
+	clientutil.MutateLabels(canaryObj, func(labels map[string]string) {
 		labels[rolloutapi.CanaryResourceLabelKey] = "true"
 	})
 }

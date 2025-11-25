@@ -9,10 +9,10 @@ import (
 	"github.com/samber/lo"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+	clientutil "kusionstack.io/kube-utils/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kusionstack.io/rollout/pkg/controllers/registry"
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 var _ sort.Interface = ProgressingInfos{}
@@ -61,7 +61,7 @@ func (m *ProgressingInfoMutator) MutatePogressingInfo(obj runtimeclient.Object, 
 }
 
 func (m *ProgressingInfoMutator) GetProgressingInfos(obj runtimeclient.Object) ProgressingInfos {
-	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), m.ProgressingInfosAnnotationKey, "")
+	objInfo := clientutil.GetMapValueByDefault(obj.GetAnnotations(), m.ProgressingInfosAnnotationKey, "")
 	if len(objInfo) == 0 {
 		return nil
 	}
@@ -89,7 +89,7 @@ func (m *ProgressingInfoMutator) SetProgressingInfos(obj runtimeclient.Object, i
 	}
 
 	var changed bool
-	utils.MutateAnnotations(obj, func(annotations map[string]string) {
+	clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 		existing, ok := annotations[m.ProgressingInfosAnnotationKey]
 		if len(expected) == 0 && ok {
 			// delete if no progressingInfo
@@ -112,7 +112,7 @@ func (m *ProgressingInfoMutator) SetProgressingInfo(obj runtimeclient.Object, in
 
 	// get info from obj annotation
 	var existing *rolloutv1alpha1.ProgressingInfo
-	objInfo := utils.GetMapValueByDefault(obj.GetAnnotations(), rolloutapi.AnnoRolloutProgressingInfo, "")
+	objInfo := clientutil.GetMapValueByDefault(obj.GetAnnotations(), rolloutapi.AnnoRolloutProgressingInfo, "")
 	if len(objInfo) > 0 {
 		temp := rolloutv1alpha1.ProgressingInfo{}
 		err := json.Unmarshal([]byte(objInfo), &temp)
@@ -127,7 +127,7 @@ func (m *ProgressingInfoMutator) SetProgressingInfo(obj runtimeclient.Object, in
 		// if no progressing info found on obj or rolloutID changed, we need to update annotation
 		changed = true
 		// set progressingInfo if no progressingInfo
-		utils.MutateAnnotations(obj, func(annotations map[string]string) {
+		clientutil.MutateAnnotations(obj, func(annotations map[string]string) {
 			annotations[rolloutapi.AnnoRolloutProgressingInfo] = string(expected)
 		})
 	}
@@ -156,7 +156,7 @@ func generateProgressingInfos(owners []*registry.WorkloadAccessor) (*rolloutv1al
 	result := ProgressingInfos{}
 
 	for _, owner := range owners {
-		ownerInfo := utils.GetMapValueByDefault(owner.Object.GetAnnotations(), rolloutapi.AnnoRolloutProgressingInfo, "")
+		ownerInfo := clientutil.GetMapValueByDefault(owner.Object.GetAnnotations(), rolloutapi.AnnoRolloutProgressingInfo, "")
 		if len(ownerInfo) == 0 {
 			continue
 		}
