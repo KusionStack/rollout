@@ -124,7 +124,7 @@ func DoHTTPProbe(url string, payload *rolloutv1alpha1.RolloutWebhookReview, clie
 		return probe.Result{
 			Code:    rolloutv1alpha1.WebhookReviewCodeError,
 			Reason:  "HTTPResponseError",
-			Message: fmt.Sprintf("HTTP probe failed with statuscode: %d, body: %q", res.StatusCode, string(b)),
+			Message: fmt.Sprintf("HTTP probe failed with statuscode: %d, request: %q, response: %q", res.StatusCode, string(bodyBytes), string(b)),
 		}
 	}
 
