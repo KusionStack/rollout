@@ -178,6 +178,9 @@ func (w *worker) doProbe() (keepGoing bool) {
 		State:             rolloutv1alpha1.WebhookRunning,
 		CodeReasonMessage: probeResult,
 	}
+	if w.lastResult.StartTime != nil {
+		result.StartTime = w.lastResult.StartTime
+	}
 
 	switch result.Code {
 	case rolloutv1alpha1.WebhookReviewCodeOK:
