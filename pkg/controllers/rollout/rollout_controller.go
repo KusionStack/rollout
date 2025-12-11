@@ -36,7 +36,6 @@ import (
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-api/rollout/v1alpha1/condition"
 	clientutil "kusionstack.io/kube-utils/client"
-	kubeutilclient "kusionstack.io/kube-utils/client"
 	"kusionstack.io/kube-utils/controller/mixin"
 	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
@@ -224,7 +223,7 @@ func (r *RolloutReconciler) ensureFinalizer(ctx context.Context, obj *rolloutv1a
 	logger := logr.FromContextOrDiscard(ctx)
 	if obj.DeletionTimestamp == nil {
 		// ensure finalizer
-		if err := kubeutilclient.AddFinalizerAndUpdate(ctx, r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
+		if err := clientutil.AddFinalizerAndUpdate(ctx, r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
 			r.recordCondition(obj, newStatus, reconcileOK, metav1.ConditionFalse, "FailedAddFinalizer", fmt.Sprintf("failed to add finalizer %s, err: %v", rollout.FinalizerRolloutProtection, err))
 			return err
 		}
@@ -233,7 +232,7 @@ func (r *RolloutReconciler) ensureFinalizer(ctx context.Context, obj *rolloutv1a
 
 	if condition.IsTerminationCompleted(obj.Status.Conditions) {
 		// remove finalizer
-		if err := kubeutilclient.RemoveFinalizerAndUpdate(ctx, r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
+		if err := clientutil.RemoveFinalizerAndUpdate(ctx, r.Client, obj, rollout.FinalizerRolloutProtection); err != nil {
 			r.recordCondition(obj, newStatus, reconcileOK, metav1.ConditionFalse, "FailedRemoveFinalizer", fmt.Sprintf("failed to remove finalizer %s, err: %v", rollout.FinalizerRolloutProtection, err))
 			return err
 		}
@@ -463,20 +462,36 @@ func (r *RolloutReconciler) shouldTrigger(obj *rolloutv1alpha1.Rollout, workload
 
 	rolloutID := generateRolloutID(obj.Name)
 
+	total := len(workloads)
+
 	triggerName, ok := obj.Annotations[rollout.AnnoRolloutTrigger]
 	if ok {
+		// triggered by annotation
 		if len(validation.IsQualifiedName(triggerName)) == 0 {
 			// use user defined trigger name as rolloutID
 			rolloutID = triggerName
 		}
+
+		// we need to make sure that there must be at least one workload waiting for rollout
+		noChangeWorkloadCount := 0
+		for _, info := range workloads {
+			if info.Status.StableRevision == info.Status.UpdatedRevision &&
+				info.Status.UpdatedAvailableReplicas >= info.Status.Replicas {
+				noChangeWorkloadCount++
+			}
+		}
+
+		if noChangeWorkloadCount == total {
+			r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "UnTriggered", "all workloads do not need to be updated")
+			return "", false
+		}
+
 		return rolloutID, true
 	}
 
 	if obj.Spec.TriggerPolicy == rolloutv1alpha1.ManualTriggerPolicy {
 		return "", false
 	}
-
-	total := len(workloads)
 
 	if total == 0 {
 		return "", false

@@ -57,7 +57,7 @@ lint: fmt
 
 .PHONY: test
 test: lint envtest ## Run tests.
-	@KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./pkg/... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./pkg/... -coverprofile cover.out
 
 
 .PHONY: e2e-test
@@ -67,11 +67,15 @@ e2e-test: manifests envtest
 ##@ Build
 
 .PHONY: build
-build: lint test ## Build manager binary.
+build: test ## Build manager binary.
 	go build -o bin/manager kusionstack.io/rollout/cmd/rollout
 
+.PHONY: dev-build
+dev-build: ## Build manager binary.
+	go build -o bin/manager kusionstack.io/rollout/cmd/rollout	
+
 .PHONY: run
-run: lint test ## Run a controller from your host.
+run: test ## Run a controller from your host.
 	go run kusionstack.io/rollout/cmd/rollout
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.

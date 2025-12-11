@@ -20,14 +20,16 @@ ROOT_DIR="${BASE_SOURCE_ROOT}"
 # shellcheck source=/dev/null
 source "${ROOT_DIR}/hack/lib/init.sh"
 
-ROLLOUT_CONFIG_CRD="${PROJECT_ROOT_DIR}/config/crd"
 KIND_CONFIG_DIR="${PROJECT_ROOT_DIR}/config/kind"
 
 log::status "compiling rollout binary"
 # build binary and container
-make build
+make dev-build
 
 kind_cluster_name="rollout-dev"
+
+crd_path="${PROJECT_ROOT_DIR}/config/crd/bases"
+
 
 # setup local dev cluster
 kind::ensure_cluster "${kind_cluster_name}"
@@ -41,8 +43,8 @@ fi
 
 # apply namespace and cluster rolebinding
 kind::kustomize_apply "${kind_cluster_name}" "${KIND_CONFIG_DIR}/prerequisite"
-# apply crd
-kind::apply_yamls_in_dir "${kind_cluster_name}" "${ROLLOUT_CONFIG_CRD}/bases"
+# apply rollout crd
+kind::apply_yamls_in_dir "${kind_cluster_name}" "$crd_path"
 # delete webhook firstly
 kind::kustomize_delete "${kind_cluster_name}" "${KIND_CONFIG_DIR}/webhook/outcluster"
 # apply workload

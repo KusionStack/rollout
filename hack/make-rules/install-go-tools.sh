@@ -23,6 +23,7 @@ source "${ROOT_DIR}/hack/lib/init.sh"
 ## Tool Versions
 KUSTOMIZE_VERSION=${KUSTOMIZE_VERSION:-"v5.3.0"}
 CONTROLLER_TOOLS_VERSION=${CONTROLLER_TOOLS_VERSION:-"v0.15.0"}
+SETUP_ENVTEST_VERSION=${SETUP_ENVTEST_VERSION:-"release-0.22"}
 HELM_VERSION=${HELM_VERSION:-"v3.18.0"}
 GOLANGCI_VERSION=${GOLANGCI_VERSION:-"v2.0.2"}
 
@@ -30,43 +31,48 @@ LOCALBIN="${ROOT_DIR}/bin"
 LOCALBIN_OS_ARCH="${ROOT_DIR}/bin/$(golang::get_host_os_arch)"
 
 install::kustomize() {
-    if test -s "${LOCALBIN_OS_ARCH}"/kustomize && "${LOCALBIN_OS_ARCH}"/kustomize version | grep "${KUSTOMIZE_VERSION}"; then
+    local VERSION=${1:-"v5.3.0"}
+    if test -s "${LOCALBIN_OS_ARCH}"/kustomize && "${LOCALBIN_OS_ARCH}"/kustomize version | grep "${VERSION}"; then
         return
     fi
-    log::status "Installing kustomize ${KUSTOMIZE_VERSION}"
-    GOBIN="${LOCALBIN_OS_ARCH}" golang::install sigs.k8s.io/kustomize/kustomize/v5@"${KUSTOMIZE_VERSION}"
+    log::status "Installing kustomize ${VERSION}"
+    GOBIN="${LOCALBIN_OS_ARCH}" golang::install sigs.k8s.io/kustomize/kustomize/v5 "${VERSION}"
 }
 
 install::controller-gen() {
-    if test -e "${LOCALBIN_OS_ARCH}"/controller-gen && "${LOCALBIN_OS_ARCH}"/controller-gen --version | grep -q "${CONTROLLER_TOOLS_VERSION}"; then
+    local VERSION=${1:-"v0.15.0"}
+    if test -e "${LOCALBIN_OS_ARCH}"/controller-gen && "${LOCALBIN_OS_ARCH}"/controller-gen --version | grep -q "${VERSION}"; then
         return
     fi
-    log::status "Installing controller-gen ${CONTROLLER_TOOLS_VERSION}"
-    GOBIN="${LOCALBIN_OS_ARCH}" golang::install sigs.k8s.io/controller-tools/cmd/controller-gen "${CONTROLLER_TOOLS_VERSION}"
+    log::status "Installing controller-gen ${VERSION}"
+    GOBIN="${LOCALBIN_OS_ARCH}" golang::install sigs.k8s.io/controller-tools/cmd/controller-gen "${VERSION}"
 }
 
 install::setup-envtest() {
+    local VERSION=${1:-"release-0.22"}
     if test -s "${LOCALBIN_OS_ARCH}"/setup-envtest; then
         return
     fi
-    log::status "Installing setup-envtest latest"
-    GOBIN="${LOCALBIN_OS_ARCH}" golang::install sigs.k8s.io/controller-runtime/tools/setup-envtest latest
+    log::status "Installing setup-envtest ${VERSION}"
+    GOBIN="${LOCALBIN_OS_ARCH}" golang::install sigs.k8s.io/controller-runtime/tools/setup-envtest "${VERSION}"
 }
 
 install::golangci-lint() {
-    if test -s "${LOCALBIN_OS_ARCH}"/golangci-lint && "${LOCALBIN_OS_ARCH}"/golangci-lint version | grep -q ${GOLANGCI_VERSION}; then
+    local VERSION=${1:-"v2.0.2"}
+    if test -s "${LOCALBIN_OS_ARCH}"/golangci-lint && "${LOCALBIN_OS_ARCH}"/golangci-lint version | grep -q "${VERSION}"; then
         return
     fi
-    log::status "Installing golangci-lint ${GOLANGCI_VERSION}"
-    GOBIN="${LOCALBIN_OS_ARCH}" golang::install github.com/golangci/golangci-lint/v2/cmd/golangci-lint "${GOLANGCI_VERSION}"
+    log::status "Installing golangci-lint ${VERSION}"
+    GOBIN="${LOCALBIN_OS_ARCH}" golang::install github.com/golangci/golangci-lint/v2/cmd/golangci-lint "${VERSION}"
 }
 
 install::helm() {
-    if test -e "${LOCALBIN_OS_ARCH}"/helm && "${LOCALBIN_OS_ARCH}"/helm version | grep -q ${HELM_VERSION}; then
+    local VERSION=${1:-"v3.18.0"}
+    if test -e "${LOCALBIN_OS_ARCH}"/helm && "${LOCALBIN_OS_ARCH}"/helm version | grep -q "${VERSION}"; then
         return
     fi
-    log::status "Installing helm ${HELM_VERSION}"
-    GOBIN="${LOCALBIN_OS_ARCH}" golang::install helm.sh/helm/v3/cmd/helm "${HELM_VERSION}"
+    log::status "Installing helm ${VERSION}"
+    GOBIN="${LOCALBIN_OS_ARCH}" golang::install helm.sh/helm/v3/cmd/helm "${VERSION}"
 }
 
 install::kube-codegen() {
@@ -79,7 +85,9 @@ install::kube-codegen() {
 
 case $1 in
 *)
-    install::"$1"
-    ln -sf "${LOCALBIN_OS_ARCH}/$1" "${LOCALBIN}/"
+    binary="$1"
+    shift
+    install::"$binary" "$@"
+    ln -sf "${LOCALBIN_OS_ARCH}/$binary" "${LOCALBIN}/"
     ;;
 esac

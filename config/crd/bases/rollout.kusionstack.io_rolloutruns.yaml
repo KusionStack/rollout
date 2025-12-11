@@ -4660,6 +4660,10 @@ spec:
                           description: WorkloadDetails contains release details for each workload
                           items:
                             properties:
+                              availableReplicas:
+                                description: AvailableReplicas is the number of service available pods targeted by workload.
+                                format: int32
+                                type: integer
                               cluster:
                                 description: Cluster defines which cluster the workload is in.
                                 type: string
@@ -4714,6 +4718,10 @@ spec:
                                 description: Failure count
                                 format: int32
                                 type: integer
+                              finishTime:
+                                description: FinishTime is the time when the hook finished
+                                format: date-time
+                                type: string
                               hookType:
                                 description: Webhook Type
                                 type: string
@@ -4725,6 +4733,10 @@ spec:
                                 type: string
                               reason:
                                 description: A human-readable short word
+                                type: string
+                              startTime:
+                                description: StartTime is the time when the hook started
+                                format: date-time
                                 type: string
                               state:
                                 description: Current webhook worker state
@@ -4758,6 +4770,10 @@ spec:
                     description: WorkloadDetails contains release details for each workload
                     items:
                       properties:
+                        availableReplicas:
+                          description: AvailableReplicas is the number of service available pods targeted by workload.
+                          format: int32
+                          type: integer
                         cluster:
                           description: Cluster defines which cluster the workload is in.
                           type: string
@@ -4812,6 +4828,10 @@ spec:
                           description: Failure count
                           format: int32
                           type: integer
+                        finishTime:
+                          description: FinishTime is the time when the hook finished
+                          format: date-time
+                          type: string
                         hookType:
                           description: Webhook Type
                           type: string
@@ -4823,6 +4843,10 @@ spec:
                           type: string
                         reason:
                           description: A human-readable short word
+                          type: string
+                        startTime:
+                          description: StartTime is the time when the hook started
+                          format: date-time
                           type: string
                         state:
                           description: Current webhook worker state
@@ -4892,6 +4916,10 @@ spec:
                 description: TargetStatuses describes the referenced workloads status
                 items:
                   properties:
+                    availableReplicas:
+                      description: AvailableReplicas is the number of service available pods targeted by workload.
+                      format: int32
+                      type: integer
                     cluster:
                       description: Cluster defines which cluster the workload is in.
                       type: string

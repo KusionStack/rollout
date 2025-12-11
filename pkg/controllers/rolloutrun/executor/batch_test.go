@@ -87,7 +87,11 @@ func (s *batchExecutorTestSuite) runBatchTestCases(tests []batchExectorTestCase)
 				tt.assertStatus(ctx.NewStatus)
 			}
 			if len(objs) > 0 && tt.assertWorkloads != nil {
-				tt.assertWorkloads(objs)
+				newObjs := []client.Object{}
+				for _, info := range ctx.Workloads.ToSlice() {
+					newObjs = append(newObjs, info.Object)
+				}
+				tt.assertWorkloads(newObjs)
 			}
 		})
 	}

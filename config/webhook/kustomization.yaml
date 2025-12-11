@@ -37,6 +37,14 @@ patches:
       value: {"matchExpressions":[{"key":"webhook.rollout.kusionstack.io/disabled","operator":"DoesNotExist"},{"key":"kubernetes.io/metadata.name","operator":"NotIn","values":["kube-node-lease","kube-public","kube-system","kusionstack-system","kusionstack-rollout"]}]}
   target:
     kind: ValidatingWebhookConfiguration
+# set objectSelector to only match object without the label webhook.rollout.kusionstack.io/disabled
+- patch: |-
+    - op: replace
+      path: /webhooks/0/objectSelector
+      value: {"matchExpressions":[{"key":"webhook.rollout.kusionstack.io/disabled","operator":"DoesNotExist"}]}
+  target:
+    kind: ValidatingWebhookConfiguration
+
 
 
 replacements:
@@ -81,6 +89,24 @@ replacements:
       kind: MutatingWebhookConfiguration
     fieldPaths:
     - webhooks.*.namespaceSelector
+    options:
+      create: true
+# replace objectSelector in webhook configuration
+- source:
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+    fieldPath: webhooks.0.objectSelector
+  targets:
+  - select:
+      kind: ValidatingWebhookConfiguration
+    fieldPaths:
+    - webhooks.*.objectSelector
+    options:
+      create: true
+  - select:
+      kind: MutatingWebhookConfiguration
+    fieldPaths:
+    - webhooks.*.objectSelector
     options:
       create: true
 
