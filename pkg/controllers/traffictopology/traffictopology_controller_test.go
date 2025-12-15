@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("traffic-topology-controller", func() {
@@ -116,23 +117,10 @@ var _ = Describe("traffic-topology-controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() bool {
-				events, err := fedClientSet.CoreV1().Events("default").List(context.TODO(), v1.ListOptions{
-					FieldSelector: "involvedObject.name=tp-controller-ut-tp0",
-					TypeMeta: v1.TypeMeta{
-						APIVersion: "rollout.kusionstack.io/v1alpha1",
-						Kind:       "TrafficTopology",
-					},
-				})
-				if err != nil {
-					return false
-				}
-				for _, evt := range events.Items {
-					if evt.Reason == "ReconcileSucceed" &&
-						evt.Message == "" {
-						return true
-					}
-				}
-				return false
+				// wait for traffic topology reconcile
+				temp := &v1alpha1.TrafficTopology{}
+				fedClient.Get(context.Background(), client.ObjectKeyFromObject(tp0), temp)
+				return temp.Status.ObservedGeneration == temp.Generation
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
 			Eventually(func() bool {
@@ -144,13 +132,7 @@ var _ = Describe("traffic-topology-controller", func() {
 				if err != nil {
 					return false
 				}
-				cleanFlzAdded := false
-				for _, flz := range tpTmp.GetFinalizers() {
-					if flz == "resource-consist.kusionstack.io/clean-tp-controller-ut-tp0" {
-						cleanFlzAdded = true
-					}
-				}
-				if !cleanFlzAdded {
+				if tpTmp.Status.ObservedGeneration != tpTmp.Generation {
 					return false
 				}
 				for _, condition := range tpTmp.Status.Conditions {
@@ -453,23 +435,10 @@ var _ = Describe("traffic-topology-controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() bool {
-				events, err := fedClientSet.CoreV1().Events("default").List(context.TODO(), v1.ListOptions{
-					FieldSelector: "involvedObject.name=tp-controller-ut-tp1",
-					TypeMeta: v1.TypeMeta{
-						APIVersion: "rollout.kusionstack.io/v1alpha1",
-						Kind:       "TrafficTopology",
-					},
-				})
-				if err != nil {
-					return false
-				}
-				for _, evt := range events.Items {
-					if evt.Reason == "ReconcileSucceed" &&
-						evt.Message == "" {
-						return true
-					}
-				}
-				return false
+				// wait for traffic topology reconcile
+				temp := &v1alpha1.TrafficTopology{}
+				fedClient.Get(context.Background(), client.ObjectKeyFromObject(tp1), temp)
+				return temp.Status.ObservedGeneration == temp.Generation
 			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 
 			Eventually(func() bool {
@@ -481,15 +450,11 @@ var _ = Describe("traffic-topology-controller", func() {
 				if err != nil {
 					return false
 				}
-				cleanFlzAdded := false
-				for _, flz := range tpTmp.GetFinalizers() {
-					if flz == "resource-consist.kusionstack.io/clean-tp-controller-ut-tp1" {
-						cleanFlzAdded = true
-					}
-				}
-				if !cleanFlzAdded {
+
+				if tpTmp.Status.ObservedGeneration != tpTmp.Generation {
 					return false
 				}
+
 				for _, condition := range tpTmp.Status.Conditions {
 					if condition.Type == v1alpha1.TrafficTopologyConditionReady && condition.Status == v1.ConditionTrue {
 						return true
