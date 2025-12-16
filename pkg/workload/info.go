@@ -63,6 +63,8 @@ type InfoStatus struct {
 	UpdatedReadyReplicas int32
 	// UpdatedAvailableReplicas is the number of service available pods targeted by workload that have the updated template spec.
 	UpdatedAvailableReplicas int32
+	// TerminatingReplicas is the number of pods which is marked deletion timestamp
+	TerminatingReplicas int32
 }
 
 func NewInfo(cluster string, gvk schema.GroupVersionKind, obj client.Object, status InfoStatus) *Info {
