@@ -471,21 +471,6 @@ func (r *RolloutReconciler) shouldTrigger(obj *rolloutv1alpha1.Rollout, workload
 			// use user defined trigger name as rolloutID
 			rolloutID = triggerName
 		}
-
-		// we need to make sure that there must be at least one workload waiting for rollout
-		noChangeWorkloadCount := 0
-		for _, info := range workloads {
-			if info.Status.StableRevision == info.Status.UpdatedRevision &&
-				info.Status.UpdatedAvailableReplicas >= info.Status.Replicas {
-				noChangeWorkloadCount++
-			}
-		}
-
-		if noChangeWorkloadCount == total {
-			r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "UnTriggered", "all workloads do not need to be updated")
-			return "", false
-		}
-
 		return rolloutID, true
 	}
 
