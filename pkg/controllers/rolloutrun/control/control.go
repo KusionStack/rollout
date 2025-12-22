@@ -179,7 +179,7 @@ func (c *CanaryReleaseControl) CreateOrUpdate(ctx context.Context, stable *workl
 	cluster := stable.ClusterName
 	ctx = clusterinfo.WithCluster(ctx, cluster)
 
-	canaryReplicas, err := workload.CalculateUpdatedReplicas(&stable.Status.Replicas, replicas)
+	canaryReplicas, err := workload.CalculateUpdatedReplicas(&stable.Status.DesiredReplicas, replicas)
 	if err != nil {
 		return controllerutil.OperationResultNone, nil, err
 	}

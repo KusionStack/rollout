@@ -20,8 +20,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/utils/ptr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe"
@@ -42,7 +44,7 @@ var (
 	}
 
 	testWebhookReview = rolloutv1alpha1.RolloutWebhookReview{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-webhook",
 			Namespace: "default",
 		},
@@ -84,10 +86,12 @@ type workerTestSuite struct {
 	suite.Suite
 
 	manager *manager
+	clock   *clock.FakeClock
 }
 
 func (s *workerTestSuite) SetupSuite() {
-	s.manager = newTestManager()
+	s.clock = clock.NewFakeClock(time.Now())
+	s.manager = NewManager(s.clock).(*manager)
 }
 
 func (s *workerTestSuite) Test_DoProbe_Once() {
@@ -112,6 +116,8 @@ func (s *workerTestSuite) Test_DoProbe_Once() {
 				CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
 					Code: rolloutv1alpha1.WebhookReviewCodeOK,
 				},
+				StartTime:  ptr.To(metav1.NewTime(s.clock.Now())),
+				FinishTime: ptr.To(metav1.NewTime(s.clock.Now())),
 			},
 		},
 		{
@@ -129,6 +135,7 @@ func (s *workerTestSuite) Test_DoProbe_Once() {
 				CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
 					Code: rolloutv1alpha1.WebhookReviewCodeProcessing,
 				},
+				StartTime: ptr.To(metav1.NewTime(s.clock.Now())),
 			},
 		},
 		{
@@ -147,6 +154,7 @@ func (s *workerTestSuite) Test_DoProbe_Once() {
 					Code: rolloutv1alpha1.WebhookReviewCodeError,
 				},
 				FailureCount: 1,
+				StartTime:    ptr.To(metav1.NewTime(s.clock.Now())),
 			},
 		},
 		{
@@ -166,6 +174,8 @@ func (s *workerTestSuite) Test_DoProbe_Once() {
 					Code: rolloutv1alpha1.WebhookReviewCodeError,
 				},
 				FailureCount: 1,
+				StartTime:    ptr.To(metav1.NewTime(s.clock.Now())),
+				FinishTime:   ptr.To(metav1.NewTime(s.clock.Now())),
 			},
 		},
 	}

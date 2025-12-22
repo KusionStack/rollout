@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/utils/ptr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
@@ -11,6 +13,7 @@ import (
 type webhookExecutorTestSuite struct {
 	suite.Suite
 
+	clock    *clock.FakeClock
 	executor webhookExecutor
 
 	webhook1      rolloutv1alpha1.RolloutWebhook
@@ -25,7 +28,8 @@ type webhookExecutorTestSuite struct {
 }
 
 func (s *webhookExecutorTestSuite) SetupSuite() {
-	s.executor = newWebhookExecutor(2 * time.Second)
+	s.clock = clock.NewFakeClock(time.Now())
+	s.executor = newWebhookExecutor(s.clock, 2*time.Second)
 
 	s.webhook1 = rolloutv1alpha1.RolloutWebhook{
 		Name: "webhook-1",
@@ -120,6 +124,10 @@ func (s *webhookExecutorTestSuite) runWebhookTestCases(hookType rolloutv1alpha1.
 	}
 }
 
+func (s *webhookExecutorTestSuite) now() *metav1.Time {
+	return ptr.To(metav1.NewTime(s.clock.Now()))
+}
+
 func (s *webhookExecutorTestSuite) Test_Webhook_Retry() {
 	hookType := rolloutv1alpha1.PreCanaryStepHook
 	rollout := s.rollout
@@ -146,6 +154,7 @@ func (s *webhookExecutorTestSuite) Test_Webhook_Retry() {
 			Name:              s.webhook2.Name,
 			CodeReasonMessage: s.webhook2Error,
 			FailureCount:      1,
+			StartTime:         s.now(),
 		}, ctx.NewStatus.CanaryStatus.Webhooks[0])
 	}
 
@@ -165,6 +174,7 @@ func (s *webhookExecutorTestSuite) Test_Webhook_Retry() {
 			Name:              s.webhook2.Name,
 			CodeReasonMessage: s.webhook2Error,
 			FailureCount:      1,
+			StartTime:         s.now(),
 		}, ctx.NewStatus.CanaryStatus.Webhooks[0])
 	}
 
@@ -185,6 +195,7 @@ func (s *webhookExecutorTestSuite) Test_Webhook_Retry() {
 			Name:              s.webhook2.Name,
 			CodeReasonMessage: s.webhook2Error,
 			FailureCount:      2,
+			StartTime:         s.now(),
 		}, ctx.NewStatus.CanaryStatus.Webhooks[0])
 	}
 }
@@ -222,6 +233,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 						Name:              s.webhook1.Name,
 						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
+						FinishTime:        s.now(),
 					}, status.CanaryStatus.Webhooks[0])
 				}
 			},
@@ -246,6 +259,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 							HookType:          rolloutv1alpha1.PreCanaryStepHook,
 							Name:              s.webhook1.Name,
 							CodeReasonMessage: s.webhook1Error,
+							StartTime:         s.now(),
+							FinishTime:        s.now(),
 							FailureCount:      1,
 						},
 						{
@@ -272,6 +287,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 						Name:              s.webhook1.Name,
 						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
+						FinishTime:        s.now(),
 					}, status.CanaryStatus.Webhooks[0])
 					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						State:             rolloutv1alpha1.WebhookOnHold,
@@ -279,6 +296,7 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 						Name:              s.webhook2.Name,
 						CodeReasonMessage: s.webhook2Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
 					}, status.CanaryStatus.Webhooks[1])
 				}
 			},
@@ -313,6 +331,7 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 						Name:              s.webhook3.Name,
 						CodeReasonMessage: s.webhook3Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
 					}, status.CanaryStatus.Webhooks[0])
 				}
 			},
@@ -348,6 +367,8 @@ func (s *webhookExecutorTestSuite) Test_Webhook_PreCanaryHookStep() {
 						Name:              s.webhook1.Name,
 						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
+						FinishTime:        s.now(),
 					}, status.CanaryStatus.Webhooks[0])
 					s.Equal(rolloutv1alpha1.RolloutWebhookStatus{
 						HookType: rolloutv1alpha1.PreCanaryStepHook,
@@ -424,6 +445,8 @@ func (s *webhookExecutorTestSuite) Test_webhook_PostCanaryHookStep() {
 						Name:              s.webhook1.Name,
 						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
+						FinishTime:        s.now(),
 					}, status.CanaryStatus.Webhooks[0])
 				}
 			},
@@ -460,6 +483,7 @@ func (s *webhookExecutorTestSuite) Test_webhook_PostCanaryHookStep() {
 						Name:              s.webhook2.Name,
 						CodeReasonMessage: s.webhook2Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
 					}, status.CanaryStatus.Webhooks[0])
 				}
 			},
@@ -500,6 +524,8 @@ func (s *webhookExecutorTestSuite) Test_webhook_PreBatchHookStep() {
 						Name:              s.webhook1.Name,
 						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
+						FinishTime:        s.now(),
 					}, status.BatchStatus.Records[0].Webhooks[0])
 				}
 			},
@@ -544,6 +570,7 @@ func (s *webhookExecutorTestSuite) Test_webhook_PreBatchHookStep() {
 						Name:              s.webhook2.Name,
 						CodeReasonMessage: s.webhook2Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
 					}, status.BatchStatus.Records[0].Webhooks[0])
 				}
 			},
@@ -584,6 +611,8 @@ func (s *webhookExecutorTestSuite) Test_webhook_PostBatchHookStep() {
 						Name:              s.webhook1.Name,
 						CodeReasonMessage: s.webhook1Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
+						FinishTime:        s.now(),
 					}, status.BatchStatus.Records[0].Webhooks[0])
 				}
 			},
@@ -628,6 +657,7 @@ func (s *webhookExecutorTestSuite) Test_webhook_PostBatchHookStep() {
 						Name:              s.webhook2.Name,
 						CodeReasonMessage: s.webhook2Error,
 						FailureCount:      1,
+						StartTime:         s.now(),
 					}, status.BatchStatus.Records[0].Webhooks[0])
 				}
 			},

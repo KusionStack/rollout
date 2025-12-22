@@ -66,7 +66,10 @@ func (p *accessorImpl) getStatus(obj *appsv1.StatefulSet) workload.InfoStatus {
 		ObservedGeneration: obj.Status.ObservedGeneration,
 		StableRevision:     obj.Status.CurrentRevision,
 		UpdatedRevision:    obj.Status.UpdateRevision,
-		Replicas:           ptr.Deref(obj.Spec.Replicas, 0),
+		DesiredReplicas:    ptr.Deref(obj.Spec.Replicas, 0),
+		ObservedReplicas:   obj.Status.Replicas,
+		ReadyReplicas:      obj.Status.ReadyReplicas,
+		AvailableReplicas:  obj.Status.AvailableReplicas,
 		UpdatedReplicas:    obj.Status.UpdatedReplicas,
 	}
 

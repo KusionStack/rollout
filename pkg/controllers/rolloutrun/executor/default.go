@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/clock"
 	rolloutapis "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -16,7 +17,7 @@ type Executor struct {
 }
 
 func NewDefaultExecutor(logger logr.Logger) *Executor {
-	webhookExec := newWebhookExecutor(time.Second)
+	webhookExec := newWebhookExecutor(clock.RealClock{}, time.Second)
 	canaryExec := newCanaryExecutor(webhookExec)
 	batchExec := newBatchExecutor(webhookExec)
 	e := &Executor{

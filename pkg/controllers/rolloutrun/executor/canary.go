@@ -224,13 +224,13 @@ func (e *canaryExecutor) doCanary(ctx *ExecutorContext) (bool, time.Duration, er
 
 	// 2.b. waiting canary workload ready
 	for _, info := range canaryWorkloads {
-		if !info.CheckUpdatedReady(info.Status.Replicas) {
+		if !info.CheckUpdatedReady(info.Status.DesiredReplicas) {
 			// ready
 			logger.Info("still waiting for canary target ready",
 				"cluster", info.ClusterName,
 				"name", info.Name,
-				"replicas", info.Status.Replicas,
-				"readyReplicas", info.Status.UpdatedAvailableReplicas,
+				"desiredreplicas", info.Status.DesiredReplicas,
+				"availableReplicas", info.Status.UpdatedAvailableReplicas,
 			)
 			return false, retryDefault, nil
 		}

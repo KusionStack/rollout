@@ -28,6 +28,7 @@ import (
 
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe"
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook/probe/http"
+	"kusionstack.io/rollout/pkg/utils"
 )
 
 type Result rolloutv1alpha1.RolloutWebhookStatus
@@ -87,10 +88,11 @@ func newWorker(m *manager, key types.UID, webhook rolloutv1alpha1.RolloutWebhook
 		failureThreshold: int(webhook.FailureThreshold),
 		failurePolicy:    webhook.FailurePolicy,
 	}
+
 	// init result
 	w.lastResult = Result{
 		State:     rolloutv1alpha1.WebhookRunning,
-		StartTime: ptr.To(metav1.Now()),
+		StartTime: ptr.To(metav1.NewTime(m.clock.Now())),
 		CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
 			Code:    rolloutv1alpha1.WebhookReviewCodeProcessing,
 			Reason:  "Processing",
@@ -206,6 +208,13 @@ func (w *worker) doProbe() (keepGoing bool) {
 		// progressing
 		result.State = rolloutv1alpha1.WebhookRunning
 	}
+
+	if result.State == rolloutv1alpha1.WebhookCompleted {
+		result.FinishTime = ptr.To(metav1.NewTime(w.webhookManager.clock.Now()))
+	}
+
+	// shorten long message
+	result.Message = utils.Abbreviate(result.Message, 1024)
 
 	func() {
 		// change result with lock
