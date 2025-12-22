@@ -195,7 +195,7 @@ func (r *RolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// 8. update status firstly
-	updateStatusError := r.updateStatusOnly(ctx, obj, newStatus)
+	updateStatusError := r.updateStatusOnly(ctx, obj, newStatus, workloads)
 	if updateStatusError != nil {
 		return reconcile.Result{}, updateStatusError
 	}
@@ -589,7 +589,10 @@ func (r *RolloutReconciler) cleanupHistory(ctx context.Context, obj *rolloutv1al
 	return nil
 }
 
-func (r *RolloutReconciler) updateStatusOnly(ctx context.Context, obj *rolloutv1alpha1.Rollout, newStatus *rolloutv1alpha1.RolloutStatus) error {
+func (r *RolloutReconciler) updateStatusOnly(ctx context.Context, obj *rolloutv1alpha1.Rollout, newStatus *rolloutv1alpha1.RolloutStatus, workloads []*workload.Info) error {
+	// sync workload status into newStatus
+	newStatus.WorkloadStatuses = workload.ConvertInfoSliceToAPIStatusSlice(workloads)
+
 	if equality.Semantic.DeepEqual(obj.Status, *newStatus) {
 		// no change
 		return nil

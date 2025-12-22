@@ -17,7 +17,6 @@ package rolloutrun
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -331,45 +330,14 @@ func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, ob
 func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.RolloutRunStatus, workloads, canaryWorkloads *workload.Set) {
 	// generate workload status
 	allWorkloads := workloads.ToSlice()
-	sort.Slice(allWorkloads, func(i, j int) bool {
-		iInfo := allWorkloads[i]
-		jInfo := allWorkloads[j]
 
-		if iInfo.ClusterName == jInfo.ClusterName {
-			return iInfo.Name < jInfo.Name
-		}
-
-		return iInfo.ClusterName < jInfo.ClusterName
-	})
-	workloadStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, len(allWorkloads))
-	for i := range allWorkloads {
-		info := allWorkloads[i]
-		workloadStatuses[i] = info.APIStatus()
-	}
+	workloadStatuses := workload.ConvertInfoSliceToAPIStatusSlice(allWorkloads)
 	newStatus.TargetStatuses = workloadStatuses
 
 	// generate canary workload status
 	allCanaryWorkloads := canaryWorkloads.ToSlice()
 	if len(allCanaryWorkloads) > 0 {
-		sort.Slice(allCanaryWorkloads, func(i, j int) bool {
-			iInfo := allCanaryWorkloads[i]
-			jInfo := allCanaryWorkloads[j]
-
-			if iInfo.ClusterName == jInfo.ClusterName {
-				return iInfo.Name < jInfo.Name
-			}
-
-			return iInfo.ClusterName < jInfo.ClusterName
-		})
-		canaryWorkloadStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, len(allCanaryWorkloads))
-		for i := range allCanaryWorkloads {
-			info := allCanaryWorkloads[i]
-			canaryWorkloadStatuses[i] = info.APIStatus()
-		}
-
-		if newStatus.CanaryStatus == nil {
-			newStatus.CanaryStatus = &rolloutv1alpha1.RolloutRunStepStatus{}
-		}
+		canaryWorkloadStatuses := workload.ConvertInfoSliceToAPIStatusSlice(allCanaryWorkloads)
 		newStatus.CanaryStatus.Targets = canaryWorkloadStatuses
 	}
 }

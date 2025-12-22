@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/clock"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 )
 
@@ -35,12 +36,15 @@ type manager struct {
 	workers map[types.UID]*worker
 	// Lock for accessing & mutating workers
 	workerLock sync.RWMutex
+
+	clock clock.Clock
 }
 
-func NewManager() Manager {
+func NewManager(clock clock.Clock) Manager {
 	return &manager{
 		workerLock: sync.RWMutex{},
 		workers:    make(map[types.UID]*worker),
+		clock:      clock,
 	}
 }
 

@@ -30,7 +30,6 @@ kind_cluster_name="rollout-dev"
 
 crd_path="${PROJECT_ROOT_DIR}/config/crd/bases"
 
-
 # setup local dev cluster
 kind::ensure_cluster "${kind_cluster_name}"
 

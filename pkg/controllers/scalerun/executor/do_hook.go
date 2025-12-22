@@ -4,11 +4,11 @@ import (
 	"time"
 
 	"github.com/samber/lo"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/utils/ptr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook"
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 const (
@@ -31,7 +31,7 @@ type webhookExecutorImpl struct {
 
 func newWebhookExecutor(webhookInitTime time.Duration) webhookExecutor {
 	return &webhookExecutorImpl{
-		webhookManager:  webhook.NewManager(),
+		webhookManager:  webhook.NewManager(clock.RealClock{}),
 		webhookInitTime: webhookInitTime,
 	}
 }
@@ -52,9 +52,6 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 	}
 
 	logger.V(2).Info("get webhook result", "hookType", hookType, "webhook", curWebhook.Name, "result", hookResult)
-
-	// shorten long message
-	hookResult.Message = utils.Abbreviate(hookResult.Message, 1024)
 
 	ctx.SetWebhookStatus(rolloutv1alpha1.RolloutWebhookStatus(*hookResult))
 

@@ -4,12 +4,11 @@ import (
 	"time"
 
 	"github.com/samber/lo"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/utils/ptr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 
 	"kusionstack.io/rollout/pkg/controllers/rolloutrun/webhook"
-	"kusionstack.io/rollout/pkg/utils"
 )
 
 const (
@@ -30,9 +29,9 @@ type webhookExecutorImpl struct {
 	webhookInitTime time.Duration
 }
 
-func newWebhookExecutor(webhookInitTime time.Duration) webhookExecutor {
+func newWebhookExecutor(clock clock.Clock, webhookInitTime time.Duration) webhookExecutor {
 	return &webhookExecutorImpl{
-		webhookManager:  webhook.NewManager(),
+		webhookManager:  webhook.NewManager(clock),
 		webhookInitTime: webhookInitTime,
 	}
 }
@@ -54,12 +53,6 @@ func (r *webhookExecutorImpl) Do(ctx *ExecutorContext, hookType rolloutv1alpha1.
 
 	logger.V(2).Info("get webhook result", "hookType", hookType, "webhook", curWebhook.Name, "result", hookResult)
 
-	// shorten long message
-	hookResult.Message = utils.Abbreviate(hookResult.Message, 1024)
-
-	if hookResult.State == rolloutv1alpha1.WebhookCompleted {
-		hookResult.FinishTime = ptr.To(metav1.Now())
-	}
 	ctx.SetWebhookStatus(rolloutv1alpha1.RolloutWebhookStatus(*hookResult))
 
 	if hookResult.State == rolloutv1alpha1.WebhookOnHold &&

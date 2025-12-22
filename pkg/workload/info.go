@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,10 +53,14 @@ type InfoStatus struct {
 	StableRevision string
 	// UpdatedRevision is the updated template revision used to generate pods.
 	UpdatedRevision string
-	// Replicas is the desired number of pods targeted by workload
-	Replicas int32
-	// CurrentReplicas is the current number of existed pods targeted by workload
-	CurrentReplicas int32
+
+	// Replicas fields
+	// DesiredReplicas is the desired number of pods targeted by workload
+	DesiredReplicas int32
+	// ObservedReplicas is the current number of existed pods targeted by workload
+	ObservedReplicas int32
+	// ReadyReplicas is the number of ready pods targeted by workload.
+	ReadyReplicas int32
 	// AvailableReplicas is the number of service available pods targeted by workload.
 	AvailableReplicas int32
 	// UpdatedReplicas is the number of pods targeted by workload that have the updated template spec.
@@ -103,7 +109,8 @@ func (o *Info) CheckUpdatedReady(replicas int32) bool {
 func (o *Info) APIStatus() rolloutv1alpha1.RolloutWorkloadStatus {
 	return rolloutv1alpha1.RolloutWorkloadStatus{
 		RolloutReplicasSummary: rolloutv1alpha1.RolloutReplicasSummary{
-			Replicas:                 o.Status.Replicas,
+			Replicas:                 o.Status.DesiredReplicas,
+			AvailableReplicas:        o.Status.AvailableReplicas,
 			UpdatedReplicas:          o.Status.UpdatedReplicas,
 			UpdatedReadyReplicas:     o.Status.UpdatedReadyReplicas,
 			UpdatedAvailableReplicas: o.Status.UpdatedAvailableReplicas,
@@ -121,8 +128,8 @@ func (o *Info) ScaleWorkloadStatus() rolloutv1alpha1.ScaleWorkloadStatus {
 	return rolloutv1alpha1.ScaleWorkloadStatus{
 		Cluster:           o.ClusterName,
 		Name:              o.Name,
-		Replicas:          o.Status.Replicas,
-		CurrentReplicas:   o.Status.CurrentReplicas,
+		Replicas:          o.Status.DesiredReplicas,
+		CurrentReplicas:   o.Status.ObservedReplicas,
 		AvailableReplicas: o.Status.AvailableReplicas,
 	}
 }
@@ -238,4 +245,24 @@ func List(ctx context.Context, c client.Client, inter Accessor, namespace string
 
 func GetCanaryName(workloadName string) string {
 	return workloadName + "-canary"
+}
+
+// InfoSortFunc is a sort function for Info.
+// ref slices.SortFunc
+func InfoSortFunc(a, b *Info) int {
+	if a.ClusterName == b.ClusterName {
+		return strings.Compare(a.Name, b.Name)
+	}
+	return strings.Compare(a.ClusterName, b.ClusterName)
+}
+
+func ConvertInfoSliceToAPIStatusSlice(infos []*Info) []rolloutv1alpha1.RolloutWorkloadStatus {
+	// sort infos
+	slices.SortStableFunc(infos, InfoSortFunc)
+	// convert to API status
+	statuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0, len(infos))
+	for _, info := range infos {
+		statuses = append(statuses, info.APIStatus())
+	}
+	return statuses
 }

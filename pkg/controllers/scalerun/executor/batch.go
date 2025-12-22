@@ -215,7 +215,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		workloadStatus := info.ScaleWorkloadStatus()
 		currentWorkloadStatus := e.findCurrentWorkloadStatus(currentBatchWorkloadStatus, item.Cluster, item.Name)
 		if currentWorkloadStatus == nil {
-			workloadStatus.ScaleFrom = info.Status.Replicas
+			workloadStatus.ScaleFrom = info.Status.DesiredReplicas
 			workloadStatus.ScaleTo = item.Replicas
 			needApplyReplicas = true
 		} else {
@@ -262,9 +262,9 @@ func (e *batchExecutor) checkScaledReady(info *workload.Info, scaledFrom, scaled
 	}
 
 	if scaledFrom >= scaledTo {
-		return info.Status.CurrentReplicas <= info.Status.Replicas && info.Status.TerminatingReplicas == 0
+		return info.Status.ObservedReplicas <= info.Status.DesiredReplicas && info.Status.TerminatingReplicas == 0
 	} else {
-		return info.Status.AvailableReplicas >= info.Status.Replicas
+		return info.Status.AvailableReplicas >= info.Status.DesiredReplicas
 	}
 }
 
