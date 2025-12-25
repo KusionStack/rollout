@@ -94,6 +94,22 @@ func (s *workerTestSuite) SetupSuite() {
 	s.manager = NewManager(s.clock).(*manager)
 }
 
+func (s *workerTestSuite) Test_first_result() {
+	w := newTestWorker(s.manager, newFakeProber(rolloutv1alpha1.WebhookReviewCodeOK))
+	gotResult := w.Result()
+	s.Equal(Result{
+		State:     rolloutv1alpha1.WebhookRunning,
+		HookType:  testWebhookReview.Spec.HookType,
+		Name:      testWebhookReview.Name,
+		StartTime: ptr.To(metav1.NewTime(s.clock.Now())),
+		CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
+			Code:    rolloutv1alpha1.WebhookReviewCodeProcessing,
+			Reason:  "Processing",
+			Message: "webhook is running",
+		},
+	}, gotResult)
+}
+
 func (s *workerTestSuite) Test_DoProbe_Once() {
 	tests := []struct {
 		name          string
