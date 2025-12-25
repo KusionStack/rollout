@@ -91,6 +91,8 @@ func newWorker(m *manager, key types.UID, webhook rolloutv1alpha1.RolloutWebhook
 
 	// init result
 	w.lastResult = Result{
+		Name:      w.review.Name,
+		HookType:  w.review.Spec.HookType,
 		State:     rolloutv1alpha1.WebhookRunning,
 		StartTime: ptr.To(metav1.NewTime(m.clock.Now())),
 		CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
