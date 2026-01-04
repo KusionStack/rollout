@@ -262,9 +262,9 @@ func (e *batchExecutor) checkScaledReady(info *workload.Info, scaledFrom, scaled
 	}
 
 	if scaledFrom >= scaledTo {
-		return info.Status.ObservedReplicas <= info.Status.DesiredReplicas && info.Status.TerminatingReplicas == 0
+		return info.Status.ObservedReplicas <= scaledTo && info.Status.TerminatingReplicas == 0
 	} else {
-		return info.Status.AvailableReplicas >= info.Status.DesiredReplicas
+		return info.Status.AvailableReplicas >= scaledTo
 	}
 }
 
