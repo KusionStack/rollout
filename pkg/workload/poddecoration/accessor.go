@@ -73,6 +73,7 @@ func (w *accessorImpl) getStatus(obj *operatingv1alpha1.PodDecoration) workload.
 		UpdatedRevision:          obj.Status.UpdatedRevision,
 		ObservedGeneration:       obj.Status.ObservedGeneration,
 		DesiredReplicas:          obj.Status.MatchedPods,
+		ObservedReplicas:         obj.Status.MatchedPods,
 		UpdatedReplicas:          obj.Status.UpdatedPods,
 		UpdatedReadyReplicas:     obj.Status.UpdatedReadyPods,
 		UpdatedAvailableReplicas: obj.Status.UpdatedAvailablePods,

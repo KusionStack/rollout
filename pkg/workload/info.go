@@ -103,7 +103,7 @@ func (o *Info) CheckUpdatedReady(replicas int32) bool {
 	if o.Generation != o.Status.ObservedGeneration {
 		return false
 	}
-	return o.Status.UpdatedAvailableReplicas >= replicas
+	return o.Status.UpdatedAvailableReplicas >= replicas && o.Status.ObservedReplicas <= o.Status.DesiredReplicas
 }
 
 func (o *Info) APIStatus() rolloutv1alpha1.RolloutWorkloadStatus {
