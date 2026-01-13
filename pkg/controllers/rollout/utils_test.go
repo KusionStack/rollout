@@ -29,10 +29,10 @@ import (
 
 func newTestInfo(cluster, namespace, name string) *workload.Info {
 	return &workload.Info{
+		ClusterName: cluster,
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   namespace,
-			ClusterName: cluster,
+			Name:      name,
+			Namespace: namespace,
 		},
 	}
 }

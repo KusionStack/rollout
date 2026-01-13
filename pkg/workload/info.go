@@ -36,6 +36,9 @@ import (
 
 // workload info
 type Info struct {
+	// ClusterName is the name of the cluster.
+	ClusterName string
+	// ObjectMeta is the metadata of the workload.
 	metav1.ObjectMeta
 	// GVK is the GroupVersionKind of the workload.
 	schema.GroupVersionKind
@@ -75,12 +78,12 @@ type InfoStatus struct {
 
 func NewInfo(cluster string, gvk schema.GroupVersionKind, obj client.Object, status InfoStatus) *Info {
 	return &Info{
+		ClusterName: cluster,
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   obj.GetNamespace(),
-			Name:        obj.GetName(),
-			Labels:      obj.GetLabels(),
-			ClusterName: cluster,
-			Generation:  obj.GetGeneration(),
+			Namespace:  obj.GetNamespace(),
+			Name:       obj.GetName(),
+			Labels:     obj.GetLabels(),
+			Generation: obj.GetGeneration(),
 		},
 		GroupVersionKind: gvk,
 		Status:           status,
