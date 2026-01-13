@@ -98,7 +98,7 @@ func createTestExecutorContext(rollout *rolloutv1alpha1.Rollout, rolloutRun *rol
 	for i := range objs {
 		obj := objs[i]
 		clientbuilder.WithObjects(obj)
-		w, _ := inter.GetInfo(obj.GetClusterName(), obj)
+		w, _ := inter.GetInfo(obj.GetLabels()["kusionstack.io/cluster"], obj)
 		infos = append(infos, w)
 	}
 
@@ -133,9 +133,11 @@ func newFakeObject(cluster, namespace, name string, replicas, partition, updated
 	realPartition := replicas - partition
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   namespace,
-			ClusterName: cluster,
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"kusionstack.io/cluster": cluster,
+			},
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &replicas,
