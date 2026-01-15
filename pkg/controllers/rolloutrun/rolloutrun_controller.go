@@ -16,10 +16,10 @@ package rolloutrun
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -353,8 +353,8 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 	}
 
 	if _, ok := obj.Annotations["show-status-diff"]; ok {
-		oldStatusData, _ := json.Marshal(obj.Status)
-		newStatusData, _ := json.Marshal(*newStatus)
+		oldStatusData := spew.Sdump(obj.Status)
+		newStatusData := spew.Sdump(*newStatus)
 		r.Logger.Info("show status diff", "old", string(oldStatusData), "new", string(newStatusData))
 	}
 
