@@ -16,6 +16,7 @@ package rolloutrun
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -350,6 +351,13 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 		// no change
 		return nil
 	}
+
+	if _, ok := obj.Annotations["show-status-diff"]; ok {
+		oldStatusData, _ := json.Marshal(obj.Status)
+		newStatusData, _ := json.Marshal(*newStatus)
+		r.Logger.Info("show status diff", "old", string(oldStatusData), "new", string(newStatusData))
+	}
+
 	key := utils.ObjectKeyString(obj)
 	now := metav1.Now()
 	newStatus.LastUpdateTime = &now
