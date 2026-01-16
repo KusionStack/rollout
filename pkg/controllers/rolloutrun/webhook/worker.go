@@ -94,7 +94,7 @@ func newWorker(m *manager, key types.UID, webhook rolloutv1alpha1.RolloutWebhook
 		Name:      w.review.Name,
 		HookType:  w.review.Spec.HookType,
 		State:     rolloutv1alpha1.WebhookRunning,
-		StartTime: ptr.To(metav1.NewTime(m.clock.Now())),
+		StartTime: ptr.To(w.now()),
 		CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
 			Code:    rolloutv1alpha1.WebhookReviewCodeProcessing,
 			Reason:  "Processing",
@@ -212,7 +212,7 @@ func (w *worker) doProbe() (keepGoing bool) {
 	}
 
 	if result.State == rolloutv1alpha1.WebhookCompleted {
-		result.FinishTime = ptr.To(metav1.NewTime(w.webhookManager.clock.Now()))
+		result.FinishTime = ptr.To(w.now())
 	}
 
 	// shorten long message
@@ -226,6 +226,17 @@ func (w *worker) doProbe() (keepGoing bool) {
 	}()
 
 	return keepGoing
+}
+
+// We need special handling for time. The worker Result contains metav1.Time which serializes
+// using time.RFC3339 format, losing nanoseconds precision. If we use metav1.Now() directly, it
+// would cause inconsistency in precision between locally saved time and serialized time from
+// cluster, leading to unnecessary updates
+func (w *worker) now() metav1.Time {
+	now := metav1.NewTime(w.webhookManager.clock.Now())
+	data, _ := now.MarshalJSON()
+	now.UnmarshalJSON(data)
+	return now
 }
 
 func newProber(webhook rolloutv1alpha1.RolloutWebhook) probe.WebhookProber {
