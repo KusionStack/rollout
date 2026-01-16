@@ -398,6 +398,35 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 						}
 						if !equality.Semantic.DeepEqual(lr.Webhooks, rr.Webhooks) {
 							r.Logger.Info("show status diff: BatchStatus.Records.Webhooks", "recordIndex", i)
+
+							for j := range lr.Webhooks {
+								lw := lr.Webhooks[j]
+								rw := rr.Webhooks[j]
+								if !equality.Semantic.DeepEqual(lw, rw) {
+									r.Logger.Info("show status diff: BatchStatus.Records.Webhooks", "recordIndex", i, "webhookIndex", j)
+									if !equality.Semantic.DeepEqual(lw.Name, rw.Name) {
+										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.Name", "recordIndex", i, "webhookIndex", j)
+									}
+									if !equality.Semantic.DeepEqual(lw.CodeReasonMessage, rw.CodeReasonMessage) {
+										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.CodeReasonMessage", "recordIndex", i, "webhookIndex", j)
+									}
+									if !equality.Semantic.DeepEqual(lw.HookType, rw.HookType) {
+										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.HookType", "recordIndex", i, "webhookIndex", j)
+									}
+									if !equality.Semantic.DeepEqual(lw.State, rw.State) {
+										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.State", "recordIndex", i, "webhookIndex", j, "lw.State", lw.State, "rw.State", rw.State)
+									}
+									if !equality.Semantic.DeepEqual(lw.StartTime, rw.StartTime) {
+										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.StartTime", "recordIndex", i, "webhookIndex", j, "lw.StartTime", lw.StartTime, "rw.StartTime", rw.StartTime)
+									}
+									if !equality.Semantic.DeepEqual(lw.FinishTime, rw.FinishTime) {
+										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.FinishTime", "recordIndex", i, "webhookIndex", j, "lw.FinishTime", lw.FinishTime, "rw.FinishTime", rw.FinishTime)
+									}
+									if !equality.Semantic.DeepEqual(lw.FailureCount, rw.FailureCount) {
+										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.FailureCount", "recordIndex", i, "webhookIndex", j, "lw.FailureCount", lw.FailureCount, "rw.FailureCount", rw.FailureCount)
+									}
+								}
+							}
 						}
 					}
 				}
