@@ -417,7 +417,7 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.State", "recordIndex", i, "webhookIndex", j, "lw.State", lw.State, "rw.State", rw.State)
 									}
 									if !equality.Semantic.DeepEqual(lw.StartTime, rw.StartTime) {
-										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.StartTime", "recordIndex", i, "webhookIndex", j, "lw.StartTime", lw.StartTime, "rw.StartTime", rw.StartTime)
+										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.StartTime", "recordIndex", i, "webhookIndex", j, "lw.StartTime", lw.StartTime.Format(time.RFC3339Nano), "rw.StartTime", rw.StartTime.Format(time.RFC3339Nano))
 									}
 									if !equality.Semantic.DeepEqual(lw.FinishTime, rw.FinishTime) {
 										r.Logger.Info("show status diff: BatchStatus.Records.Webhooks.FinishTime", "recordIndex", i, "webhookIndex", j, "lw.FinishTime", lw.FinishTime, "rw.FinishTime", rw.FinishTime)
