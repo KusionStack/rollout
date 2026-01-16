@@ -38,6 +38,19 @@ func TestRolloutRunStatusDeepEqual(t *testing.T) {
 				{
 					Index:     ptr.To[int32](0),
 					StartTime: &mt1,
+					Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
+						{
+							Name:     "PreBatchOpsCheck",
+							HookType: "PreBatchStepHook",
+							CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
+								Code:    "Processing",
+								Reason:  "工单otrafficonaicloudservice-test不存在",
+								Message: "工单otrafficonaicloudservice-test不存在",
+							},
+							StartTime: &mt1,
+							State:     "Running",
+						},
+					},
 				},
 			},
 		},
@@ -51,6 +64,19 @@ func TestRolloutRunStatusDeepEqual(t *testing.T) {
 				{
 					Index:     ptr.To[int32](0),
 					StartTime: &mt2,
+					Webhooks: []rolloutv1alpha1.RolloutWebhookStatus{
+						{
+							Name:     "PreBatchOpsCheck",
+							HookType: "PreBatchStepHook",
+							CodeReasonMessage: rolloutv1alpha1.CodeReasonMessage{
+								Code:    "Processing",
+								Reason:  "工单otrafficonaicloudservice-test不存在",
+								Message: "工单otrafficonaicloudservice-test不存在",
+							},
+							StartTime: &mt2,
+							State:     "Running",
+						},
+					},
 				},
 			},
 		},

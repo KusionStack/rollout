@@ -373,14 +373,36 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 
 		if !equality.Semantic.DeepEqual(obj.Status.BatchStatus, newStatus.BatchStatus) {
 			r.Logger.Info("show status diff: BatchStatus changed")
-		}
+			if !equality.Semantic.DeepEqual(obj.Status.BatchStatus.RolloutBatchStatus, newStatus.BatchStatus.RolloutBatchStatus) {
+				r.Logger.Info("show status diff: BatchStatus.RolloutBatchStatus changed")
+			}
 
-		if !equality.Semantic.DeepEqual(obj.Status.BatchStatus.RolloutBatchStatus, newStatus.BatchStatus.RolloutBatchStatus) {
-			r.Logger.Info("show status diff: BatchStatus.RolloutBatchStatus changed")
-		}
+			if !equality.Semantic.DeepEqual(obj.Status.BatchStatus.Records, newStatus.BatchStatus.Records) {
+				r.Logger.Info("show status diff: BatchStatus.Records changed")
+				for i := range newStatus.BatchStatus.Records {
+					lr := obj.Status.BatchStatus.Records[i]
+					rr := newStatus.BatchStatus.Records[i]
+					if !equality.Semantic.DeepEqual(lr, rr) {
+						r.Logger.Info("show status diff: BatchStatus.Records", "recordIndex", i)
+						if !equality.Semantic.DeepEqual(lr.Index, rr.Index) {
+							r.Logger.Info("show status diff: BatchStatus.Records.Index", "recordIndex", i)
+						}
+						if !equality.Semantic.DeepEqual(lr.StartTime, rr.StartTime) {
+							r.Logger.Info("show status diff: BatchStatus.Records.StartTime", "recordIndex", i)
+						}
+						if !equality.Semantic.DeepEqual(lr.FinishTime, rr.FinishTime) {
+							r.Logger.Info("show status diff: BatchStatus.Records.FinishTime", "recordIndex", i)
+						}
+						if !equality.Semantic.DeepEqual(lr.Targets, rr.Targets) {
+							r.Logger.Info("show status diff: BatchStatus.Records.Targets", "recordIndex", i)
+						}
+						if !equality.Semantic.DeepEqual(lr.Webhooks, rr.Webhooks) {
+							r.Logger.Info("show status diff: BatchStatus.Records.Webhooks", "recordIndex", i)
+						}
+					}
+				}
+			}
 
-		if !equality.Semantic.DeepEqual(obj.Status.BatchStatus.Records, newStatus.BatchStatus.Records) {
-			r.Logger.Info("show status diff: BatchStatus.Records changed")
 		}
 
 		if !equality.Semantic.DeepEqual(obj.Status.TargetStatuses, newStatus.TargetStatuses) {
