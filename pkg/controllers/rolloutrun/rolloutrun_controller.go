@@ -346,21 +346,46 @@ func (r *RolloutRunReconciler) syncWorkloadStatus(newStatus *rolloutv1alpha1.Rol
 func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, newStatus *rolloutv1alpha1.RolloutRunStatus, workloads, canaryWorkloads *workload.Set) error {
 	// generate workload status
 	r.syncWorkloadStatus(newStatus, workloads, canaryWorkloads)
+	key := utils.ObjectKeyString(obj)
 
 	if equality.Semantic.DeepEqual(obj.Status, *newStatus) {
 		// no change
+		r.Logger.Info("rolloutRun status not changed", "run", key)
 		return nil
 	}
 
 	if _, ok := obj.Annotations["show-status-diff"]; ok {
+		if !equality.Semantic.DeepEqual(obj.Status.Conditions, newStatus.Conditions) {
+			r.Logger.Info("show status diff: condition changed")
+		}
+
+		if !equality.Semantic.DeepEqual(obj.Status.LastUpdateTime, newStatus.LastUpdateTime) {
+			r.Logger.Info("show status diff: LastUpdateTime changed")
+		}
+
+		if !equality.Semantic.DeepEqual(obj.Status.Error, newStatus.Error) {
+			r.Logger.Info("show status diff: Error changed")
+		}
+
+		if !equality.Semantic.DeepEqual(obj.Status.CanaryStatus, newStatus.CanaryStatus) {
+			r.Logger.Info("show status diff: CanaryStatus changed")
+		}
+
+		if !equality.Semantic.DeepEqual(obj.Status.BatchStatus, newStatus.BatchStatus) {
+			r.Logger.Info("show status diff: BatchStatus changed")
+		}
+
+		if !equality.Semantic.DeepEqual(obj.Status.TargetStatuses, newStatus.TargetStatuses) {
+			r.Logger.Info("show status diff: TargetStatuses changed")
+		}
+
 		oldStatusData := spew.Sdump(obj.Status)
 		newStatusData := spew.Sdump(*newStatus)
 		r.Logger.Info("show status diff", "old", string(oldStatusData), "new", string(newStatusData))
+
 	}
 
-	key := utils.ObjectKeyString(obj)
-	now := metav1.Now()
-	newStatus.LastUpdateTime = &now
+	newStatus.LastUpdateTime = nil
 	_, err := kubeutilclient.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), obj, func(in *rolloutv1alpha1.RolloutRun) error {
 		in.Status = *newStatus
 		in.Status.ObservedGeneration = in.Generation
@@ -372,6 +397,7 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 		return err
 	}
 
+	r.Logger.Info("rolloutRun status updated", "run", key)
 	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
 	return nil
 }
