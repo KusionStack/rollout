@@ -375,6 +375,14 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 			r.Logger.Info("show status diff: BatchStatus changed")
 		}
 
+		if !equality.Semantic.DeepEqual(obj.Status.BatchStatus.RolloutBatchStatus, newStatus.BatchStatus.RolloutBatchStatus) {
+			r.Logger.Info("show status diff: BatchStatus.RolloutBatchStatus changed")
+		}
+
+		if !equality.Semantic.DeepEqual(obj.Status.BatchStatus.Records, newStatus.BatchStatus.Records) {
+			r.Logger.Info("show status diff: BatchStatus.Records changed")
+		}
+
 		if !equality.Semantic.DeepEqual(obj.Status.TargetStatuses, newStatus.TargetStatuses) {
 			r.Logger.Info("show status diff: TargetStatuses changed")
 		}
@@ -385,7 +393,8 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 
 	}
 
-	newStatus.LastUpdateTime = nil
+	now := metav1.Now()
+	newStatus.LastUpdateTime = &now
 	_, err := kubeutilclient.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client.Status(), obj, func(in *rolloutv1alpha1.RolloutRun) error {
 		in.Status = *newStatus
 		in.Status.ObservedGeneration = in.Generation
