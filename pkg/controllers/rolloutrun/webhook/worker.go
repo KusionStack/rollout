@@ -235,7 +235,7 @@ func (w *worker) doProbe() (keepGoing bool) {
 func (w *worker) now() metav1.Time {
 	now := metav1.NewTime(w.webhookManager.clock.Now())
 	data, _ := now.MarshalJSON()
-	_ = now.UnmarshalJSON(data)
+	now.UnmarshalJSON(data) //nolint
 	return now
 }
 
