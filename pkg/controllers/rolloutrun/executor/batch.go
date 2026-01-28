@@ -222,7 +222,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 			// if the target is ready, we will not change partition
 			continue
 		}
-		ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeNormal, "WorkloadUpdatedUnready", "workload updated unready, reason %s", reason)
+		ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeNormal, "WaitingWorkloadUpdatedReady", "still waiting for target to be ready, target: %v, reason: %s", item.CrossClusterObjectNameReference, reason)
 
 		allWorkloadReady = false
 		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference, "reason", reason)
