@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -194,6 +195,8 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	newStatus := ctx.NewStatus
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
+	totalBatches := len(rolloutRun.Spec.Batch.Batches)
+	isLastBatch := int(currentBatchIndex+1) == totalBatches
 
 	logger := ctx.GetBatchLogger()
 
@@ -214,13 +217,15 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 		currentBatchExpectedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
 
-		if info.CheckUpdatedReady(currentBatchExpectedReplicas) {
+		ready, reason := info.CheckUpdatedReady(currentBatchExpectedReplicas, isLastBatch)
+		if ready {
 			// if the target is ready, we will not change partition
 			continue
 		}
+		ctx.Recorder.Eventf(ctx.RolloutRun, corev1.EventTypeNormal, "WaitingWorkloadUpdatedReady", "still waiting for target to be ready, target: %v, reason: %s", item.CrossClusterObjectNameReference, reason)
 
 		allWorkloadReady = false
-		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference)
+		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference, "reason", reason)
 
 		expectedReplicas, err := e.calculateExpectedReplicasBySlidingWindow(status, currentBatchExpectedReplicas, item.ReplicaSlidingWindow)
 		if err != nil {

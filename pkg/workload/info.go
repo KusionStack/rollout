@@ -102,11 +102,17 @@ func (o *Info) String() string {
 	return rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: o.ClusterName, Name: o.Name}.String()
 }
 
-func (o *Info) CheckUpdatedReady(replicas int32) bool {
+func (o *Info) CheckUpdatedReady(replicas int32, strictCheck bool) (bool, string) {
 	if o.Generation != o.Status.ObservedGeneration {
-		return false
+		return false, "workload Generation and ObservedGeneration are mismatched"
 	}
-	return o.Status.UpdatedAvailableReplicas >= replicas && o.Status.ObservedReplicas <= o.Status.DesiredReplicas
+	if o.Status.UpdatedAvailableReplicas < replicas {
+		return false, "workload updated available replicas is not satisfied"
+	}
+	if strictCheck && o.Status.ObservedReplicas > o.Status.DesiredReplicas {
+		return false, "workload observed replicas is more than desiredReplicas"
+	}
+	return true, ""
 }
 
 func (o *Info) APIStatus() rolloutv1alpha1.RolloutWorkloadStatus {
