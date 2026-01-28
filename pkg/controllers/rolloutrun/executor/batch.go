@@ -194,6 +194,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	newStatus := ctx.NewStatus
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	currentBatch := rolloutRun.Spec.Batch.Batches[currentBatchIndex]
+	totalBatches := len(rolloutRun.Spec.Batch.Batches)
 
 	logger := ctx.GetBatchLogger()
 
@@ -214,13 +215,14 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 		currentBatchExpectedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
 
-		if info.CheckUpdatedReady(currentBatchExpectedReplicas) {
+		ready, reason := info.CheckUpdatedReady(currentBatchExpectedReplicas, int(currentBatchIndex+1) == totalBatches)
+		if ready {
 			// if the target is ready, we will not change partition
 			continue
 		}
 
 		allWorkloadReady = false
-		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference)
+		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference, "reason", reason)
 
 		expectedReplicas, err := e.calculateExpectedReplicasBySlidingWindow(status, currentBatchExpectedReplicas, item.ReplicaSlidingWindow)
 		if err != nil {
