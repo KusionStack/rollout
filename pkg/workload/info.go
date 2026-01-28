@@ -102,11 +102,24 @@ func (o *Info) String() string {
 	return rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: o.ClusterName, Name: o.Name}.String()
 }
 
-func (o *Info) CheckUpdatedReady(replicas int32) bool {
+func (o *Info) CheckUpdatedReady(replicas int32, isLastBatch bool) (bool, string) {
+	if o.Generation != o.Status.ObservedGeneration {
+		return false, string(UpdatedUnreadyGenerationMismatched)
+	}
+	if o.Status.UpdatedAvailableReplicas < replicas {
+		return false, string(UpdatedUnreadyAvailableReplicasNotSatisfied)
+	}
+	if isLastBatch && o.Status.ObservedReplicas > o.Status.DesiredReplicas {
+		return false, string(UpdatedUnreadyObservedReplicasNotSatisfied)
+	}
+	return true, ""
+}
+
+func (o *Info) CheckCanaryUpdatedReady(replicas int32) bool {
 	if o.Generation != o.Status.ObservedGeneration {
 		return false
 	}
-	return o.Status.UpdatedAvailableReplicas >= replicas && o.Status.ObservedReplicas <= o.Status.DesiredReplicas
+	return o.Status.UpdatedAvailableReplicas >= replicas
 }
 
 func (o *Info) APIStatus() rolloutv1alpha1.RolloutWorkloadStatus {
