@@ -69,8 +69,16 @@ func filterWorkloadsByMatch(workloads []*workload.Info, match *rolloutv1alpha1.R
 }
 
 func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []*workload.Info, rolloutId string) *rolloutv1alpha1.RolloutRun {
+	var run *rolloutv1alpha1.RolloutRun
+	var hasInline bool
+	// Try inline strategy first
+	if run, hasInline = constructRolloutRunFromInlineStrategy(obj, workloadWrappers, rolloutId); hasInline {
+		return run
+	}
+
+	// Fall back to strategy reference
 	owner := metav1.NewControllerRef(obj, rolloutv1alpha1.SchemeGroupVersion.WithKind("Rollout"))
-	run := &rolloutv1alpha1.RolloutRun{
+	run = &rolloutv1alpha1.RolloutRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       obj.Namespace,
 			Name:            rolloutId,

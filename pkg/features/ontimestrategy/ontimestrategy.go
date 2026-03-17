@@ -28,7 +28,16 @@ const (
 )
 
 type OneTimeStrategy struct {
+	// Batch is the original field for StrategyRef scenario.
+	// Used when referencing a RolloutStrategy CRD with match/replicas.
+	// Mutually exclusive with InlineBatch.
 	Batch rolloutv1alpha1.BatchStrategy `json:"batch,omitempty"`
+
+	// InlineBatch is for inline batch strategy scenario.
+	// Used when RolloutSpec uses BatchStrategy inline configuration.
+	// Mutually exclusive with Batch.
+	// Directly reuses RolloutRunBatchStrategy type.
+	InlineBatch *rolloutv1alpha1.RolloutRunBatchStrategy `json:"inlineBatch,omitempty"`
 }
 
 func (s *OneTimeStrategy) JSONData() []byte {
@@ -36,8 +45,22 @@ func (s *OneTimeStrategy) JSONData() []byte {
 	return data
 }
 
+// ConvertFrom creates a OneTimeStrategy from RolloutStrategy (for StrategyRef scenario)
 func ConvertFrom(in *rolloutv1alpha1.RolloutStrategy) *OneTimeStrategy {
+	if in == nil || in.Batch == nil {
+		return &OneTimeStrategy{}
+	}
 	return &OneTimeStrategy{
 		Batch: *in.Batch,
+	}
+}
+
+// ConvertFromInline creates a OneTimeStrategy for inline batch strategy scenario
+func ConvertFromInline(batchStrategy *rolloutv1alpha1.RolloutRunBatchStrategy) *OneTimeStrategy {
+	if batchStrategy == nil {
+		return &OneTimeStrategy{}
+	}
+	return &OneTimeStrategy{
+		InlineBatch: batchStrategy,
 	}
 }
