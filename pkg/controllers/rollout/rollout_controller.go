@@ -327,16 +327,22 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 
 func (r *RolloutReconciler) getDependentResources(ctx context.Context, obj *rolloutv1alpha1.Rollout) (ros *rolloutv1alpha1.RolloutStrategy, ttopos []*rolloutv1alpha1.TrafficTopology, errs []error) {
 	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
-	var strategy rolloutv1alpha1.RolloutStrategy
-	err := r.Client.Get(
-		ctx,
-		client.ObjectKey{Namespace: obj.Namespace, Name: obj.Spec.StrategyRef},
-		&strategy,
-	)
-	if err != nil {
-		errs = append(errs, err)
-	} else {
-		ros = &strategy
+
+	// Check if using inline strategy (BatchStrategy)
+	// If using inline strategy, we don't need to fetch RolloutStrategy
+	if obj.Spec.BatchStrategy == nil && len(obj.Spec.StrategyRef) > 0 {
+		// Only fetch RolloutStrategy if using StrategyRef (not inline strategy)
+		var strategy rolloutv1alpha1.RolloutStrategy
+		err := r.Client.Get(
+			ctx,
+			client.ObjectKey{Namespace: obj.Namespace, Name: obj.Spec.StrategyRef},
+			&strategy,
+		)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			ros = &strategy
+		}
 	}
 
 	for _, tt := range obj.Spec.TrafficTopologyRefs {
@@ -670,12 +676,21 @@ func (r *RolloutReconciler) applyOneTimeStrategy(ctx context.Context, obj *rollo
 		return nil
 	}
 
-	batch := rolloutv1alpha1.RolloutRunBatchStrategy{
-		Batches:    constructRolloutRunBatches(&strategy.Batch, workloads),
-		Toleration: strategy.Batch.Toleration,
+	var batch *rolloutv1alpha1.RolloutRunBatchStrategy
+
+	// Check if using InlineBatch (for inline batch strategy scenario)
+	if strategy.InlineBatch != nil {
+		workloadMap := buildWorkloadMap(workloads)
+		batch = validateAndCopyBatchStrategy(strategy.InlineBatch, workloadMap)
+	} else {
+		// Use original Batch field (for StrategyRef scenario)
+		batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
+			Batches:    constructRolloutRunBatches(&strategy.Batch, workloads),
+			Toleration: strategy.Batch.Toleration,
+		}
 	}
 
-	if batch.Toleration == nil {
+	if batch.Toleration == nil && run.Spec.Batch != nil {
 		batch.Toleration = run.Spec.Batch.Toleration
 	}
 
@@ -693,7 +708,7 @@ func (r *RolloutReconciler) applyOneTimeStrategy(ctx context.Context, obj *rollo
 		// update strategy in annotation
 		in.Annotations[ontimestrategy.AnnoOneTimeStrategy] = strategyStr
 		// update batch in spec
-		in.Spec.Batch = &batch
+		in.Spec.Batch = batch
 		return nil
 	})
 	if err != nil {
