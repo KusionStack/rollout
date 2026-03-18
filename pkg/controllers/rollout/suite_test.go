@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,7 +44,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	env = &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths:       []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
+		ControlPlaneStopTimeout: 60, // 60 seconds timeout for apiserver and etcd to stop
 	}
 
 	config, err := env.Start()
@@ -70,6 +72,15 @@ var _ = BeforeSuite(func() {
 	go func() {
 		Expect(mgr.Start(ctx)).NotTo(HaveOccurred())
 	}()
+})
+
+var _ = AfterSuite(func() {
+	By("tearing down the test environment")
+
+	cancel()
+	// Give manager time to stop gracefully before stopping envtest
+	time.Sleep(3 * time.Second)
+	_ = env.Stop()
 })
 
 func TestRolloutReconciler(t *testing.T) {
