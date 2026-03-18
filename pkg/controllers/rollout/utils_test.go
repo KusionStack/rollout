@@ -260,6 +260,21 @@ func Test_constructRolloutRun(t *testing.T) {
 							},
 						},
 					},
+					BatchStrategy: &rolloutv1alpha1.RolloutRunBatchStrategy{
+						Batches: []rolloutv1alpha1.RolloutRunStep{
+							{
+								Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+									{
+										CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+											Cluster: "cluster-a",
+											Name:    "test-1",
+										},
+										Replicas: intstr.FromString("100%"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 			strategy: &rolloutv1alpha1.RolloutStrategy{

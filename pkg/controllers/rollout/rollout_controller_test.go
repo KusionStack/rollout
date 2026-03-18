@@ -15,7 +15,6 @@
 package rollout
 
 import (
-	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -427,8 +426,6 @@ func containsString(slice []string, s string) bool {
 }
 
 func createNamespace(namespace string) error {
-	ctx = context.Background()
-
 	// Create test namespace
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
