@@ -56,6 +56,14 @@ func ValidateRolloutSpec(spec *rolloutv1alpha1.RolloutSpec, fldPath *field.Path,
 		))
 	}
 
+	if hasCanary && !hasBatch {
+		allErrs = append(allErrs, field.Invalid(
+			fldPath,
+			spec.StrategyRef,
+			"batchStrategy is required when canaryStrategy is set",
+		))
+	}
+
 	// Must specify at least one strategy
 	if !hasStrategyRef && !hasBatch {
 		allErrs = append(allErrs, field.Required(
