@@ -15,307 +15,928 @@
 package rollout
 
 import (
+	"context"
+	"encoding/json"
+	"flag"
+	"os"
+	"path/filepath"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
+	"github.com/stretchr/testify/suite"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
+	"k8s.io/utils/ptr"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-api/rollout/v1alpha1/condition"
+	"kusionstack.io/kube-utils/multicluster"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
+	"kusionstack.io/kube-utils/multicluster/clusterprovider"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"kusionstack.io/rollout/pkg/controllers/registry"
+	"kusionstack.io/rollout/pkg/features"
+	"kusionstack.io/rollout/pkg/features/ontimestrategy"
 )
 
-var _ = Describe("Rollout Controller Integration Tests", func() {
-	const (
-		timeout  = time.Second * 30
-		interval = time.Millisecond * 250
+type rolloutTestSuite struct {
+	suite.Suite
+
+	fedClient      client.Client
+	cluster1Client client.Client
+	cluster2Client client.Client
+
+	rollout *rolloutv1alpha1.Rollout
+
+	// Environment cleanup
+	testClusterEnv *envtest.Environment
+	ctx            context.Context
+	cancel         context.CancelFunc
+}
+
+func (s *rolloutTestSuite) setupCluster(env *envtest.Environment) (*rest.Config, client.Client) {
+	config, err := env.Start()
+	s.Require().NoError(err)
+	s.Require().NotNil(config)
+
+	c, err := client.New(config, client.Options{Scheme: env.Scheme})
+	s.Require().NoError(err)
+	s.Require().NotNil(c)
+
+	return config, c
+}
+
+func (s *rolloutTestSuite) SetupSuite() {
+	local := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	klog.InitFlags(local)
+	local.Set("v", "3")
+
+	// Enable OneTimeStrategy feature gate for tests
+	if err := features.DefaultMutableFeatureGate.Set("OneTimeStrategy=true"); err != nil {
+		panic(err)
+	}
+
+	logf.SetLogger(klogr.New())
+
+	// Create cancellable context for cleanup
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+
+	// fed
+	testscheme := scheme.Scheme
+	err := rolloutv1alpha1.AddToScheme(testscheme)
+	s.Require().NoError(err)
+
+	s.testClusterEnv = &envtest.Environment{
+		Scheme: testscheme,
+		CRDInstallOptions: envtest.CRDInstallOptions{
+			Paths: []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
+		},
+	}
+
+	var (
+		fedConfig      *rest.Config
+		cluster1Config *rest.Config
+		cluster2Config *rest.Config
 	)
 
-	Context("Rollout initialize", func() {
-		var (
-			namespace  = "test-ns-rollout-init"
-			rolloutKey = types.NamespacedName{
-				Namespace: namespace,
-				Name:      "test-rollout-init",
-			}
-		)
+	fedConfig, s.fedClient = s.setupCluster(s.testClusterEnv)
+	cluster1Config, s.cluster1Client = s.setupCluster(s.testClusterEnv)
+	cluster2Config, s.cluster2Client = s.setupCluster(s.testClusterEnv)
 
-		It("should create rollout with finalizer", func() {
-			Expect(createNamespace(namespace)).Should(Succeed())
+	// manager
+	os.Setenv(clusterinfo.EnvClusterAllowList, "cluster1,cluster2")
 
-			// Create a basic rollout
-			rollout := newTestRollout(rolloutKey.Name, namespace)
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+	clusterMgr, newCacheFunc, newClientFunc, err := multicluster.NewManager(&multicluster.ManagerConfig{
+		ClusterProvider: clusterprovider.NewSimpleClusterProvider(map[string]*rest.Config{
+			"cluster1": cluster1Config,
+			"cluster2": cluster2Config,
+			"fed":      fedConfig,
+		}),
+		FedConfig:     fedConfig,
+		ClusterScheme: testscheme,
+		ResyncPeriod:  10 * time.Minute,
+	}, multicluster.Options{})
 
-			// Wait for finalizer to be added
-			Eventually(func() bool {
-				r := &rolloutv1alpha1.Rollout{}
-				if err := c.Get(ctx, rolloutKey, r); err != nil {
-					return false
-				}
-				return containsString(r.Finalizers, rolloutapi.FinalizerRolloutProtection)
-			}, timeout, interval).Should(BeTrue())
-		})
+	s.Require().NoError(err)
 
-		It("initialize rollout with correct phase", func() {
-			// Wait for rollout to be initialized
-			Eventually(func() bool {
-				r := &rolloutv1alpha1.Rollout{}
-				if err := c.Get(ctx, rolloutKey, r); err != nil {
-					return false
-				}
-				return r.Status.Phase == rolloutv1alpha1.RolloutPhaseInitialized
-			}, timeout, interval).Should(BeTrue())
-		})
+	go func() {
+		// start multi cluster client manager
+		err := clusterMgr.Run(s.ctx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	// wait for cache synced
+	s.Require().True(clusterMgr.WaitForSynced(s.ctx))
+
+	s.ctx = clusterinfo.WithCluster(s.ctx, clusterinfo.Fed)
+
+	mgr, err := manager.New(fedConfig, manager.Options{
+		Scheme:                 testscheme,
+		NewClient:              newClientFunc,
+		NewCache:               newCacheFunc,
+		MetricsBindAddress:     "0",
+		HealthProbeBindAddress: "0",
 	})
 
-	Context("Rollout with StrategyRef", func() {
-		var (
-			namespace   = "test-ns-rollout-strategy"
-			rolloutKey  = types.NamespacedName{Namespace: namespace, Name: "test-rollout"}
-			strategyKey = types.NamespacedName{Namespace: namespace, Name: "test-strategy"}
-		)
+	s.Require().NoError(err)
 
-		It("should resolve strategy reference successfully", func() {
-			Expect(createNamespace(namespace)).Should(Succeed())
+	_, err = registry.InitWorkloadRegistry(mgr)
+	s.Require().NoError(err)
 
-			// Create rollout strategy
-			strategy := newTestRolloutStrategy(strategyKey.Name, namespace)
-			Expect(c.Create(clusterinfo.WithCluster(ctx, clusterinfo.Fed), strategy)).Should(Succeed())
+	_, err = InitFunc(mgr)
+	s.Require().NoError(err)
 
-			rollout := newTestRollout(rolloutKey.Name, namespace)
-			rollout.Spec.StrategyRef = strategyKey.Name
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+	go func() {
+		err := mgr.Start(s.ctx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+}
 
-			// Wait for Available condition to become True
-			Eventually(func() bool {
-				r := &rolloutv1alpha1.Rollout{}
-				if err := c.Get(ctx, rolloutKey, r); err != nil {
-					return false
-				}
-				return condition.IsAvailable(r.Status.Conditions)
-			}, timeout, interval).Should(BeTrue())
-		})
+func (s *rolloutTestSuite) TearDownSuite() {
+	// Cancel context to stop manager and cluster manager
+	if s.cancel != nil {
+		s.cancel()
+	}
+	// Stop envtest environment
+	if s.testClusterEnv != nil {
+		_ = s.testClusterEnv.Stop()
+	}
+}
 
-		It("should fail when strategy reference does not exist", func() {
-			rolloutKey = types.NamespacedName{
-				Namespace: namespace,
-				Name:      "test-rollout-no-strategy",
+func (s *rolloutTestSuite) SetupTest() {
+	namespace := "default"
+	s.rollout = newTestRollout("test-rollout", namespace)
+}
+
+func (s *rolloutTestSuite) TearDownTest() {
+	err := s.fedClient.Delete(context.Background(), s.rollout)
+	s.Require().NoError(client.IgnoreNotFound(err))
+}
+
+func (s *rolloutTestSuite) rolloutShouldBeAvailable(obj *rolloutv1alpha1.Rollout) bool {
+	if obj.Generation != obj.Status.ObservedGeneration {
+		logf.Log.Info("generation not equal", "observedGeneration", obj.Status.ObservedGeneration, "generation", obj.Generation)
+		return false
+	}
+	if !condition.IsAvailable(obj.Status.Conditions) {
+		logf.Log.Info("Available condition should be true", "conditions", obj.Status.Conditions)
+		return false
+	}
+	return true
+}
+
+func (s *rolloutTestSuite) rolloutShouldHaveFinalizer(obj *rolloutv1alpha1.Rollout) bool {
+	for _, f := range obj.Finalizers {
+		if f == rolloutapi.FinalizerRolloutProtection {
+			return true
+		}
+	}
+	return false
+}
+
+type RolloutInitializationTestSuite struct {
+	rolloutTestSuite
+}
+
+func (s *RolloutInitializationTestSuite) Test_CreateRollout() {
+	// create rollout
+	err := s.fedClient.Create(context.Background(), s.rollout)
+	s.Require().NoError(err)
+
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(context.Background(), client.ObjectKeyFromObject(s.rollout), obj)
+		if err != nil {
+			return false
+		}
+
+		// check finalizer
+		if !s.rolloutShouldHaveFinalizer(obj) {
+			logf.Log.Info("finalizer not found")
+			return false
+		}
+
+		if obj.Generation != obj.Status.ObservedGeneration {
+			logf.Log.Info("generation not equal", "observedGeneration", obj.Status.ObservedGeneration, "generation", obj.Generation)
+			return false
+		}
+
+		if obj.Status.Phase != rolloutv1alpha1.RolloutPhaseInitialized {
+			logf.Log.Info("phase should be Initialized", "phase", obj.Status.Phase)
+			return false
+		}
+
+		return true
+	}, 30*time.Second, 2*time.Second)
+}
+
+func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithStrategyRef() {
+	// create rollout strategy
+	strategy := newTestRolloutStrategy("test-strategy", s.rollout.Namespace)
+	err := s.fedClient.Create(context.Background(), strategy)
+	s.Require().NoError(err)
+
+	defer func() {
+		_ = s.fedClient.Delete(context.Background(), strategy)
+	}()
+
+	// create rollout with strategy ref
+	s.rollout.Spec.StrategyRef = strategy.Name
+	s.rollout.Name = "test-rollout-with-strategy"
+	err = s.fedClient.Create(context.Background(), s.rollout)
+	s.Require().NoError(err)
+
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(context.Background(), client.ObjectKeyFromObject(s.rollout), obj)
+		if err != nil {
+			return false
+		}
+
+		return s.rolloutShouldBeAvailable(obj)
+	}, 30*time.Second, 2*time.Second)
+}
+
+func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithInlineBatchStrategy() {
+	// create rollout with inline batch strategy
+	s.rollout.Name = "test-rollout-inline-batch"
+	s.rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
+		Batches: []rolloutv1alpha1.RolloutRunStep{
+			{
+				Breakpoint: true,
+				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+					{
+						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+							Cluster: "cluster1",
+							Name:    "test-workload",
+						},
+						Replicas: intstr.FromString("100%"),
+					},
+				},
+			},
+		},
+	}
+	err := s.fedClient.Create(context.Background(), s.rollout)
+	s.Require().NoError(err)
+
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(context.Background(), client.ObjectKeyFromObject(s.rollout), obj)
+		if err != nil {
+			return false
+		}
+
+		if !s.rolloutShouldHaveFinalizer(obj) {
+			return false
+		}
+
+		return s.rolloutShouldBeAvailable(obj)
+	}, 30*time.Second, 2*time.Second)
+}
+
+func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithInlineCanaryStrategy() {
+	// create rollout with inline canary strategy
+	s.rollout.Name = "test-rollout-inline-canary"
+	s.rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
+		Batches: []rolloutv1alpha1.RolloutRunStep{
+			{
+				Breakpoint: true,
+				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+					{
+						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+							Cluster: "cluster1",
+							Name:    "test-workload",
+						},
+						Replicas: intstr.FromString("100%"),
+					},
+				},
+			},
+		},
+	}
+	s.rollout.Spec.CanaryStrategy = &rolloutv1alpha1.RolloutRunCanaryStrategy{
+		Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+			{
+				CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+					Cluster: "cluster1",
+					Name:    "test-workload",
+				},
+				Replicas: intstr.FromString("10%"),
+			},
+		},
+	}
+	err := s.fedClient.Create(context.Background(), s.rollout)
+	s.Require().NoError(err)
+
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(context.Background(), client.ObjectKeyFromObject(s.rollout), obj)
+		if err != nil {
+			return false
+		}
+
+		if !s.rolloutShouldHaveFinalizer(obj) {
+			return false
+		}
+
+		return s.rolloutShouldBeAvailable(obj)
+	}, 30*time.Second, 2*time.Second)
+}
+
+type RolloutControllerTestSuite struct {
+	rolloutTestSuite
+}
+
+func (s *RolloutControllerTestSuite) TearDownTest() {
+	// Override parent's TearDownTest to do nothing since each test manages its own cleanup
+}
+
+func (s *RolloutControllerTestSuite) Test_StrategyRefNotFound() {
+	ctx := context.Background()
+	rollout := newTestRollout("test-rollout-no-strategy", "default")
+	rollout.Spec.StrategyRef = "non-existent-strategy"
+
+	err := s.fedClient.Create(ctx, rollout)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, rollout)
+	}()
+
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(ctx, client.ObjectKeyFromObject(rollout), obj)
+		if err != nil {
+			return false
+		}
+
+		// should not be available when strategy ref not found
+		if condition.IsAvailable(obj.Status.Conditions) {
+			logf.Log.Info("Available condition should be false when strategy ref not found")
+			return false
+		}
+
+		return true
+	}, 20*time.Second, 2*time.Second)
+}
+
+func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithStrategyRef() {
+	ctx := context.Background()
+	namespace := "default"
+	stsName := "test-sts-strategyref"
+
+	// 1. Create StatefulSet as workload
+	sts := newTestStatefulSet(stsName, namespace)
+	err := s.cluster1Client.Create(ctx, sts)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.cluster1Client.Delete(ctx, sts)
+	}()
+
+	// 2. Create RolloutStrategy
+	strategy := &rolloutv1alpha1.RolloutStrategy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-strategy-for-run",
+			Namespace: namespace,
+		},
+		Batch: &rolloutv1alpha1.BatchStrategy{
+			Batches: []rolloutv1alpha1.RolloutStep{
+				{
+					Breakpoint: true,
+					Replicas:   intstr.FromString("25%"),
+				},
+				{
+					Replicas: intstr.FromString("50%"),
+				},
+				{
+					Replicas: intstr.FromString("100%"),
+				},
+			},
+		},
+	}
+	err = s.fedClient.Create(ctx, strategy)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, strategy)
+	}()
+
+	// 3. Create Rollout with StrategyRef and trigger annotation
+	rollout := newTestRollout("test-rollout-strategyref-run", namespace)
+	rollout.Spec.StrategyRef = strategy.Name
+	rollout.Spec.WorkloadRef.Match = rolloutv1alpha1.ResourceMatch{
+		Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
+			{
+				Cluster: "cluster1",
+				Name:    stsName,
+			},
+		},
+	}
+	rollout.Annotations = map[string]string{
+		rolloutapi.AnnoRolloutTrigger: "trigger-strategyref-run",
+	}
+	err = s.fedClient.Create(ctx, rollout)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, rollout)
+	}()
+
+	// 4. Wait for Rollout to become Available first
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(ctx, client.ObjectKeyFromObject(rollout), obj)
+		if err != nil {
+			return false
+		}
+		return s.rolloutShouldBeAvailable(obj)
+	}, 30*time.Second, 2*time.Second)
+
+	// 5. Wait for RolloutRun to be created and verify batch info
+	var run *rolloutv1alpha1.RolloutRun
+	s.Require().Eventually(func() bool {
+		runList := &rolloutv1alpha1.RolloutRunList{}
+		err := s.fedClient.List(ctx, runList, client.InNamespace(namespace))
+		if err != nil {
+			return false
+		}
+
+		for i := range runList.Items {
+			r := &runList.Items[i]
+			owner := metav1.GetControllerOf(r)
+			if owner != nil && owner.Name == rollout.Name && r.Name == "trigger-strategyref-run" {
+				run = r
+				return true
 			}
-			rollout := newTestRollout(rolloutKey.Name, namespace)
-			rollout.Spec.StrategyRef = "non-existent-strategy"
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+		}
+		return false
+	}, 30*time.Second, 2*time.Second)
 
-			// Wait for Available condition to become False
-			Eventually(func() bool {
-				r := &rolloutv1alpha1.Rollout{}
-				if err := c.Get(ctx, rolloutKey, r); err != nil {
-					return false
-				}
-				return !condition.IsAvailable(r.Status.Conditions)
-			}, timeout, interval).Should(BeTrue())
-		})
+	defer func() {
+		_ = s.fedClient.Delete(ctx, run)
+	}()
 
-		It("should create rolloutRun using strategyRef", func() {
-			rolloutKey = types.NamespacedName{
-				Namespace: namespace,
-				Name:      "test-rollout-with-run",
+	// 5. Verify RolloutRun spec
+	s.Require().NotNil(run.Spec.Batch, "Batch should not be nil")
+	s.Require().Len(run.Spec.Batch.Batches, 3, "Should have 3 batches")
+	s.Require().True(run.Spec.Batch.Batches[0].Breakpoint, "First batch should have breakpoint")
+	s.Require().False(run.Spec.Batch.Batches[1].Breakpoint, "Second batch should not have breakpoint")
+	s.Require().False(run.Spec.Batch.Batches[2].Breakpoint, "Third batch should not have breakpoint")
+
+	// Verify targets are set correctly
+	s.Require().Len(run.Spec.Batch.Batches[0].Targets, 1, "First batch should have 1 target")
+	s.Require().Equal("cluster1", run.Spec.Batch.Batches[0].Targets[0].Cluster)
+	s.Require().Equal(stsName, run.Spec.Batch.Batches[0].Targets[0].Name)
+}
+
+func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithInlineBatchStrategy() {
+	ctx := context.Background()
+	namespace := "default"
+	stsName := "test-sts-inline-batch"
+
+	// 1. Create StatefulSet as workload
+	sts := newTestStatefulSet(stsName, namespace)
+	err := s.cluster1Client.Create(ctx, sts)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.cluster1Client.Delete(ctx, sts)
+	}()
+
+	// 2. Create Rollout with InlineBatchStrategy and trigger annotation
+	rollout := newTestRollout("test-rollout-inline-batch-run", namespace)
+	rollout.Spec.WorkloadRef.Match = rolloutv1alpha1.ResourceMatch{
+		Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
+			{
+				Cluster: "cluster1",
+				Name:    stsName,
+			},
+		},
+	}
+	rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
+		Batches: []rolloutv1alpha1.RolloutRunStep{
+			{
+				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+					{
+						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+							Cluster: "cluster1",
+							Name:    stsName,
+						},
+						Replicas: intstr.FromString("30%"),
+					},
+				},
+			},
+			{
+				Breakpoint: true,
+				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+					{
+						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+							Cluster: "cluster1",
+							Name:    stsName,
+						},
+						Replicas: intstr.FromString("100%"),
+					},
+				},
+			},
+		},
+	}
+	rollout.Annotations = map[string]string{
+		rolloutapi.AnnoRolloutTrigger: "trigger-inline-batch-run",
+	}
+	err = s.fedClient.Create(ctx, rollout)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, rollout)
+	}()
+
+	// 3. Wait for Rollout to become Available first
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(ctx, client.ObjectKeyFromObject(rollout), obj)
+		if err != nil {
+			return false
+		}
+		return s.rolloutShouldBeAvailable(obj)
+	}, 30*time.Second, 2*time.Second)
+
+	// 4. Wait for RolloutRun to be created and verify batch info
+	var run *rolloutv1alpha1.RolloutRun
+	s.Require().Eventually(func() bool {
+		runList := &rolloutv1alpha1.RolloutRunList{}
+		err := s.fedClient.List(ctx, runList, client.InNamespace(namespace))
+		if err != nil {
+			return false
+		}
+
+		for i := range runList.Items {
+			r := &runList.Items[i]
+			owner := metav1.GetControllerOf(r)
+			if owner != nil && owner.Name == rollout.Name && r.Name == "trigger-inline-batch-run" {
+				run = r
+				return true
 			}
+		}
+		return false
+	}, 30*time.Second, 2*time.Second)
 
-			rollout := newTestRollout(rolloutKey.Name, namespace)
-			rollout.Spec.StrategyRef = strategyKey.Name
-			rollout.Annotations = map[string]string{
-				rolloutapi.AnnoRolloutTrigger: "trigger-from-strategy-ref",
+	defer func() {
+		_ = s.fedClient.Delete(ctx, run)
+	}()
+
+	// 5. Verify RolloutRun spec matches inline batch strategy
+	s.Require().NotNil(run.Spec.Batch, "Batch should not be nil")
+	s.Require().Len(run.Spec.Batch.Batches, 2, "Should have 2 batches")
+
+	// Verify first batch
+	s.Require().Len(run.Spec.Batch.Batches[0].Targets, 1, "First batch should have 1 target")
+	s.Require().Equal("cluster1", run.Spec.Batch.Batches[0].Targets[0].Cluster)
+	s.Require().Equal(stsName, run.Spec.Batch.Batches[0].Targets[0].Name)
+	s.Require().Equal("30%", run.Spec.Batch.Batches[0].Targets[0].Replicas.String())
+
+	// Verify second batch
+	s.Require().True(run.Spec.Batch.Batches[1].Breakpoint, "Second batch should not have breakpoint")
+	s.Require().Len(run.Spec.Batch.Batches[1].Targets, 1, "Second batch should have 1 target")
+	s.Require().Equal("100%", run.Spec.Batch.Batches[1].Targets[0].Replicas.String())
+}
+
+func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithInlineBatch() {
+	ctx := context.Background()
+	namespace := "default"
+	stsName := "test-sts-onetime-inline"
+
+	// 1. Create StatefulSet as workload
+	sts := newTestStatefulSet(stsName, namespace)
+	err := s.cluster1Client.Create(ctx, sts)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.cluster1Client.Delete(ctx, sts)
+	}()
+
+	// 2. Create Rollout with InlineBatchStrategy and trigger annotation
+	rollout := newTestRollout("test-rollout-onetime-inline", namespace)
+	rollout.Spec.WorkloadRef.Match = rolloutv1alpha1.ResourceMatch{
+		Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
+			{
+				Cluster: "cluster1",
+				Name:    stsName,
+			},
+		},
+	}
+	rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
+		Batches: []rolloutv1alpha1.RolloutRunStep{
+			{
+				Breakpoint: true,
+				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+					{
+						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+							Cluster: "cluster1",
+							Name:    stsName,
+						},
+						Replicas: intstr.FromString("50%"),
+					},
+				},
+			},
+		},
+	}
+	rollout.Annotations = map[string]string{
+		rolloutapi.AnnoRolloutTrigger: "trigger-onetime-inline",
+	}
+	err = s.fedClient.Create(ctx, rollout)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, rollout)
+	}()
+
+	// 3. Wait for Rollout to become Available first
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(ctx, client.ObjectKeyFromObject(rollout), obj)
+		if err != nil {
+			return false
+		}
+		return s.rolloutShouldBeAvailable(obj)
+	}, 30*time.Second, 2*time.Second)
+
+	// 4. Wait for RolloutRun to be created
+	var run *rolloutv1alpha1.RolloutRun
+	s.Require().Eventually(func() bool {
+		runList := &rolloutv1alpha1.RolloutRunList{}
+		err := s.fedClient.List(ctx, runList, client.InNamespace(namespace))
+		if err != nil {
+			return false
+		}
+
+		for i := range runList.Items {
+			r := &runList.Items[i]
+			owner := metav1.GetControllerOf(r)
+			if owner != nil && owner.Name == rollout.Name && r.Name == "trigger-onetime-inline" {
+				run = r
+				return true
 			}
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+		}
+		return false
+	}, 30*time.Second, 2*time.Second)
 
-			// Wait for rolloutRun to be created
-			Eventually(func() bool {
-				runList := &rolloutv1alpha1.RolloutRunList{}
-				if err := c.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), runList, client.InNamespace(namespace)); err != nil {
-					return false
-				}
-				for _, run := range runList.Items {
-					owner := metav1.GetControllerOf(&run)
-					if owner != nil && owner.Name == rolloutKey.Name && run.Name == "trigger-from-strategy-ref" {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue())
-		})
-	})
+	// 5. Verify initial batch
+	s.Require().NotNil(run.Spec.Batch, "Batch should not be nil")
+	s.Require().Len(run.Spec.Batch.Batches, 1, "Should have 1 batch initially")
+	s.Require().Equal("50%", run.Spec.Batch.Batches[0].Targets[0].Replicas.String())
 
-	Context("Rollout with Inline Strategy", func() {
-		var (
-			namespace  = "test-ns-inline"
-			rolloutKey = types.NamespacedName{Namespace: namespace, Name: "test-rollout"}
-		)
+	// 6. Apply one-time strategy via annotation using InlineBatch
+	oneTimeStrategy := ontimestrategy.OneTimeStrategy{
+		InlineBatch: &rolloutv1alpha1.RolloutRunBatchStrategy{
+			Batches: []rolloutv1alpha1.RolloutRunStep{
+				{
+					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						{
+							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+								Cluster: "cluster1",
+								Name:    stsName,
+							},
+							Replicas: intstr.FromString("20%"),
+						},
+					},
+				},
+				{
+					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						{
+							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+								Cluster: "cluster1",
+								Name:    stsName,
+							},
+							Replicas: intstr.FromString("40%"),
+						},
+					},
+				},
+				{
+					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						{
+							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+								Cluster: "cluster1",
+								Name:    stsName,
+							},
+							Replicas: intstr.FromString("60%"),
+						},
+					},
+				},
+			},
+		},
+	}
+	oneTimeData, err := json.Marshal(oneTimeStrategy)
+	s.Require().NoError(err)
 
-		It("should create rollout with inline batch strategy", func() {
-			Expect(createNamespace(namespace)).Should(Succeed())
+	// Update rollout with one-time strategy annotation
+	err = s.fedClient.Get(ctx, client.ObjectKeyFromObject(rollout), rollout)
+	s.Require().NoError(err)
+	if rollout.Annotations == nil {
+		rollout.Annotations = make(map[string]string)
+	}
+	rollout.Annotations[ontimestrategy.AnnoOneTimeStrategy] = string(oneTimeData)
+	err = s.fedClient.Update(ctx, rollout)
+	s.Require().NoError(err)
 
-			rollout := newTestRolloutWithInlineBatch(rolloutKey.Name, namespace)
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+	// 7. Verify RolloutRun is updated with new batch strategy
+	s.Require().Eventually(func() bool {
+		err := s.fedClient.Get(ctx, client.ObjectKey{Name: run.Name, Namespace: namespace}, run)
+		if err != nil {
+			return false
+		}
+		return len(run.Spec.Batch.Batches) == 3
+	}, 30*time.Second, 2*time.Second)
 
-			// Verify rollout is created and has finalizer
-			Eventually(func() bool {
-				r := &rolloutv1alpha1.Rollout{}
-				if err := c.Get(ctx, rolloutKey, r); err != nil {
-					return false
-				}
-				return containsString(r.Finalizers, rolloutapi.FinalizerRolloutProtection)
-			}, timeout, interval).Should(BeTrue())
-		})
+	defer func() {
+		_ = s.fedClient.Delete(ctx, run)
+	}()
 
-		It("should create rollout with inline canary strategy", func() {
-			rolloutKey = types.NamespacedName{Namespace: namespace, Name: "test-rollout-canary"}
-			rollout := newTestRolloutWithInlineCanary(rolloutKey.Name, namespace)
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+	s.Require().Len(run.Spec.Batch.Batches, 3, "Should have 3 batches after one-time strategy applied")
+	s.Require().Equal("20%", run.Spec.Batch.Batches[0].Targets[0].Replicas.String())
+	s.Require().Equal("40%", run.Spec.Batch.Batches[1].Targets[0].Replicas.String())
+	s.Require().Equal("60%", run.Spec.Batch.Batches[2].Targets[0].Replicas.String())
 
-			// Verify rollout is created
-			Eventually(func() bool {
-				r := &rolloutv1alpha1.Rollout{}
-				if err := c.Get(ctx, rolloutKey, r); err != nil {
-					return false
-				}
-				return r.Status.Phase == rolloutv1alpha1.RolloutPhaseInitialized
-			}, timeout, interval).Should(BeTrue())
-		})
+	// 8. Verify one-time strategy annotation is on RolloutRun
+	s.Require().Contains(run.Annotations, ontimestrategy.AnnoOneTimeStrategy, "RolloutRun should have one-time strategy annotation")
+}
 
-		It("should create rolloutRun with inline batch strategy and trigger", func() {
-			rolloutKey = types.NamespacedName{Namespace: namespace, Name: "test-rollout-inline-batch-trigger"}
-			rollout := newTestRolloutWithInlineBatch(rolloutKey.Name, namespace)
-			rollout.Annotations = map[string]string{
-				rolloutapi.AnnoRolloutTrigger: "inline-batch-trigger",
+func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithStrategyRef() {
+	ctx := context.Background()
+	namespace := "default"
+	stsName := "test-sts-onetime-strategyref"
+
+	// 1. Create StatefulSet as workload
+	sts := newTestStatefulSet(stsName, namespace)
+	err := s.cluster1Client.Create(ctx, sts)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.cluster1Client.Delete(ctx, sts)
+	}()
+
+	// 2. Create RolloutStrategy
+	strategy := &rolloutv1alpha1.RolloutStrategy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-strategy-onetime",
+			Namespace: namespace,
+		},
+		Batch: &rolloutv1alpha1.BatchStrategy{
+			Batches: []rolloutv1alpha1.RolloutStep{
+				{
+					Replicas: intstr.FromString("30%"),
+				},
+				{
+					Breakpoint: true,
+					Replicas:   intstr.FromString("60%"),
+				},
+				{
+					Breakpoint: true,
+					Replicas:   intstr.FromString("100%"),
+				},
+			},
+		},
+	}
+	err = s.fedClient.Create(ctx, strategy)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, strategy)
+	}()
+
+	// 3. Create Rollout with StrategyRef and trigger annotation
+	rollout := newTestRollout("test-rollout-onetime-strategyref", namespace)
+	rollout.Spec.StrategyRef = strategy.Name
+	rollout.Spec.WorkloadRef.Match = rolloutv1alpha1.ResourceMatch{
+		Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
+			{
+				Cluster: "cluster1",
+				Name:    stsName,
+			},
+		},
+	}
+	rollout.Annotations = map[string]string{
+		rolloutapi.AnnoRolloutTrigger: "trigger-onetime-strategyref",
+	}
+	err = s.fedClient.Create(ctx, rollout)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, rollout)
+	}()
+
+	// 4. Wait for Rollout to become Available first
+	s.Require().Eventually(func() bool {
+		obj := &rolloutv1alpha1.Rollout{}
+		err := s.fedClient.Get(ctx, client.ObjectKeyFromObject(rollout), obj)
+		if err != nil {
+			return false
+		}
+		return s.rolloutShouldBeAvailable(obj)
+	}, 30*time.Second, 2*time.Second)
+
+	// 5. Wait for RolloutRun to be created
+	var run *rolloutv1alpha1.RolloutRun
+	s.Require().Eventually(func() bool {
+		runList := &rolloutv1alpha1.RolloutRunList{}
+		err := s.fedClient.List(ctx, runList, client.InNamespace(namespace))
+		if err != nil {
+			return false
+		}
+
+		for i := range runList.Items {
+			r := &runList.Items[i]
+			owner := metav1.GetControllerOf(r)
+			if owner != nil && owner.Name == rollout.Name && r.Name == "trigger-onetime-strategyref" {
+				run = r
+				return true
 			}
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+		}
+		return false
+	}, 30*time.Second, 2*time.Second)
 
-			// Wait for rolloutRun to be created
-			Eventually(func() bool {
-				runList := &rolloutv1alpha1.RolloutRunList{}
-				if err := c.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), runList, client.InNamespace(namespace)); err != nil {
-					return false
-				}
-				for _, run := range runList.Items {
-					owner := metav1.GetControllerOf(&run)
-					if owner != nil && owner.Name == rolloutKey.Name && run.Name == "inline-batch-trigger" {
-						return run.Spec.Batch != nil
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue())
-		})
+	// 6. Verify initial batch (from StrategyRef)
+	s.Require().NotNil(run.Spec.Batch, "Batch should not be nil")
+	s.Require().Len(run.Spec.Batch.Batches, 3, "Should have 3 batches from StrategyRef initially")
+	s.Require().True(run.Spec.Batch.Batches[1].Breakpoint, "Second batch should have breakpoint")
+	s.Require().True(run.Spec.Batch.Batches[2].Breakpoint, "Third batch should have breakpoint")
+	s.Require().Len(run.Spec.Batch.Batches[0].Targets, 1, "First batch should have 1 target")
+	s.Require().Equal("30%", run.Spec.Batch.Batches[0].Targets[0].Replicas.String())
 
-		It("should create rolloutRun with inline canary strategy and trigger", func() {
-			rolloutKey = types.NamespacedName{Namespace: namespace, Name: "test-rollout-inline-canary-trigger"}
-			rollout := newTestRolloutWithInlineCanary(rolloutKey.Name, namespace)
-			rollout.Annotations = map[string]string{
-				rolloutapi.AnnoRolloutTrigger: "inline-canary-trigger",
-			}
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+	// 7. Apply one-time strategy via annotation using InlineBatch
+	oneTimeStrategy := ontimestrategy.OneTimeStrategy{
+		Batch: rolloutv1alpha1.BatchStrategy{
+			Batches: []rolloutv1alpha1.RolloutStep{
+				{
+					Replicas: intstr.FromString("30%"),
+				},
+				{
+					Breakpoint: false,
+					Replicas:   intstr.FromString("60%"),
+				},
+				{
+					Breakpoint: false,
+					Replicas:   intstr.FromString("100%"),
+				},
+			},
+		},
+	}
+	oneTimeData, err := json.Marshal(oneTimeStrategy)
+	s.Require().NoError(err)
 
-			// Wait for rolloutRun to be created
-			Eventually(func() bool {
-				runList := &rolloutv1alpha1.RolloutRunList{}
-				if err := c.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), runList, client.InNamespace(namespace)); err != nil {
-					return false
-				}
-				for _, run := range runList.Items {
-					owner := metav1.GetControllerOf(&run)
-					if owner != nil && owner.Name == rolloutKey.Name && run.Name == "inline-canary-trigger" {
-						return run.Spec.Canary != nil
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue())
-		})
-	})
+	// Update rollout with one-time strategy annotation
+	err = s.fedClient.Get(ctx, client.ObjectKeyFromObject(rollout), rollout)
+	s.Require().NoError(err)
+	if rollout.Annotations == nil {
+		rollout.Annotations = make(map[string]string)
+	}
+	rollout.Annotations[ontimestrategy.AnnoOneTimeStrategy] = string(oneTimeData)
+	err = s.fedClient.Update(ctx, rollout)
+	s.Require().NoError(err)
 
-	Context("Trigger Policy", func() {
-		var (
-			namespace  = "test-ns-manual-policy"
-			rolloutKey = types.NamespacedName{Namespace: namespace, Name: "test-rollout-manual-policy"}
-		)
+	// 8. Verify RolloutRun is updated with new batch strategy
+	s.Require().Eventually(func() bool {
+		err := s.fedClient.Get(ctx, client.ObjectKey{Name: run.Name, Namespace: namespace}, run)
+		if err != nil {
+			return false
+		}
+		return len(run.Spec.Batch.Batches) == 3
+	}, 30*time.Second, 2*time.Second)
 
-		It("should not auto-trigger when trigger policy is manual", func() {
-			Expect(createNamespace(namespace)).Should(Succeed())
+	defer func() {
+		_ = s.fedClient.Delete(ctx, run)
+	}()
 
-			rollout := newTestRolloutWithInlineBatch(rolloutKey.Name, namespace)
-			rollout.Spec.TriggerPolicy = rolloutv1alpha1.ManualTriggerPolicy
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
+	s.Require().Len(run.Spec.Batch.Batches, 3, "Should have 3 batches after one-time strategy applied")
+	s.Require().False(run.Spec.Batch.Batches[1].Breakpoint, "Second batch should have no breakpoint")
+	s.Require().False(run.Spec.Batch.Batches[2].Breakpoint, "Third batch should have no breakpoint")
 
-			// Wait a bit to ensure no rolloutRun is created
-			Consistently(func() int {
-				runList := &rolloutv1alpha1.RolloutRunList{}
-				_ = c.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), runList, client.InNamespace(namespace))
-				return len(runList.Items)
-			}, time.Second*3, interval).Should(Equal(0))
-		})
-
-		It("should auto-trigger when trigger policy is auto (default)", func() {
-			// Use different rolloutKey for this test
-			rolloutKey = types.NamespacedName{Namespace: namespace, Name: "test-rollout-auto-policy"}
-
-			// Create rollout without trigger annotation
-			rollout := newTestRollout(rolloutKey.Name, namespace)
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
-
-			// Wait and verify rolloutRun is not created without trigger annotation
-			// The controller needs workloads to be in waiting-rollout state
-			Consistently(func() int {
-				runList := &rolloutv1alpha1.RolloutRunList{}
-				_ = c.List(clusterinfo.WithCluster(ctx, clusterinfo.Fed), runList, client.InNamespace(namespace))
-				return len(runList.Items)
-			}, time.Second*3, interval).Should(Equal(0))
-		})
-	})
-
-	Context("Status Updates", func() {
-		var (
-			namespace  = "test-ns-status"
-			rolloutKey = types.NamespacedName{Namespace: namespace, Name: "test-rollout-obs-gen"}
-		)
-
-		It("should update observed generation", func() {
-			Expect(createNamespace(namespace)).Should(Succeed())
-
-			rollout := newTestRollout(rolloutKey.Name, namespace)
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
-
-			// Wait for observed generation to be set
-			Eventually(func() int64 {
-				r := &rolloutv1alpha1.Rollout{}
-				if err := c.Get(ctx, rolloutKey, r); err != nil {
-					return 0
-				}
-				return r.Status.ObservedGeneration
-			}, timeout, interval).Should(Equal(rollout.Generation))
-		})
-
-		It("should record conditions properly", func() {
-			rolloutKey = types.NamespacedName{Namespace: namespace, Name: "test-rollout-conditions"}
-
-			rollout := newTestRollout(rolloutKey.Name, namespace)
-			Expect(c.Create(ctx, rollout)).Should(Succeed())
-
-			// Wait for conditions to be recorded
-			Eventually(func() bool {
-				r := &rolloutv1alpha1.Rollout{}
-				if err := c.Get(ctx, rolloutKey, r); err != nil {
-					return false
-				}
-				return len(r.Status.Conditions) > 0
-			}, timeout, interval).Should(BeTrue())
-		})
-	})
-})
+	// 9. Verify one-time strategy annotation is on RolloutRun
+	s.Require().Contains(run.Annotations, ontimestrategy.AnnoOneTimeStrategy, "RolloutRun should have one-time strategy annotation")
+}
 
 // Helper functions
 
@@ -324,7 +945,6 @@ func newTestRollout(name, namespace string) *rolloutv1alpha1.Rollout {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			Labels:    map[string]string{},
 		},
 		Spec: rolloutv1alpha1.RolloutSpec{
 			WorkloadRef: rolloutv1alpha1.WorkloadRef{
@@ -333,67 +953,6 @@ func newTestRollout(name, namespace string) *rolloutv1alpha1.Rollout {
 			},
 		},
 	}
-}
-
-func newTestRolloutWithInlineBatch(name, namespace string) *rolloutv1alpha1.Rollout {
-	rollout := newTestRollout(name, namespace)
-	rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
-		Batches: []rolloutv1alpha1.RolloutRunStep{
-			{
-				Breakpoint: true,
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Cluster: "",
-							Name:    "test-workload",
-						},
-						Replicas: intstr.FromString("25%"),
-					},
-				},
-			},
-			{
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Cluster: "",
-							Name:    "test-workload",
-						},
-						Replicas: intstr.FromString("100%"),
-					},
-				},
-			},
-		},
-	}
-	return rollout
-}
-
-func newTestRolloutWithInlineCanary(name, namespace string) *rolloutv1alpha1.Rollout {
-	rollout := newTestRollout(name, namespace)
-	rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
-		Batches: []rolloutv1alpha1.RolloutRunStep{
-			{
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Name: "test-workload",
-						},
-						Replicas: intstr.FromString("100%"),
-					},
-				},
-			},
-		},
-	}
-	rollout.Spec.CanaryStrategy = &rolloutv1alpha1.RolloutRunCanaryStrategy{
-		Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-			{
-				CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-					Name: "test-workload",
-				},
-				Replicas: intstr.FromString("10%"),
-			},
-		},
-	}
-	return rollout
 }
 
 func newTestRolloutStrategy(name, namespace string) *rolloutv1alpha1.RolloutStrategy {
@@ -416,21 +975,42 @@ func newTestRolloutStrategy(name, namespace string) *rolloutv1alpha1.RolloutStra
 	}
 }
 
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
-func createNamespace(namespace string) error {
-	// Create test namespace
-	ns := &corev1.Namespace{
+func newTestStatefulSet(name, namespace string) *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app": name,
+			},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: ptr.To[int32](3),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:1.14.2",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
-	return c.Create(ctx, ns)
 }
