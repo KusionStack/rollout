@@ -403,7 +403,11 @@ func Test_constructRolloutRun(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			run := constructRolloutRun(tt.obj, tt.strategy, tt.workloadWrappers, tt.rolloutId)
+			run, err := constructRolloutRun(tt.obj, tt.strategy, tt.workloadWrappers, tt.rolloutId)
+			if err != nil {
+				t.Errorf("constructRolloutRun() unexpected error: %v", err)
+				return
+			}
 
 			if run == nil {
 				t.Errorf("constructRolloutRun() returned nil")

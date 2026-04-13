@@ -16,6 +16,7 @@ package rollout
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -36,6 +37,8 @@ func Test_constructRolloutRunFromInlineStrategy(t *testing.T) {
 		wantRun          bool
 		wantCanary       bool
 		wantBatch        bool
+		wantErr          bool
+		errContains      string
 	}{
 		{
 			name: "no inline strategy - return nil, false",
@@ -186,7 +189,7 @@ func Test_constructRolloutRunFromInlineStrategy(t *testing.T) {
 			wantBatch:  true,
 		},
 		{
-			name: "filter non-existent workloads",
+			name: "non-existent workload should error",
 			obj: &rolloutv1alpha1.Rollout{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "test",
@@ -225,18 +228,32 @@ func Test_constructRolloutRunFromInlineStrategy(t *testing.T) {
 				newTestInfo("cluster-a", "test", "test-1"),
 				// cluster-b/test-1 is not in workloads
 			},
-			rolloutId:  "test-rollout-1",
-			wantRun:    true,
-			wantCanary: false,
-			wantBatch:  true,
+			rolloutId:   "test-rollout-1",
+			wantRun:     true,
+			wantErr:     true,
+			errContains: "batch[0] target cluster=cluster-b name=test-1 not found in workloads",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			run, gotInline := constructRolloutRunFromInlineStrategy(tt.obj, tt.workloadWrappers, tt.rolloutId)
+			run, gotInline, err := constructRolloutRunFromInlineStrategy(tt.obj, tt.workloadWrappers, tt.rolloutId)
 			if gotInline != tt.wantRun {
 				t.Errorf("constructRolloutRunFromInlineStrategy() gotInline = %v, want %v", gotInline, tt.wantRun)
+				return
+			}
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("constructRolloutRunFromInlineStrategy() expected error, got nil")
+					return
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("constructRolloutRunFromInlineStrategy() error = %v, want containing %v", err, tt.errContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("constructRolloutRunFromInlineStrategy() unexpected error: %v", err)
 				return
 			}
 
@@ -292,6 +309,8 @@ func Test_validateAndCopyBatchStrategy(t *testing.T) {
 		batch       *rolloutv1alpha1.RolloutRunBatchStrategy
 		workloadMap map[string]*workload.Info
 		want        *rolloutv1alpha1.RolloutRunBatchStrategy
+		wantErr     bool
+		errContains string
 	}{
 		{
 			name:        "nil batch",
@@ -365,7 +384,7 @@ func Test_validateAndCopyBatchStrategy(t *testing.T) {
 			},
 		},
 		{
-			name: "batch with targets - filter non-existent",
+			name: "batch with non-existent target - should error",
 			batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
 				Batches: []rolloutv1alpha1.RolloutRunStep{
 					{
@@ -392,21 +411,8 @@ func Test_validateAndCopyBatchStrategy(t *testing.T) {
 				"cluster-a/test-1": newTestInfo("cluster-a", "test", "test-1"),
 				// cluster-b/test-1 is missing
 			},
-			want: &rolloutv1alpha1.RolloutRunBatchStrategy{
-				Batches: []rolloutv1alpha1.RolloutRunStep{
-					{
-						Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-							{
-								CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-									Cluster: "cluster-a",
-									Name:    "test-1",
-								},
-								Replicas: intstr.FromString("20%"),
-							},
-						},
-					},
-				},
-			},
+			wantErr:     true,
+			errContains: "batch[0] target cluster=cluster-b name=test-1 not found in workloads",
 		},
 		{
 			name: "batch with toleration preserved",
@@ -454,7 +460,21 @@ func Test_validateAndCopyBatchStrategy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := validateAndCopyBatchStrategy(tt.batch, tt.workloadMap)
+			got, err := validateAndCopyBatchStrategy(tt.batch, tt.workloadMap)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateAndCopyBatchStrategy() expected error, got nil")
+					return
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("validateAndCopyBatchStrategy() error = %v, want containing %v", err, tt.errContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("validateAndCopyBatchStrategy() unexpected error: %v", err)
+				return
+			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("validateAndCopyBatchStrategy() = %v, want %v", spew.Sdump(got), spew.Sdump(tt.want))
 			}
@@ -468,6 +488,8 @@ func Test_validateAndCopyCanaryStrategy(t *testing.T) {
 		canary      *rolloutv1alpha1.RolloutRunCanaryStrategy
 		workloadMap map[string]*workload.Info
 		want        *rolloutv1alpha1.RolloutRunCanaryStrategy
+		wantErr     bool
+		errContains string
 	}{
 		{
 			name:        "nil canary",
@@ -504,7 +526,7 @@ func Test_validateAndCopyCanaryStrategy(t *testing.T) {
 			},
 		},
 		{
-			name: "canary with filtered targets",
+			name: "canary with non-existent target - should error",
 			canary: &rolloutv1alpha1.RolloutRunCanaryStrategy{
 				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 					{
@@ -527,20 +549,11 @@ func Test_validateAndCopyCanaryStrategy(t *testing.T) {
 				"cluster-a/test-1": newTestInfo("cluster-a", "test", "test-1"),
 				// cluster-b/test-1 is missing
 			},
-			want: &rolloutv1alpha1.RolloutRunCanaryStrategy{
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Cluster: "cluster-a",
-							Name:    "test-1",
-						},
-						Replicas: intstr.FromString("10%"),
-					},
-				},
-			},
+			wantErr:     true,
+			errContains: "canary target cluster=cluster-b name=test-1 not found in workloads",
 		},
 		{
-			name: "canary with all non-existent targets",
+			name: "canary with all non-existent targets - should error",
 			canary: &rolloutv1alpha1.RolloutRunCanaryStrategy{
 				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 					{
@@ -556,15 +569,28 @@ func Test_validateAndCopyCanaryStrategy(t *testing.T) {
 				"cluster-a/test-1": newTestInfo("cluster-a", "test", "test-1"),
 				// cluster-b/test-1 is missing
 			},
-			want: &rolloutv1alpha1.RolloutRunCanaryStrategy{
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{},
-			},
+			wantErr:     true,
+			errContains: "canary target cluster=cluster-b name=test-1 not found in workloads",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := validateAndCopyCanaryStrategy(tt.canary, tt.workloadMap)
+			got, err := validateAndCopyCanaryStrategy(tt.canary, tt.workloadMap)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateAndCopyCanaryStrategy() expected error, got nil")
+					return
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("validateAndCopyCanaryStrategy() error = %v, want containing %v", err, tt.errContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("validateAndCopyCanaryStrategy() unexpected error: %v", err)
+				return
+			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("validateAndCopyCanaryStrategy() = %v, want %v", spew.Sdump(got), spew.Sdump(tt.want))
 			}

@@ -15,6 +15,8 @@
 package rollout
 
 import (
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	rolloutapi "kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
@@ -25,14 +27,14 @@ import (
 )
 
 // constructRolloutRunFromInlineStrategy constructs RolloutRun from inline strategy
-// Returns the constructed RolloutRun and a boolean indicating if inline strategy was used
+// Returns the constructed RolloutRun, a boolean indicating if inline strategy was used, and an error if validation fails
 func constructRolloutRunFromInlineStrategy(
 	obj *rolloutv1alpha1.Rollout,
 	workloadWrappers []*workload.Info,
 	rolloutId string,
-) (*rolloutv1alpha1.RolloutRun, bool) {
+) (*rolloutv1alpha1.RolloutRun, bool, error) {
 	if obj.Spec.BatchStrategy == nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Build workload map for validation
@@ -59,11 +61,17 @@ func constructRolloutRunFromInlineStrategy(
 	}
 
 	if obj.Spec.CanaryStrategy != nil {
-		canary := validateAndCopyCanaryStrategy(obj.Spec.CanaryStrategy, workloadMap)
+		canary, err := validateAndCopyCanaryStrategy(obj.Spec.CanaryStrategy, workloadMap)
+		if err != nil {
+			return nil, true, err
+		}
 		run.Spec.Canary = canary
 	}
 
-	batch := validateAndCopyBatchStrategy(obj.Spec.BatchStrategy, workloadMap)
+	batch, err := validateAndCopyBatchStrategy(obj.Spec.BatchStrategy, workloadMap)
+	if err != nil {
+		return nil, true, err
+	}
 	run.Spec.Batch = batch
 
 	// Set OneTimeStrategy annotation for inline batch strategy
@@ -80,26 +88,26 @@ func constructRolloutRunFromInlineStrategy(
 		}
 	}
 
-	return run, true
+	return run, true, nil
 }
 
 // validateAndCopyCanaryStrategy validates targets and creates a copy for RolloutRun
 // For inline strategy, targets are already pre-resolved by user
+// Returns error if any target is not found in workloadMap
 func validateAndCopyCanaryStrategy(
 	canary *rolloutv1alpha1.RolloutRunCanaryStrategy,
 	workloadMap map[string]*workload.Info,
-) *rolloutv1alpha1.RolloutRunCanaryStrategy {
+) (*rolloutv1alpha1.RolloutRunCanaryStrategy, error) {
 	if canary == nil {
-		return nil
+		return nil, nil
 	}
 
-	// Validate targets exist
+	// Validate all targets exist
 	validatedTargets := make([]rolloutv1alpha1.RolloutRunStepTarget, 0, len(canary.Targets))
 	for _, target := range canary.Targets {
 		key := workloadKey(target.Cluster, target.Name)
 		if _, exists := workloadMap[key]; !exists {
-			// Skip targets that don't exist in actual workloads
-			continue
+			return nil, fmt.Errorf("canary target cluster=%s name=%s not found in workloads", target.Cluster, target.Name)
 		}
 		// Direct copy - targets are already in correct format
 		validatedTargets = append(validatedTargets, target)
@@ -110,17 +118,18 @@ func validateAndCopyCanaryStrategy(
 		Traffic:               canary.Traffic,
 		Properties:            canary.Properties,
 		TemplateMetadataPatch: canary.TemplateMetadataPatch,
-	}
+	}, nil
 }
 
 // validateAndCopyBatchStrategy validates and creates a copy for RolloutRun
 // For inline strategy, targets are already pre-resolved by user
+// Returns error if any target is not found in workloadMap
 func validateAndCopyBatchStrategy(
 	batch *rolloutv1alpha1.RolloutRunBatchStrategy,
 	workloadMap map[string]*workload.Info,
-) *rolloutv1alpha1.RolloutRunBatchStrategy {
+) (*rolloutv1alpha1.RolloutRunBatchStrategy, error) {
 	if batch == nil {
-		return nil
+		return nil, nil
 	}
 
 	if len(batch.Batches) == 0 {
@@ -128,24 +137,23 @@ func validateAndCopyBatchStrategy(
 		return &rolloutv1alpha1.RolloutRunBatchStrategy{
 			Toleration: batch.Toleration,
 			Batches:    []rolloutv1alpha1.RolloutRunStep{},
-		}
+		}, nil
 	}
 
 	validatedBatches := make([]rolloutv1alpha1.RolloutRunStep, 0, len(batch.Batches))
 
-	for _, step := range batch.Batches {
+	for batchIdx, step := range batch.Batches {
 		if len(step.Targets) == 0 {
 			// Skip steps without targets
 			continue
 		}
 
-		// Validate and filter targets that exist
+		// Validate all targets exist
 		validatedTargets := make([]rolloutv1alpha1.RolloutRunStepTarget, 0, len(step.Targets))
 		for _, target := range step.Targets {
 			key := workloadKey(target.Cluster, target.Name)
 			if _, exists := workloadMap[key]; !exists {
-				// Skip targets that don't exist in actual workloads
-				continue
+				return nil, fmt.Errorf("batch[%d] target cluster=%s name=%s not found in workloads", batchIdx, target.Cluster, target.Name)
 			}
 			// Direct copy - targets are already in correct format
 			validatedTargets = append(validatedTargets, target)
@@ -165,7 +173,7 @@ func validateAndCopyBatchStrategy(
 	return &rolloutv1alpha1.RolloutRunBatchStrategy{
 		Toleration: batch.Toleration,
 		Batches:    validatedBatches,
-	}
+	}, nil
 }
 
 // Helper functions
