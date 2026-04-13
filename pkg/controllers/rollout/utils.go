@@ -68,12 +68,16 @@ func filterWorkloadsByMatch(workloads []*workload.Info, match *rolloutv1alpha1.R
 	return result
 }
 
-func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []*workload.Info, rolloutId string) *rolloutv1alpha1.RolloutRun {
+func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []*workload.Info, rolloutId string) (*rolloutv1alpha1.RolloutRun, error) {
 	var run *rolloutv1alpha1.RolloutRun
 	var hasInline bool
 	// Try inline strategy first
-	if run, hasInline = constructRolloutRunFromInlineStrategy(obj, workloadWrappers, rolloutId); hasInline {
-		return run
+	run, hasInline, err := constructRolloutRunFromInlineStrategy(obj, workloadWrappers, rolloutId)
+	if hasInline {
+		if err != nil {
+			return nil, err
+		}
+		return run, nil
 	}
 
 	// Fall back to strategy reference
@@ -114,7 +118,7 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 			run.Labels[rolloutapi.LabelRolloutClass] = class
 		}
 	}
-	return run
+	return run, nil
 }
 
 func constructRolloutRunCanary(strategy *rolloutv1alpha1.CanaryStrategy, workloadWrappers []*workload.Info) *rolloutv1alpha1.RolloutRunCanaryStrategy {

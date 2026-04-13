@@ -439,7 +439,12 @@ func (r *RolloutReconciler) syncRun(
 	}
 
 	// 4. trigger a new rollout progress
-	curRun = constructRolloutRun(obj, ros, workloads, rolloutID)
+	var constructErr error
+	curRun, constructErr = constructRolloutRun(obj, ros, workloads, rolloutID)
+	if constructErr != nil {
+		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedConstruct", fmt.Sprintf("failed to construct a new rolloutRun: %v", constructErr))
+		return constructErr
+	}
 	r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionTrue, "Create", fmt.Sprintf("construct a new rolloutRun %s", curRun.Name))
 
 	// NOTO: we have to set expectation before we create the rolloutRun to avoid
@@ -681,7 +686,12 @@ func (r *RolloutReconciler) applyOneTimeStrategy(ctx context.Context, obj *rollo
 	// Check if using InlineBatch (for inline batch strategy scenario)
 	if strategy.InlineBatch != nil {
 		workloadMap := buildWorkloadMap(workloads)
-		batch = validateAndCopyBatchStrategy(strategy.InlineBatch, workloadMap)
+		var validateErr error
+		batch, validateErr = validateAndCopyBatchStrategy(strategy.InlineBatch, workloadMap)
+		if validateErr != nil {
+			r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "InvalidStrategy", fmt.Sprintf("failed to validate inline batch strategy: %v", validateErr))
+			return nil
+		}
 	} else {
 		// Use original Batch field (for StrategyRef scenario)
 		batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
