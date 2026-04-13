@@ -614,7 +614,7 @@ func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithInlineBatchStrate
 	s.Require().Equal("30%", run.Spec.Batch.Batches[0].Targets[0].Replicas.String())
 
 	// Verify second batch
-	s.Require().True(run.Spec.Batch.Batches[1].Breakpoint, "Second batch should not have breakpoint")
+	s.Require().True(run.Spec.Batch.Batches[1].Breakpoint, "Second batch should have breakpoint")
 	s.Require().Len(run.Spec.Batch.Batches[1].Targets, 1, "Second batch should have 1 target")
 	s.Require().Equal("100%", run.Spec.Batch.Batches[1].Targets[0].Replicas.String())
 }
