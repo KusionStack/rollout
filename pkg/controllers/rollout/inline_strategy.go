@@ -56,7 +56,7 @@ func constructRolloutRunFromInlineStrategy(
 				Kind:       obj.Spec.WorkloadRef.Kind,
 			},
 			TrafficTopologyRefs: obj.Spec.TrafficTopologyRefs,
-			Webhooks:            []rolloutv1alpha1.RolloutWebhook{}, // Empty for inline strategy
+			Webhooks:            obj.Spec.Webhooks,
 		},
 	}
 

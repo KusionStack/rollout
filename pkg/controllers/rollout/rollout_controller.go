@@ -722,7 +722,7 @@ func (r *RolloutReconciler) applyOneTimeStrategy(ctx context.Context, obj *rollo
 		return nil
 	})
 	if err != nil {
-		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedUpdate", fmt.Sprintf("failed to apply one time stratey to RolloutRun: %v", err))
+		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedUpdate", fmt.Sprintf("failed to apply one time strategy to RolloutRun: %v", err))
 		// allow retry
 		return err
 	}
