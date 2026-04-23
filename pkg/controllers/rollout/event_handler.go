@@ -19,9 +19,11 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"kusionstack.io/kube-api/rollout"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
 	"kusionstack.io/kube-utils/multicluster/clusterinfo"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -71,32 +73,44 @@ func getRolloutForWorkload(
 	logger logr.Logger,
 	workloadInfo *workload.Info,
 ) (*rolloutv1alpha1.Rollout, error) {
-	rList := &rolloutv1alpha1.RolloutList{}
 	ctx := clusterinfo.WithCluster(context.TODO(), clusterinfo.Fed)
+
+	// fast path: get rollout by name from workload annotation
+	if rolloutName := workloadInfo.Annotations[rollout.AnnoRolloutName]; rolloutName != "" {
+		r := &rolloutv1alpha1.Rollout{}
+		if err := reader.Get(ctx, types.NamespacedName{Namespace: workloadInfo.Namespace, Name: rolloutName}, r); err != nil {
+			if errors.IsNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		return r, nil
+	}
+
+	// fallback: list rollouts and match
+	rList := &rolloutv1alpha1.RolloutList{}
 	if err := reader.List(ctx, rList, client.InNamespace(workloadInfo.Namespace)); err != nil {
 		logger.Error(err, "failed to list rollouts")
 		return nil, err
 	}
 
 	for i := range rList.Items {
-		rollout := rList.Items[i]
-		workloadRef := rollout.Spec.WorkloadRef
+		rolloutObj := rList.Items[i]
+		workloadRef := rolloutObj.Spec.WorkloadRef
 		refGV, err := schema.ParseGroupVersion(workloadRef.APIVersion)
 		if err != nil {
-			logger.Error(err, "failed to parse rollout workload ref group version", "rollout", rollout.Name, "apiVersion", workloadRef.APIVersion)
+			logger.Error(err, "failed to parse rollout workload ref group version", "rollout", rolloutObj.Name, "apiVersion", workloadRef.APIVersion)
 			continue
 		}
 		refGVK := refGV.WithKind(workloadRef.Kind)
 
 		if !reflect.DeepEqual(refGVK, workloadInfo.GroupVersionKind) {
-			// group version kind not match
-			// logger.Info("gvk not match", "gvk", workloadInfo.GVK.String(), "refGVK", refGVK)
 			continue
 		}
 
 		macher := workload.MatchAsMatcher(workloadRef.Match)
 		if macher.Matches(workloadInfo.ClusterName, workloadInfo.Name, workloadInfo.Labels) {
-			return &rollout, nil
+			return &rolloutObj, nil
 		}
 	}
 
@@ -122,12 +136,12 @@ func enqueueRolloutForStrategyHandler(
 		}
 		name := strategy.GetName()
 
-		for _, rollout := range rList.Items {
-			if rollout.Spec.StrategyRef == name {
+		for _, rolloutObj := range rList.Items {
+			if rolloutObj.Spec.StrategyRef == name {
 				result = append(result, reconcile.Request{
 					NamespacedName: types.NamespacedName{
-						Namespace: rollout.Namespace,
-						Name:      rollout.Name,
+						Namespace: rolloutObj.Namespace,
+						Name:      rolloutObj.Name,
 					},
 				})
 			}

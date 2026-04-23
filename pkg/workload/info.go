@@ -80,10 +80,11 @@ func NewInfo(cluster string, gvk schema.GroupVersionKind, obj client.Object, sta
 	return &Info{
 		ClusterName: cluster,
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:  obj.GetNamespace(),
-			Name:       obj.GetName(),
-			Labels:     obj.GetLabels(),
-			Generation: obj.GetGeneration(),
+			Namespace:   obj.GetNamespace(),
+			Name:        obj.GetName(),
+			Labels:      obj.GetLabels(),
+			Generation:  obj.GetGeneration(),
+			Annotations: obj.GetAnnotations(),
 		},
 		GroupVersionKind: gvk,
 		Status:           status,
