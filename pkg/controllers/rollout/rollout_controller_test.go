@@ -270,26 +270,35 @@ func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithStrategyRef() {
 	}, 30*time.Second, 2*time.Second)
 }
 
-func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithInlineBatchStrategy() {
-	// create rollout with inline batch strategy
-	s.rollout.Name = "test-rollout-inline-batch"
-	s.rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
-		Batches: []rolloutv1alpha1.RolloutRunStep{
-			{
-				Breakpoint: true,
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Cluster: "cluster1",
-							Name:    "test-workload",
-						},
-						Replicas: intstr.FromString("100%"),
+func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithV2BatchStrategy() {
+	// create RolloutStrategy with V2 batch strategy
+	strategy := &rolloutv1alpha1.RolloutStrategy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-strategy-v2-batch",
+			Namespace: s.rollout.Namespace,
+		},
+		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
+			Batches: []rolloutv1alpha1.RolloutBatchStep{
+				{
+					Breakpoint: true,
+					Targets: []rolloutv1alpha1.RolloutTargets{
+						{Replicas: intstr.FromString("100%")},
 					},
 				},
 			},
 		},
 	}
-	err := s.fedClient.Create(context.Background(), s.rollout)
+	err := s.fedClient.Create(context.Background(), strategy)
+	s.Require().NoError(err)
+
+	defer func() {
+		_ = s.fedClient.Delete(context.Background(), strategy)
+	}()
+
+	// create rollout referencing the V2 strategy
+	s.rollout.Name = "test-rollout-v2-batch"
+	s.rollout.Spec.StrategyRef = strategy.Name
+	err = s.fedClient.Create(context.Background(), s.rollout)
 	s.Require().NoError(err)
 
 	s.Require().Eventually(func() bool {
@@ -307,37 +316,40 @@ func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithInlineBatchStrate
 	}, 30*time.Second, 2*time.Second)
 }
 
-func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithInlineCanaryStrategy() {
-	// create rollout with inline canary strategy
-	s.rollout.Name = "test-rollout-inline-canary"
-	s.rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
-		Batches: []rolloutv1alpha1.RolloutRunStep{
-			{
-				Breakpoint: true,
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Cluster: "cluster1",
-							Name:    "test-workload",
-						},
-						Replicas: intstr.FromString("100%"),
+func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithV2CanaryStrategy() {
+	// create RolloutStrategy with V2 canary + batch strategy
+	strategy := &rolloutv1alpha1.RolloutStrategy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-strategy-v2-canary",
+			Namespace: s.rollout.Namespace,
+		},
+		CanaryV2: &rolloutv1alpha1.CanaryStrategyV2{
+			Targets: []rolloutv1alpha1.RolloutTargets{
+				{Replicas: intstr.FromString("10%")},
+			},
+		},
+		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
+			Batches: []rolloutv1alpha1.RolloutBatchStep{
+				{
+					Breakpoint: true,
+					Targets: []rolloutv1alpha1.RolloutTargets{
+						{Replicas: intstr.FromString("100%")},
 					},
 				},
 			},
 		},
 	}
-	s.rollout.Spec.CanaryStrategy = &rolloutv1alpha1.RolloutRunCanaryStrategy{
-		Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-			{
-				CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-					Cluster: "cluster1",
-					Name:    "test-workload",
-				},
-				Replicas: intstr.FromString("10%"),
-			},
-		},
-	}
-	err := s.fedClient.Create(context.Background(), s.rollout)
+	err := s.fedClient.Create(context.Background(), strategy)
+	s.Require().NoError(err)
+
+	defer func() {
+		_ = s.fedClient.Delete(context.Background(), strategy)
+	}()
+
+	// create rollout referencing the V2 canary+batch strategy
+	s.rollout.Name = "test-rollout-v2-canary"
+	s.rollout.Spec.StrategyRef = strategy.Name
+	err = s.fedClient.Create(context.Background(), s.rollout)
 	s.Require().NoError(err)
 
 	s.Require().Eventually(func() bool {
@@ -506,10 +518,10 @@ func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithStrategyRef() {
 	s.Require().Equal(stsName, run.Spec.Batch.Batches[0].Targets[0].Name)
 }
 
-func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithInlineBatchStrategy() {
+func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithV2BatchStrategy() {
 	ctx := context.Background()
 	namespace := "default"
-	stsName := "test-sts-inline-batch"
+	stsName := "test-sts-v2-batch"
 
 	// 1. Create StatefulSet as workload
 	sts := newTestStatefulSet(stsName, namespace)
@@ -521,8 +533,39 @@ func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithInlineBatchStrate
 		_ = s.cluster1Client.Delete(ctx, sts)
 	}()
 
-	// 2. Create Rollout with InlineBatchStrategy and trigger annotation
-	rollout := newTestRollout("test-rollout-inline-batch-run", namespace)
+	// 2. Create RolloutStrategy with BatchV2
+	strategy := &rolloutv1alpha1.RolloutStrategy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-strategy-v2-batch-run",
+			Namespace: namespace,
+		},
+		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
+			Batches: []rolloutv1alpha1.RolloutBatchStep{
+				{
+					Targets: []rolloutv1alpha1.RolloutTargets{
+						{Replicas: intstr.FromString("30%")},
+					},
+				},
+				{
+					Breakpoint: true,
+					Targets: []rolloutv1alpha1.RolloutTargets{
+						{Replicas: intstr.FromString("100%")},
+					},
+				},
+			},
+		},
+	}
+	err = s.fedClient.Create(ctx, strategy)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, strategy)
+	}()
+
+	// 3. Create Rollout with StrategyRef (V2) and trigger annotation
+	rollout := newTestRollout("test-rollout-v2-batch-run", namespace)
+	rollout.Spec.StrategyRef = strategy.Name
 	rollout.Spec.WorkloadRef.Match = rolloutv1alpha1.ResourceMatch{
 		Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
 			{
@@ -531,35 +574,8 @@ func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithInlineBatchStrate
 			},
 		},
 	}
-	rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
-		Batches: []rolloutv1alpha1.RolloutRunStep{
-			{
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Cluster: "cluster1",
-							Name:    stsName,
-						},
-						Replicas: intstr.FromString("30%"),
-					},
-				},
-			},
-			{
-				Breakpoint: true,
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Cluster: "cluster1",
-							Name:    stsName,
-						},
-						Replicas: intstr.FromString("100%"),
-					},
-				},
-			},
-		},
-	}
 	rollout.Annotations = map[string]string{
-		rolloutapi.AnnoRolloutTrigger: "trigger-inline-batch-run",
+		rolloutapi.AnnoRolloutTrigger: "trigger-v2-batch-run",
 	}
 	err = s.fedClient.Create(ctx, rollout)
 	s.Require().NoError(err)
@@ -591,7 +607,7 @@ func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithInlineBatchStrate
 		for i := range runList.Items {
 			r := &runList.Items[i]
 			owner := metav1.GetControllerOf(r)
-			if owner != nil && owner.Name == rollout.Name && r.Name == "trigger-inline-batch-run" {
+			if owner != nil && owner.Name == rollout.Name && r.Name == "trigger-v2-batch-run" {
 				run = r
 				return true
 			}
@@ -619,10 +635,10 @@ func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithInlineBatchStrate
 	s.Require().Equal("100%", run.Spec.Batch.Batches[1].Targets[0].Replicas.String())
 }
 
-func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithInlineBatch() {
+func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithV2Batch() {
 	ctx := context.Background()
 	namespace := "default"
-	stsName := "test-sts-onetime-inline"
+	stsName := "test-sts-onetime-v2"
 
 	// 1. Create StatefulSet as workload
 	sts := newTestStatefulSet(stsName, namespace)
@@ -634,8 +650,34 @@ func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithInlineBatch() 
 		_ = s.cluster1Client.Delete(ctx, sts)
 	}()
 
-	// 2. Create Rollout with InlineBatchStrategy and trigger annotation
-	rollout := newTestRollout("test-rollout-onetime-inline", namespace)
+	// 2. Create RolloutStrategy with BatchV2
+	strategy := &rolloutv1alpha1.RolloutStrategy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-strategy-onetime-v2",
+			Namespace: namespace,
+		},
+		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
+			Batches: []rolloutv1alpha1.RolloutBatchStep{
+				{
+					Breakpoint: true,
+					Targets: []rolloutv1alpha1.RolloutTargets{
+						{Replicas: intstr.FromString("50%")},
+					},
+				},
+			},
+		},
+	}
+	err = s.fedClient.Create(ctx, strategy)
+	s.Require().NoError(err)
+
+	// Cleanup
+	defer func() {
+		_ = s.fedClient.Delete(ctx, strategy)
+	}()
+
+	// 3. Create Rollout with StrategyRef (V2) and trigger annotation
+	rollout := newTestRollout("test-rollout-onetime-v2", namespace)
+	rollout.Spec.StrategyRef = strategy.Name
 	rollout.Spec.WorkloadRef.Match = rolloutv1alpha1.ResourceMatch{
 		Names: []rolloutv1alpha1.CrossClusterObjectNameReference{
 			{
@@ -644,24 +686,8 @@ func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithInlineBatch() 
 			},
 		},
 	}
-	rollout.Spec.BatchStrategy = &rolloutv1alpha1.RolloutRunBatchStrategy{
-		Batches: []rolloutv1alpha1.RolloutRunStep{
-			{
-				Breakpoint: true,
-				Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-					{
-						CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-							Cluster: "cluster1",
-							Name:    stsName,
-						},
-						Replicas: intstr.FromString("50%"),
-					},
-				},
-			},
-		},
-	}
 	rollout.Annotations = map[string]string{
-		rolloutapi.AnnoRolloutTrigger: "trigger-onetime-inline",
+		rolloutapi.AnnoRolloutTrigger: "trigger-onetime-v2",
 	}
 	err = s.fedClient.Create(ctx, rollout)
 	s.Require().NoError(err)
@@ -693,7 +719,7 @@ func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithInlineBatch() 
 		for i := range runList.Items {
 			r := &runList.Items[i]
 			owner := metav1.GetControllerOf(r)
-			if owner != nil && owner.Name == rollout.Name && r.Name == "trigger-onetime-inline" {
+			if owner != nil && owner.Name == rollout.Name && r.Name == "trigger-onetime-v2" {
 				run = r
 				return true
 			}
@@ -706,41 +732,23 @@ func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithInlineBatch() 
 	s.Require().Len(run.Spec.Batch.Batches, 1, "Should have 1 batch initially")
 	s.Require().Equal("50%", run.Spec.Batch.Batches[0].Targets[0].Replicas.String())
 
-	// 6. Apply one-time strategy via annotation using InlineBatch
+	// 6. Apply one-time strategy via annotation using BatchV2
 	oneTimeStrategy := ontimestrategy.OneTimeStrategy{
-		InlineBatch: &rolloutv1alpha1.RolloutRunBatchStrategy{
-			Batches: []rolloutv1alpha1.RolloutRunStep{
+		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
+			Batches: []rolloutv1alpha1.RolloutBatchStep{
 				{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{
-							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-								Cluster: "cluster1",
-								Name:    stsName,
-							},
-							Replicas: intstr.FromString("20%"),
-						},
+					Targets: []rolloutv1alpha1.RolloutTargets{
+						{Replicas: intstr.FromString("20%")},
 					},
 				},
 				{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{
-							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-								Cluster: "cluster1",
-								Name:    stsName,
-							},
-							Replicas: intstr.FromString("40%"),
-						},
+					Targets: []rolloutv1alpha1.RolloutTargets{
+						{Replicas: intstr.FromString("40%")},
 					},
 				},
 				{
-					Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						{
-							CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
-								Cluster: "cluster1",
-								Name:    stsName,
-							},
-							Replicas: intstr.FromString("60%"),
-						},
+					Targets: []rolloutv1alpha1.RolloutTargets{
+						{Replicas: intstr.FromString("60%")},
 					},
 				},
 			},
@@ -947,6 +955,7 @@ func newTestRollout(name, namespace string) *rolloutv1alpha1.Rollout {
 			Namespace: namespace,
 		},
 		Spec: rolloutv1alpha1.RolloutSpec{
+			StrategyRef: "default-strategy",
 			WorkloadRef: rolloutv1alpha1.WorkloadRef{
 				APIVersion: "apps/v1",
 				Kind:       "StatefulSet",

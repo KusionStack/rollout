@@ -122,6 +122,32 @@ rules:
 - apiGroups:
   - rollout.kusionstack.io
   resources:
+  - scaleruns
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - scaleruns/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
+  - scaleruns/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rollout.kusionstack.io
+  resources:
   - traffictopologies
   verbs:
   - create

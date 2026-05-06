@@ -68,21 +68,9 @@ func filterWorkloadsByMatch(workloads []*workload.Info, match *rolloutv1alpha1.R
 	return result
 }
 
-func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []*workload.Info, rolloutId string) (*rolloutv1alpha1.RolloutRun, error) {
-	var run *rolloutv1alpha1.RolloutRun
-	var hasInline bool
-	// Try inline strategy first
-	run, hasInline, err := constructRolloutRunFromInlineStrategy(obj, workloadWrappers, rolloutId)
-	if hasInline {
-		if err != nil {
-			return nil, err
-		}
-		return run, nil
-	}
-
-	// Fall back to strategy reference
+func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1.RolloutStrategy, workloadWrappers []*workload.Info, rolloutId string) *rolloutv1alpha1.RolloutRun {
 	owner := metav1.NewControllerRef(obj, rolloutv1alpha1.SchemeGroupVersion.WithKind("Rollout"))
-	run = &rolloutv1alpha1.RolloutRun{
+	run := &rolloutv1alpha1.RolloutRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       obj.Namespace,
 			Name:            rolloutId,
@@ -97,13 +85,29 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 				Kind:       obj.Spec.WorkloadRef.Kind,
 			},
 			TrafficTopologyRefs: obj.Spec.TrafficTopologyRefs,
-			Canary:              constructRolloutRunCanary(strategy.Canary, workloadWrappers),
-			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
-				Toleration: strategy.Batch.Toleration,
-				Batches:    constructRolloutRunBatches(strategy.Batch, workloadWrappers),
-			},
-			Webhooks: strategy.Webhooks,
+			Webhooks:            strategy.Webhooks,
 		},
+	}
+
+	// Determine V1 vs V2 path based on BatchV2 presence
+	if strategy.BatchV2 != nil {
+		// V2 path: BatchV2 + optional CanaryV2
+		if strategy.CanaryV2 != nil {
+			run.Spec.Canary = constructRolloutRunCanaryV2(strategy.CanaryV2, workloadWrappers)
+		}
+		run.Spec.Batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
+			Toleration: strategy.BatchV2.Toleration,
+			Batches:    constructRolloutRunBatchesV2(strategy.BatchV2, workloadWrappers),
+		}
+	} else if strategy.Batch != nil {
+		// V1 path: Batch + optional Canary
+		if strategy.Canary != nil {
+			run.Spec.Canary = constructRolloutRunCanary(strategy.Canary, workloadWrappers)
+		}
+		run.Spec.Batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
+			Toleration: strategy.Batch.Toleration,
+			Batches:    constructRolloutRunBatches(strategy.Batch, workloadWrappers),
+		}
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.OneTimeStrategy) {
@@ -118,7 +122,7 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 			run.Labels[rolloutapi.LabelRolloutClass] = class
 		}
 	}
-	return run, nil
+	return run
 }
 
 func constructRolloutRunCanary(strategy *rolloutv1alpha1.CanaryStrategy, workloadWrappers []*workload.Info) *rolloutv1alpha1.RolloutRunCanaryStrategy {
@@ -179,6 +183,64 @@ func constructRolloutRunBatches(strategy *rolloutv1alpha1.BatchStrategy, workloa
 		step.Properties = b.Properties
 		step.Traffic = b.Traffic
 		result = append(result, step)
+	}
+	return result
+}
+
+// constructRolloutRunCanaryV2 constructs RolloutRunCanaryStrategy from CanaryStrategyV2
+func constructRolloutRunCanaryV2(strategy *rolloutv1alpha1.CanaryStrategyV2, workloadWrappers []*workload.Info) *rolloutv1alpha1.RolloutRunCanaryStrategy {
+	if strategy == nil {
+		return nil
+	}
+	targets := resolveRolloutTargets(strategy.Targets, workloadWrappers)
+
+	return &rolloutv1alpha1.RolloutRunCanaryStrategy{
+		Targets:               targets,
+		Traffic:               strategy.Traffic,
+		Properties:            strategy.Properties,
+		TemplateMetadataPatch: strategy.TemplateMetadataPatch,
+	}
+}
+
+// constructRolloutRunBatchesV2 constructs RolloutRunStep list from BatchStrategyV2
+func constructRolloutRunBatchesV2(strategy *rolloutv1alpha1.BatchStrategyV2, workloadWrappers []*workload.Info) []rolloutv1alpha1.RolloutRunStep {
+	if strategy == nil {
+		return nil
+	}
+
+	if len(strategy.Batches) == 0 {
+		panic("no valid batches found in batchV2 strategy")
+	}
+
+	result := make([]rolloutv1alpha1.RolloutRunStep, 0, len(strategy.Batches))
+	for _, b := range strategy.Batches {
+		step := rolloutv1alpha1.RolloutRunStep{
+			Targets:    resolveRolloutTargets(b.Targets, workloadWrappers),
+			Breakpoint: b.Breakpoint,
+			Properties: b.Properties,
+			Traffic:    b.Traffic,
+		}
+		result = append(result, step)
+	}
+	return result
+}
+
+// resolveRolloutTargets resolves RolloutTargets into RolloutRunStepTarget by matching workloads
+func resolveRolloutTargets(targets []rolloutv1alpha1.RolloutTargets, workloadWrappers []*workload.Info) []rolloutv1alpha1.RolloutRunStepTarget {
+	result := make([]rolloutv1alpha1.RolloutRunStepTarget, 0)
+	for _, t := range targets {
+		filteredWorkloads := filterWorkloadsByMatch(workloadWrappers, t.Match)
+		for _, info := range filteredWorkloads {
+			target := rolloutv1alpha1.RolloutRunStepTarget{
+				CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{
+					Cluster: info.ClusterName,
+					Name:    info.Name,
+				},
+				Replicas:             t.Replicas,
+				ReplicaSlidingWindow: t.ReplicaSlidingWindow,
+			}
+			result = append(result, target)
+		}
 	}
 	return result
 }
