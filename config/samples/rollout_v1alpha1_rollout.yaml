@@ -9,4 +9,11 @@ metadata:
     app.kubernetes.io/created-by: rollout
   name: rollout-sample
 spec:
-
+  strategyRef: rolloutstrategy-sample
+  triggerPolicy: Auto
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    match:
+      names:
+        - name: demo

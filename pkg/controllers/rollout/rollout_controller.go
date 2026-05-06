@@ -328,10 +328,8 @@ func (r *RolloutReconciler) handleProgressing(ctx context.Context, obj *rolloutv
 func (r *RolloutReconciler) getDependentResources(ctx context.Context, obj *rolloutv1alpha1.Rollout) (ros *rolloutv1alpha1.RolloutStrategy, ttopos []*rolloutv1alpha1.TrafficTopology, errs []error) {
 	ctx = clusterinfo.WithCluster(ctx, clusterinfo.Fed)
 
-	// Check if using inline strategy (BatchStrategy)
-	// If using inline strategy, we don't need to fetch RolloutStrategy
-	if obj.Spec.BatchStrategy == nil && len(obj.Spec.StrategyRef) > 0 {
-		// Only fetch RolloutStrategy if using StrategyRef (not inline strategy)
+	// Always fetch RolloutStrategy (StrategyRef is required)
+	if len(obj.Spec.StrategyRef) > 0 {
 		var strategy rolloutv1alpha1.RolloutStrategy
 		err := r.Client.Get(
 			ctx,
@@ -439,12 +437,7 @@ func (r *RolloutReconciler) syncRun(
 	}
 
 	// 4. trigger a new rollout progress
-	var constructErr error
-	curRun, constructErr = constructRolloutRun(obj, ros, workloads, rolloutID)
-	if constructErr != nil {
-		r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "FailedConstruct", fmt.Sprintf("failed to construct a new rolloutRun: %v", constructErr))
-		return constructErr
-	}
+	curRun = constructRolloutRun(obj, ros, workloads, rolloutID)
 	r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionTrue, "Create", fmt.Sprintf("construct a new rolloutRun %s", curRun.Name))
 
 	// NOTO: we have to set expectation before we create the rolloutRun to avoid
@@ -683,17 +676,14 @@ func (r *RolloutReconciler) applyOneTimeStrategy(ctx context.Context, obj *rollo
 
 	var batch *rolloutv1alpha1.RolloutRunBatchStrategy
 
-	// Check if using InlineBatch (for inline batch strategy scenario)
-	if strategy.InlineBatch != nil {
-		workloadMap := buildWorkloadMap(workloads)
-		var validateErr error
-		batch, validateErr = validateAndCopyBatchStrategy(strategy.InlineBatch, workloadMap)
-		if validateErr != nil {
-			r.recordCondition(obj, newStatus, rolloutv1alpha1.RolloutConditionTrigger, metav1.ConditionFalse, "InvalidStrategy", fmt.Sprintf("failed to validate inline batch strategy: %v", validateErr))
-			return nil
+	// Check if using BatchV2 (V2 strategy scenario)
+	if strategy.BatchV2 != nil {
+		batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
+			Batches:    constructRolloutRunBatchesV2(strategy.BatchV2, workloads),
+			Toleration: strategy.BatchV2.Toleration,
 		}
 	} else {
-		// Use original Batch field (for StrategyRef scenario)
+		// Use original Batch field (V1 scenario)
 		batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
 			Batches:    constructRolloutRunBatches(&strategy.Batch, workloads),
 			Toleration: strategy.Batch.Toleration,

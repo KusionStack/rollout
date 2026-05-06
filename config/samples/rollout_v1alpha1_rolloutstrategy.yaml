@@ -9,4 +9,10 @@ metadata:
     app.kubernetes.io/created-by: rollout
   name: rolloutstrategy-sample
 spec:
-  # TODO(user): Add fields here
+  batchV2:
+    batches:
+      - targets:
+          - replicas: "30%"
+      - breakpoint: true
+        targets:
+          - replicas: "100%"

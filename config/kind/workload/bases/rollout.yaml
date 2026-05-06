@@ -1,4 +1,3 @@
-
 apiVersion: rollout.kusionstack.io/v1alpha1
 kind: Rollout
 metadata:
@@ -24,28 +23,33 @@ apiVersion: rollout.kusionstack.io/v1alpha1
 kind: RolloutStrategy
 metadata:
   name: rollout-demo
-canary:
-  replicas: 2
-  templateMetadataPatch:
-    labels:
-      service.tag: "canary"
-  traffic:
-    http:
-      filters:
-      - requestHeaderModifier:
-          set:
-          - name: x-mse-tag
+spec:
+  canaryV2:
+    targets:
+      - replicas: 2
+    templateMetadataPatch:
+      labels:
+        service.tag: "canary"
+    traffic:
+      http:
+        filters:
+        - requestHeaderModifier:
+            set:
+            - name: x-mse-tag
+              value: canary
+          type: RequestHeaderModifier
+        matches:
+        - headers:
+          - type: Exact
+            name: env
             value: canary
-        type: RequestHeaderModifier
-      matches:
-      - headers:
-        - type: Exact 
-          name: env
-          value: canary
-batch:
-  batches:
-  - replicas: 1
-  - replicas: 3
-    replicaSlidingWindow: 1
-    breakpoint: true
-  - replicas: 100%
+  batchV2:
+    batches:
+    - targets:
+        - replicas: 1
+    - targets:
+        - replicas: 3
+          replicaSlidingWindow: 1
+      breakpoint: true
+    - targets:
+        - replicas: "100%"

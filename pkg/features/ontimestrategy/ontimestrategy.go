@@ -28,16 +28,15 @@ const (
 )
 
 type OneTimeStrategy struct {
-	// Batch is the original field for StrategyRef scenario.
-	// Used when referencing a RolloutStrategy CRD with match/replicas.
-	// Mutually exclusive with InlineBatch.
+	// Batch is the V1 field for StrategyRef scenario.
+	// Used when referencing a RolloutStrategy CRD with V1 match/replicas.
+	// Mutually exclusive with BatchV2.
 	Batch rolloutv1alpha1.BatchStrategy `json:"batch,omitempty"`
 
-	// InlineBatch is for inline batch strategy scenario.
-	// Used when RolloutSpec uses BatchStrategy inline configuration.
+	// BatchV2 is for V2 batch strategy scenario.
+	// Used when RolloutStrategy uses BatchV2 configuration.
 	// Mutually exclusive with Batch.
-	// Directly reuses RolloutRunBatchStrategy type.
-	InlineBatch *rolloutv1alpha1.RolloutRunBatchStrategy `json:"inlineBatch,omitempty"`
+	BatchV2 *rolloutv1alpha1.BatchStrategyV2 `json:"batchV2,omitempty"`
 }
 
 func (s *OneTimeStrategy) JSONData() []byte {
@@ -45,22 +44,30 @@ func (s *OneTimeStrategy) JSONData() []byte {
 	return data
 }
 
-// ConvertFrom creates a OneTimeStrategy from RolloutStrategy (for StrategyRef scenario)
+// ConvertFrom creates a OneTimeStrategy from RolloutStrategy
 func ConvertFrom(in *rolloutv1alpha1.RolloutStrategy) *OneTimeStrategy {
-	if in == nil || in.Batch == nil {
+	if in == nil {
 		return &OneTimeStrategy{}
 	}
-	return &OneTimeStrategy{
-		Batch: *in.Batch,
+	if in.BatchV2 != nil {
+		return &OneTimeStrategy{
+			BatchV2: in.BatchV2,
+		}
 	}
+	if in.Batch != nil {
+		return &OneTimeStrategy{
+			Batch: *in.Batch,
+		}
+	}
+	return &OneTimeStrategy{}
 }
 
-// ConvertFromInline creates a OneTimeStrategy for inline batch strategy scenario
-func ConvertFromInline(batchStrategy *rolloutv1alpha1.RolloutRunBatchStrategy) *OneTimeStrategy {
+// ConvertFromV2 creates a OneTimeStrategy from BatchStrategyV2
+func ConvertFromV2(batchStrategy *rolloutv1alpha1.BatchStrategyV2) *OneTimeStrategy {
 	if batchStrategy == nil {
 		return &OneTimeStrategy{}
 	}
 	return &OneTimeStrategy{
-		InlineBatch: batchStrategy,
+		BatchV2: batchStrategy,
 	}
 }

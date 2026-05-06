@@ -42,44 +42,9 @@ func ValidateRolloutSpec(spec *rolloutv1alpha1.RolloutSpec, fldPath *field.Path,
 		allErrs = append(allErrs, field.NotSupported(fldPath.Child("triggerPolicy"), spec.TriggerPolicy, []string{string(rolloutv1alpha1.AutoTriggerPolicy), string(rolloutv1alpha1.ManualTriggerPolicy)}))
 	}
 
-	// Validate strategy mutual exclusion: StrategyRef vs inline strategies (CanaryStrategy and BatchStrategy)
-	hasStrategyRef := len(spec.StrategyRef) > 0
-	hasCanary := spec.CanaryStrategy != nil
-	hasBatch := spec.BatchStrategy != nil
-
-	// StrategyRef is mutually exclusive with inline strategies
-	if hasStrategyRef && hasBatch {
-		allErrs = append(allErrs, field.Invalid(
-			fldPath,
-			spec.StrategyRef,
-			"strategyRef is mutually exclusive with batchStrategy",
-		))
-	}
-
-	if hasCanary && !hasBatch {
-		allErrs = append(allErrs, field.Invalid(
-			fldPath,
-			spec.StrategyRef,
-			"batchStrategy is required when canaryStrategy is set",
-		))
-	}
-
-	// Must specify at least one strategy
-	if !hasStrategyRef && !hasBatch {
-		allErrs = append(allErrs, field.Required(
-			fldPath.Child("strategyRef"),
-			"must specify either strategyRef, or batchStrategy",
-		))
-	}
-
-	// Validate CanaryStrategy if present
-	if hasCanary {
-		allErrs = append(allErrs, ValidateRolloutRunCanaryStrategy(spec.CanaryStrategy, fldPath.Child("canaryStrategy"))...)
-	}
-
-	// Validate BatchStrategy if present
-	if hasBatch {
-		allErrs = append(allErrs, ValidateRolloutRunBatchStrategy(spec.BatchStrategy, fldPath.Child("batchStrategy"))...)
+	// StrategyRef is required
+	if len(spec.StrategyRef) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("strategyRef"), "strategyRef is required"))
 	}
 
 	allErrs = append(allErrs, ValidateWorkloadRef(&spec.WorkloadRef, fldPath.Child("workloadRef"), isSupportedGVK)...)

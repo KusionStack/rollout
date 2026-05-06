@@ -28,12 +28,28 @@ import (
 func ValidateRolloutStrategy(obj *rolloutv1alpha1.RolloutStrategy) field.ErrorList {
 	allErrs := apimachineryvalidation.ValidateObjectMeta(&obj.ObjectMeta, true, apimachineryvalidation.NameIsDNSSubdomain, field.NewPath("metadata"))
 
-	if obj.Canary != nil && obj.Batch == nil {
-		allErrs = append(allErrs, field.Forbidden(field.NewPath("canary"), "cannot set canary independently"))
+	// V1 and V2 are mutually exclusive
+	if obj.Canary != nil && obj.CanaryV2 != nil {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("canaryV2"), "canary and canaryV2 are mutually exclusive"))
+	}
+	if obj.Batch != nil && obj.BatchV2 != nil {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("batchV2"), "batch and batchV2 are mutually exclusive"))
 	}
 
+	// V1 validation
+	if obj.Canary != nil && obj.Batch == nil && obj.BatchV2 == nil {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("canary"), "cannot set canary independently"))
+	}
 	allErrs = append(allErrs, ValidateBatchStrategy(obj.Batch, field.NewPath("batch"))...)
 	allErrs = append(allErrs, ValidateCanaryStrategy(obj.Canary, field.NewPath("canary"))...)
+
+	// V2 validation
+	if obj.CanaryV2 != nil && obj.BatchV2 == nil && obj.Batch == nil {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("canaryV2"), "cannot set canaryV2 independently"))
+	}
+	allErrs = append(allErrs, ValidateCanaryStrategyV2(obj.CanaryV2, field.NewPath("canaryV2"))...)
+	allErrs = append(allErrs, ValidateBatchStrategyV2(obj.BatchV2, field.NewPath("batchV2"))...)
+
 	allErrs = append(allErrs, ValidateWebhooks(obj.Webhooks, field.NewPath("webhooks"))...)
 
 	return allErrs
@@ -128,6 +144,71 @@ func ValidateRolloutWebhook(webhook *rolloutv1alpha1.RolloutWebhook, fldPath *fi
 	}
 
 	allErrs = append(allErrs, ValidateWebhookURL(fldPath.Child("url"), webhook.ClientConfig.URL, false)...)
+
+	return allErrs
+}
+
+func ValidateBatchStrategyV2(strategy *rolloutv1alpha1.BatchStrategyV2, fldPath *field.Path) field.ErrorList {
+	if strategy == nil {
+		return nil
+	}
+
+	allErrs := field.ErrorList{}
+
+	if len(strategy.Batches) == 0 {
+		return append(allErrs, field.Required(fldPath.Child("batches"), "must have at least one batch"))
+	}
+
+	for i := range strategy.Batches {
+		batch := strategy.Batches[i]
+		allErrs = append(allErrs, ValidateRolloutBatchStep(&batch, fldPath.Child("batches").Index(i))...)
+	}
+
+	return allErrs
+}
+
+func ValidateRolloutBatchStep(step *rolloutv1alpha1.RolloutBatchStep, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if len(step.Targets) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("targets"), "must specify at least one target"))
+	} else {
+		for i := range step.Targets {
+			allErrs = append(allErrs, ValidateRolloutTargets(&step.Targets[i], fldPath.Child("targets").Index(i))...)
+		}
+	}
+
+	allErrs = append(allErrs, validateTrafficStrategy(step.Traffic, fldPath.Child("traffic"))...)
+
+	return allErrs
+}
+
+func ValidateRolloutTargets(targets *rolloutv1alpha1.RolloutTargets, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	allErrs = append(allErrs, appsvalidation.ValidatePositiveIntOrPercent(targets.Replicas, fldPath.Child("replicas"))...)
+	allErrs = append(allErrs, ValidateResourceMatch(targets.Match, fldPath.Child("matchTargets"))...)
+
+	return allErrs
+}
+
+func ValidateCanaryStrategyV2(strategy *rolloutv1alpha1.CanaryStrategyV2, fldPath *field.Path) field.ErrorList {
+	if strategy == nil {
+		return nil
+	}
+
+	allErrs := field.ErrorList{}
+
+	if len(strategy.Targets) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("targets"), "must specify at least one target"))
+	} else {
+		for i := range strategy.Targets {
+			allErrs = append(allErrs, ValidateRolloutTargets(&strategy.Targets[i], fldPath.Child("targets").Index(i))...)
+		}
+	}
+
+	allErrs = append(allErrs, validateTemplateMetadataPatch(strategy.TemplateMetadataPatch, fldPath.Child("patch"))...)
+	allErrs = append(allErrs, validateTrafficStrategy(strategy.Traffic, fldPath.Child("traffic"))...)
 
 	return allErrs
 }
