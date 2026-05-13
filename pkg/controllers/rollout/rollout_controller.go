@@ -677,10 +677,10 @@ func (r *RolloutReconciler) applyOneTimeStrategy(ctx context.Context, obj *rollo
 	var batch *rolloutv1alpha1.RolloutRunBatchStrategy
 
 	// Check if using BatchV2 (V2 strategy scenario)
+	// Note: BatchStrategyV2 does not support Toleration, only V1 BatchStrategy has it
 	if strategy.BatchV2 != nil {
 		batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
-			Batches:    constructRolloutRunBatchesV2(strategy.BatchV2, workloads),
-			Toleration: strategy.BatchV2.Toleration,
+			Batches: constructRolloutRunBatchesV2(strategy.BatchV2, workloads),
 		}
 	} else {
 		// Use original Batch field (V1 scenario)

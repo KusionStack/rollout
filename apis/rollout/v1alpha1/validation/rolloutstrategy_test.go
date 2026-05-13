@@ -178,16 +178,16 @@ func TestValidateRolloutStrategy_V2(t *testing.T) {
 			Namespace: "default",
 		},
 		CanaryV2: &rolloutv1alpha1.CanaryStrategyV2{
-			Targets: []rolloutv1alpha1.RolloutTargets{
+			Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 				{
 					Replicas: intstr.FromString("10%"),
 				},
 			},
 		},
 		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
-			Batches: []rolloutv1alpha1.RolloutBatchStep{
+			Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 				{
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{
 							Replicas: intstr.FromString("30%"),
 						},
@@ -198,7 +198,7 @@ func TestValidateRolloutStrategy_V2(t *testing.T) {
 				},
 				{
 					Breakpoint: true,
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{
 							Replicas: intstr.FromString("100%"),
 						},
@@ -275,7 +275,7 @@ func TestValidateRolloutStrategy_V2(t *testing.T) {
 			obj: func() *rolloutv1alpha1.RolloutStrategy {
 				obj := validV2Strategy.DeepCopy()
 				obj.CanaryV2 = nil
-				obj.BatchV2.Batches = []rolloutv1alpha1.RolloutBatchStep{
+				obj.BatchV2.Batches = []rolloutv1alpha1.RolloutBatchStrategyStep{
 					{Targets: nil},
 				}
 				return obj

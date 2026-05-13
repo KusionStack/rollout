@@ -207,15 +207,15 @@ func Test_constructRolloutRun_V2Path(t *testing.T) {
 			},
 			strategy: &rolloutv1alpha1.RolloutStrategy{
 				BatchV2: &rolloutv1alpha1.BatchStrategyV2{
-					Batches: []rolloutv1alpha1.RolloutBatchStep{
+					Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 						{
-							Targets: []rolloutv1alpha1.RolloutTargets{
+							Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 								{Replicas: intstr.FromString("30%")},
 							},
 						},
 						{
 							Breakpoint: true,
-							Targets: []rolloutv1alpha1.RolloutTargets{
+							Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 								{Replicas: intstr.FromString("100%")},
 							},
 						},
@@ -247,14 +247,14 @@ func Test_constructRolloutRun_V2Path(t *testing.T) {
 			},
 			strategy: &rolloutv1alpha1.RolloutStrategy{
 				CanaryV2: &rolloutv1alpha1.CanaryStrategyV2{
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("5%")},
 					},
 				},
 				BatchV2: &rolloutv1alpha1.BatchStrategyV2{
-					Batches: []rolloutv1alpha1.RolloutBatchStep{
+					Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 						{
-							Targets: []rolloutv1alpha1.RolloutTargets{
+							Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 								{Replicas: intstr.FromString("100%")},
 							},
 						},
@@ -368,7 +368,7 @@ func Test_constructRolloutRunCanaryV2(t *testing.T) {
 		{
 			name: "single target without match (match all)",
 			strategy: &rolloutv1alpha1.CanaryStrategyV2{
-				Targets: []rolloutv1alpha1.RolloutTargets{
+				Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 					{Replicas: intstr.FromString("10%")},
 				},
 			},
@@ -378,7 +378,7 @@ func Test_constructRolloutRunCanaryV2(t *testing.T) {
 		{
 			name: "target with match by name",
 			strategy: &rolloutv1alpha1.CanaryStrategyV2{
-				Targets: []rolloutv1alpha1.RolloutTargets{
+				Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 					{
 						Replicas: intstr.FromString("10%"),
 						Match: &rolloutv1alpha1.ResourceMatch{
@@ -430,15 +430,15 @@ func Test_constructRolloutRunBatchesV2(t *testing.T) {
 		{
 			name: "two batches with targets",
 			strategy: &rolloutv1alpha1.BatchStrategyV2{
-				Batches: []rolloutv1alpha1.RolloutBatchStep{
+				Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 					{
-						Targets: []rolloutv1alpha1.RolloutTargets{
+						Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 							{Replicas: intstr.FromString("30%")},
 						},
 					},
 					{
 						Breakpoint: true,
-						Targets: []rolloutv1alpha1.RolloutTargets{
+						Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 							{Replicas: intstr.FromString("100%")},
 						},
 					},
@@ -450,9 +450,9 @@ func Test_constructRolloutRunBatchesV2(t *testing.T) {
 		{
 			name: "batch with match filtering",
 			strategy: &rolloutv1alpha1.BatchStrategyV2{
-				Batches: []rolloutv1alpha1.RolloutBatchStep{
+				Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 					{
-						Targets: []rolloutv1alpha1.RolloutTargets{
+						Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 							{
 								Replicas: intstr.FromString("50%"),
 								Match: &rolloutv1alpha1.ResourceMatch{
@@ -494,7 +494,7 @@ func Test_resolveRolloutTargets(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		targets []rolloutv1alpha1.RolloutTargets
+		targets []rolloutv1alpha1.RolloutStrategyTargets
 		wantLen int
 	}{
 		{
@@ -504,14 +504,14 @@ func Test_resolveRolloutTargets(t *testing.T) {
 		},
 		{
 			name: "match all workloads",
-			targets: []rolloutv1alpha1.RolloutTargets{
+			targets: []rolloutv1alpha1.RolloutStrategyTargets{
 				{Replicas: intstr.FromString("50%")},
 			},
 			wantLen: 2,
 		},
 		{
 			name: "match specific cluster",
-			targets: []rolloutv1alpha1.RolloutTargets{
+			targets: []rolloutv1alpha1.RolloutStrategyTargets{
 				{
 					Replicas: intstr.FromString("50%"),
 					Match: &rolloutv1alpha1.ResourceMatch{
@@ -525,7 +525,7 @@ func Test_resolveRolloutTargets(t *testing.T) {
 		},
 		{
 			name: "multiple targets filter to different workloads",
-			targets: []rolloutv1alpha1.RolloutTargets{
+			targets: []rolloutv1alpha1.RolloutStrategyTargets{
 				{
 					Replicas: intstr.FromString("30%"),
 					Match: &rolloutv1alpha1.ResourceMatch{
