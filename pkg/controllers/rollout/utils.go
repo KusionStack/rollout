@@ -92,12 +92,12 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 	// Determine V1 vs V2 path based on BatchV2 presence
 	if strategy.BatchV2 != nil {
 		// V2 path: BatchV2 + optional CanaryV2
+		// Note: BatchStrategyV2 does not support Toleration, only V1 BatchStrategy has it
 		if strategy.CanaryV2 != nil {
 			run.Spec.Canary = constructRolloutRunCanaryV2(strategy.CanaryV2, workloadWrappers)
 		}
 		run.Spec.Batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
-			Toleration: strategy.BatchV2.Toleration,
-			Batches:    constructRolloutRunBatchesV2(strategy.BatchV2, workloadWrappers),
+			Batches: constructRolloutRunBatchesV2(strategy.BatchV2, workloadWrappers),
 		}
 	} else if strategy.Batch != nil {
 		// V1 path: Batch + optional Canary
@@ -225,8 +225,8 @@ func constructRolloutRunBatchesV2(strategy *rolloutv1alpha1.BatchStrategyV2, wor
 	return result
 }
 
-// resolveRolloutTargets resolves RolloutTargets into RolloutRunStepTarget by matching workloads
-func resolveRolloutTargets(targets []rolloutv1alpha1.RolloutTargets, workloadWrappers []*workload.Info) []rolloutv1alpha1.RolloutRunStepTarget {
+// resolveRolloutTargets resolves RolloutStrategyTargets into RolloutRunStepTarget by matching workloads
+func resolveRolloutTargets(targets []rolloutv1alpha1.RolloutStrategyTargets, workloadWrappers []*workload.Info) []rolloutv1alpha1.RolloutRunStepTarget {
 	result := make([]rolloutv1alpha1.RolloutRunStepTarget, 0)
 	for _, t := range targets {
 		filteredWorkloads := filterWorkloadsByMatch(workloadWrappers, t.Match)

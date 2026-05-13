@@ -161,20 +161,20 @@ func ValidateBatchStrategyV2(strategy *rolloutv1alpha1.BatchStrategyV2, fldPath 
 
 	for i := range strategy.Batches {
 		batch := strategy.Batches[i]
-		allErrs = append(allErrs, ValidateRolloutBatchStep(&batch, fldPath.Child("batches").Index(i))...)
+		allErrs = append(allErrs, ValidateRolloutBatchStrategyStep(&batch, fldPath.Child("batches").Index(i))...)
 	}
 
 	return allErrs
 }
 
-func ValidateRolloutBatchStep(step *rolloutv1alpha1.RolloutBatchStep, fldPath *field.Path) field.ErrorList {
+func ValidateRolloutBatchStrategyStep(step *rolloutv1alpha1.RolloutBatchStrategyStep, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if len(step.Targets) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("targets"), "must specify at least one target"))
 	} else {
 		for i := range step.Targets {
-			allErrs = append(allErrs, ValidateRolloutTargets(&step.Targets[i], fldPath.Child("targets").Index(i))...)
+			allErrs = append(allErrs, ValidateRolloutStrategyTargets(&step.Targets[i], fldPath.Child("targets").Index(i))...)
 		}
 	}
 
@@ -183,7 +183,7 @@ func ValidateRolloutBatchStep(step *rolloutv1alpha1.RolloutBatchStep, fldPath *f
 	return allErrs
 }
 
-func ValidateRolloutTargets(targets *rolloutv1alpha1.RolloutTargets, fldPath *field.Path) field.ErrorList {
+func ValidateRolloutStrategyTargets(targets *rolloutv1alpha1.RolloutStrategyTargets, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	allErrs = append(allErrs, appsvalidation.ValidatePositiveIntOrPercent(targets.Replicas, fldPath.Child("replicas"))...)
@@ -203,7 +203,7 @@ func ValidateCanaryStrategyV2(strategy *rolloutv1alpha1.CanaryStrategyV2, fldPat
 		allErrs = append(allErrs, field.Required(fldPath.Child("targets"), "must specify at least one target"))
 	} else {
 		for i := range strategy.Targets {
-			allErrs = append(allErrs, ValidateRolloutTargets(&strategy.Targets[i], fldPath.Child("targets").Index(i))...)
+			allErrs = append(allErrs, ValidateRolloutStrategyTargets(&strategy.Targets[i], fldPath.Child("targets").Index(i))...)
 		}
 	}
 

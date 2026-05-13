@@ -278,10 +278,10 @@ func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithV2BatchStrategy()
 			Namespace: s.rollout.Namespace,
 		},
 		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
-			Batches: []rolloutv1alpha1.RolloutBatchStep{
+			Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 				{
 					Breakpoint: true,
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("100%")},
 					},
 				},
@@ -324,15 +324,15 @@ func (s *RolloutInitializationTestSuite) Test_CreateRolloutWithV2CanaryStrategy(
 			Namespace: s.rollout.Namespace,
 		},
 		CanaryV2: &rolloutv1alpha1.CanaryStrategyV2{
-			Targets: []rolloutv1alpha1.RolloutTargets{
+			Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 				{Replicas: intstr.FromString("10%")},
 			},
 		},
 		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
-			Batches: []rolloutv1alpha1.RolloutBatchStep{
+			Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 				{
 					Breakpoint: true,
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("100%")},
 					},
 				},
@@ -540,15 +540,15 @@ func (s *RolloutControllerTestSuite) Test_TriggerRolloutRunWithV2BatchStrategy()
 			Namespace: namespace,
 		},
 		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
-			Batches: []rolloutv1alpha1.RolloutBatchStep{
+			Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 				{
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("30%")},
 					},
 				},
 				{
 					Breakpoint: true,
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("100%")},
 					},
 				},
@@ -657,10 +657,10 @@ func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithV2Batch() {
 			Namespace: namespace,
 		},
 		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
-			Batches: []rolloutv1alpha1.RolloutBatchStep{
+			Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 				{
 					Breakpoint: true,
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("50%")},
 					},
 				},
@@ -735,19 +735,19 @@ func (s *RolloutControllerTestSuite) Test_ApplyOneTimeStrategyWithV2Batch() {
 	// 6. Apply one-time strategy via annotation using BatchV2
 	oneTimeStrategy := ontimestrategy.OneTimeStrategy{
 		BatchV2: &rolloutv1alpha1.BatchStrategyV2{
-			Batches: []rolloutv1alpha1.RolloutBatchStep{
+			Batches: []rolloutv1alpha1.RolloutBatchStrategyStep{
 				{
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("20%")},
 					},
 				},
 				{
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("40%")},
 					},
 				},
 				{
-					Targets: []rolloutv1alpha1.RolloutTargets{
+					Targets: []rolloutv1alpha1.RolloutStrategyTargets{
 						{Replicas: intstr.FromString("60%")},
 					},
 				},
