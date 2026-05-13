@@ -4564,32 +4564,6 @@ spec:
                       - targets
                     type: object
                   type: array
-                toleration:
-                  description: Toleration is the toleration policy of the canary strategy
-                  properties:
-                    initialDelaySeconds:
-                      description: Number of seconds after the toleration check has started before the task are initiated.
-                      format: int32
-                      type: integer
-                    taskFailureThreshold:
-                      anyOf:
-                        - type: integer
-                        - type: string
-                      description: |-
-                        FailureThreshold indicates how many failed pods can be tolerated before marking the rollout task as success
-                        If not set, the default value is 0, which means no failed pods can be tolerated
-                        This is a task level threshold.
-                      x-kubernetes-int-or-string: true
-                    workloadTotalFailureThreshold:
-                      anyOf:
-                        - type: integer
-                        - type: string
-                      description: |-
-                        WorkloadFailureThreshold indicates how many failed pods can be tolerated in all upgraded pods of one workload.
-                        The default value is 0, which means no failed pods can be tolerated.
-                        This is a workload level threshold.
-                      x-kubernetes-int-or-string: true
-                  type: object
               type: object
             canary:
               description: Canary defines the canary strategy for upgrade and operation

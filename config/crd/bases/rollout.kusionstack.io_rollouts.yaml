@@ -96,12 +96,14 @@ spec:
                       description: Kind is the type of resource being referenced
                       type: string
                     match:
-                      description: Match indicates how to match workloads. only one workload should be matches in one cluster
+                      description: Match indicates how to match workloads. only one
+                        workload should be matches in one cluster
                       properties:
                         names:
                           description: Names is a list of workload name
                           items:
-                            description: CrossClusterObjectNameReference contains cluster and name reference to a k8s object
+                            description: CrossClusterObjectNameReference contains cluster
+                              and name reference to a k8s object
                             properties:
                               cluster:
                                 description: Cluster indicates the name of cluster
@@ -114,17 +116,20 @@ spec:
                             type: object
                           type: array
                         selector:
-                          description: Selector is a label query over a set of resources, in this case resource
+                          description: Selector is a label query over a set of resources,
+                            in this case resource
                           properties:
                             matchExpressions:
-                              description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
                               items:
                                 description: |-
                                   A label selector requirement is a selector that contains values, a key, and an operator that
                                   relates the key and values.
                                 properties:
                                   key:
-                                    description: key is the label key that the selector applies to.
+                                    description: key is the label key that the selector
+                                      applies to.
                                     type: string
                                   operator:
                                     description: |-
@@ -172,7 +177,8 @@ spec:
                       See: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
                     properties:
                       lastTransitionTime:
-                        description: Last time the condition transitioned from one status to another.
+                        description: Last time the condition transitioned from one status
+                          to another.
                         format: date-time
                         type: string
                       lastUpdateTime:
@@ -180,7 +186,8 @@ spec:
                         format: date-time
                         type: string
                       message:
-                        description: A human-readable message indicating details about the transition.
+                        description: A human-readable message indicating details about
+                          the transition.
                         type: string
                       reason:
                         description: The reason for the condition's last transition.
@@ -217,7 +224,8 @@ spec:
                   items:
                     properties:
                       availableReplicas:
-                        description: AvailableReplicas is the number of service available pods targeted by workload.
+                        description: AvailableReplicas is the number of service available
+                          pods targeted by workload.
                         format: int32
                         type: integer
                       cluster:
@@ -231,30 +239,38 @@ spec:
                         description: Name is the workload name
                         type: string
                       observedGeneration:
-                        description: ObservedGeneration is the most recent generation observed for this workload.
+                        description: ObservedGeneration is the most recent generation
+                          observed for this workload.
                         format: int64
                         type: integer
                       replicas:
-                        description: Replicas is the desired number of pods targeted by workload
+                        description: Replicas is the desired number of pods targeted
+                          by workload
                         format: int32
                         type: integer
                       stableRevision:
-                        description: StableRevision is the old stable revision used to generate pods.
+                        description: StableRevision is the old stable revision used
+                          to generate pods.
                         type: string
                       updatedAvailableReplicas:
-                        description: UpdatedAvailableReplicas is the number of service available pods targeted by workload that have the updated template spec.
+                        description: UpdatedAvailableReplicas is the number of service
+                          available pods targeted by workload that have the updated
+                          template spec.
                         format: int32
                         type: integer
                       updatedReadyReplicas:
-                        description: UpdatedReadyReplicas is the number of ready pods targeted by workload that have the updated template spec.
+                        description: UpdatedReadyReplicas is the number of ready pods
+                          targeted by workload that have the updated template spec.
                         format: int32
                         type: integer
                       updatedReplicas:
-                        description: UpdatedReplicas is the number of pods targeted by workload that have the updated template spec.
+                        description: UpdatedReplicas is the number of pods targeted
+                          by workload that have the updated template spec.
                         format: int32
                         type: integer
                       updatedRevision:
-                        description: UpdatedRevision is the updated template revision used to generate pods.
+                        description: UpdatedRevision is the updated template revision
+                          used to generate pods.
                         type: string
                     type: object
                   type: array
