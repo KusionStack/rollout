@@ -103,14 +103,25 @@ func (o *Info) String() string {
 	return rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: o.ClusterName, Name: o.Name}.String()
 }
 
-func (o *Info) CheckUpdatedReady(replicas int32, strictCheck bool) (bool, string) {
+func (o *Info) CheckUpdatedReady(replicas int32, strictCheck bool, skipToleration int32) (bool, string) {
 	if o.Generation != o.Status.ObservedGeneration {
 		return false, "workload Generation and ObservedGeneration are mismatched"
 	}
-	if o.Status.UpdatedAvailableReplicas < replicas {
+
+	// When this is the last batch, toleration is not allowed.
+	// The last batch must strictly satisfy UpdatedAvailableReplicas >= currentBatchExpectedReplicas,
+	// because there is no subsequent batch to compensate for the deficit.
+	effectiveToleration := skipToleration
+	if strictCheck {
+		effectiveToleration = 0
+	}
+
+	gap := replicas - o.Status.UpdatedAvailableReplicas
+	if gap > effectiveToleration {
 		return false, "workload updated available replicas is not satisfied"
 	}
-	if strictCheck && (o.Status.ObservedReplicas > o.Status.DesiredReplicas || o.Status.TerminatingReplicas != 0) {
+
+	if strictCheck && o.Status.ObservedReplicas > o.Status.DesiredReplicas || o.Status.TerminatingReplicas != 0 {
 		return false, "workload observed replicas is more than desiredReplicas"
 	}
 	return true, ""
