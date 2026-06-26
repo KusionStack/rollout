@@ -23,6 +23,8 @@ cloud.google.com/go/pubsub v1.2.0/go.mod h1:jhfEVHT8odbXTkndysNHCcx0awwzvfOlguIA
 cloud.google.com/go/storage v1.0.0/go.mod h1:IhtSnM/ZTZV8YYJWCY8RULGVqBDmpoyjwiyrjsg+URw=
 cloud.google.com/go/storage v1.5.0/go.mod h1:tpKbwo567HUNpVclU5sGELwQWBDZ8gh0ZeosJ0Rtdos=
 cloud.google.com/go/storage v1.6.0/go.mod h1:N7U0C8pVQ/+NIKOBQyamJIeKQKkZ+mxpohlUTyfDhBk=
+code.alipay.com/paas-core/apimachinery v0.22.2-paascore-0.3 h1:2wlUdXvsivrjcwbmX9I0pZFikOqf/oQcc4KqX9rz7GA=
+code.alipay.com/paas-core/apimachinery v0.22.2-paascore-0.3/go.mod h1:O3oNtNadZdeOMxHFVxOreoznohCpy0z6mocxbZr7oJ0=
 github.com/Azure/azure-sdk-for-go v55.0.0+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
 github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78/go.mod h1:LmzpDX56iTiv29bbRTIsUNlaFfuhWRQBWjQdVyAevI8=
 github.com/Azure/go-ansiterm v0.0.0-20210608223527-2377c96fe795/go.mod h1:LmzpDX56iTiv29bbRTIsUNlaFfuhWRQBWjQdVyAevI8=
@@ -981,8 +983,6 @@ k8s.io/api v0.22.2 h1:M8ZzAD0V6725Fjg53fKeTJxGsJvRbk4TEm/fexHMtfw=
 k8s.io/api v0.22.2/go.mod h1:y3ydYpLJAaDI+BbSe2xmGcqxiWHmWjkEeIbiwHvnPR8=
 k8s.io/apiextensions-apiserver v0.22.2 h1:zK7qI8Ery7j2CaN23UCFaC1hj7dMiI87n01+nKuewd4=
 k8s.io/apiextensions-apiserver v0.22.2/go.mod h1:2E0Ve/isxNl7tWLSUDgi6+cmwHi5fQRdwGVCxbC+KFA=
-k8s.io/apimachinery v0.22.4-rc.0 h1:eTfSdVVKz3tyT8KX/biSENd4pAXyX+R7SyjDawAnPB4=
-k8s.io/apimachinery v0.22.4-rc.0/go.mod h1:O3oNtNadZdeOMxHFVxOreoznohCpy0z6mocxbZr7oJ0=
 k8s.io/apiserver v0.22.2 h1:TdIfZJc6YNhu2WxeAOWq1TvukHF0Sfx0+ln4XK9qnL4=
 k8s.io/apiserver v0.22.2/go.mod h1:vrpMmbyjWrgdyOvZTSpsusQq5iigKNWv9o9KlDAbBHI=
 k8s.io/cli-runtime v0.22.2/go.mod h1:tkm2YeORFpbgQHEK/igqttvPTRIHFRz5kATlw53zlMI=

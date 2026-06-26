@@ -109,7 +109,7 @@ replace (
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	k8s.io/api => k8s.io/api v0.22.2
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.22.2
-	k8s.io/apimachinery => k8s.io/apimachinery v0.22.4-rc.0
+	k8s.io/apimachinery => code.alipay.com/paas-core/apimachinery v0.22.2-paascore-0.3
 	k8s.io/apiserver => k8s.io/apiserver v0.22.2
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.22.2
 	k8s.io/client-go => k8s.io/client-go v0.22.2
