@@ -6,6 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	rolloutv1alpha1 "kusionstack.io/kube-api/rollout/v1alpha1"
+
 	"kusionstack.io/rollout/pkg/workload"
 )
 
@@ -16,8 +17,8 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 		batchSize                 int
 		batches                   []rolloutv1alpha1.RolloutRunStep
 		workloads                 *workload.Set
-		existingSkipToleration    []rolloutv1alpha1.WorkloadSkipToleration
-		expectedSkipToleration    []rolloutv1alpha1.WorkloadSkipToleration
+		existingToleration        []rolloutv1alpha1.RolloutRunTolerationTarget
+		expectedToleration        []rolloutv1alpha1.RolloutRunTolerationTarget
 		expectedCurrentBatchIndex int32
 		expectedCurrentBatchState rolloutv1alpha1.RolloutStepState
 	}{
@@ -36,10 +37,10 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 					newRunStepTarget("cluster-a", "test-a", intstr.FromInt(100)),
 				}},
 			},
-			workloads:              newTestWorkloadSet("cluster-a", "test-a", 1, 100, 25),
-			existingSkipToleration: nil,
-			expectedSkipToleration: []rolloutv1alpha1.WorkloadSkipToleration{
-				{Cluster: "cluster-a", Name: "test-a", Toleration: 5}, // 30 - 25 = 5
+			workloads:          newTestWorkloadSet("cluster-a", "test-a", 1, 100, 25),
+			existingToleration: nil,
+			expectedToleration: []rolloutv1alpha1.RolloutRunTolerationTarget{
+				{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5}, // 30 - 25 = 5
 			},
 			expectedCurrentBatchIndex: 1,
 			expectedCurrentBatchState: rolloutv1alpha1.RolloutStepNone,
@@ -60,11 +61,11 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 				}},
 			},
 			workloads: newTestWorkloadSet("cluster-a", "test-a", 1, 100, 52),
-			existingSkipToleration: []rolloutv1alpha1.WorkloadSkipToleration{
-				{Cluster: "cluster-a", Name: "test-a", Toleration: 5},
+			existingToleration: []rolloutv1alpha1.RolloutRunTolerationTarget{
+				{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
 			},
-			expectedSkipToleration: []rolloutv1alpha1.WorkloadSkipToleration{
-				{Cluster: "cluster-a", Name: "test-a", Toleration: 13}, // 5 + (60-52=8) = 13
+			expectedToleration: []rolloutv1alpha1.RolloutRunTolerationTarget{
+				{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 13}, // 5 + (60-52=8) = 13
 			},
 			expectedCurrentBatchIndex: 2,
 			expectedCurrentBatchState: rolloutv1alpha1.RolloutStepNone,
@@ -85,11 +86,11 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 				}},
 			},
 			workloads: newTestWorkloadSet("cluster-a", "test-a", 1, 100, 93),
-			existingSkipToleration: []rolloutv1alpha1.WorkloadSkipToleration{
-				{Cluster: "cluster-a", Name: "test-a", Toleration: 5},
+			existingToleration: []rolloutv1alpha1.RolloutRunTolerationTarget{
+				{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
 			},
-			expectedSkipToleration: []rolloutv1alpha1.WorkloadSkipToleration{
-				{Cluster: "cluster-a", Name: "test-a", Toleration: 5},
+			expectedToleration: []rolloutv1alpha1.RolloutRunTolerationTarget{
+				{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
 			},
 			expectedCurrentBatchIndex: 2, // unchanged
 			expectedCurrentBatchState: rolloutv1alpha1.RolloutStepNone,
@@ -107,8 +108,8 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 				}},
 			},
 			workloads:                 newTestWorkloadSet("cluster-a", "test-a", 1, 100, 35),
-			existingSkipToleration:    nil,
-			expectedSkipToleration:    nil, // no gap, no toleration added
+			existingToleration:        nil,
+			expectedToleration:        nil, // no gap, no toleration added
 			expectedCurrentBatchIndex: 1,
 			expectedCurrentBatchState: rolloutv1alpha1.RolloutStepNone,
 		},
@@ -121,25 +122,29 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
 						CurrentBatchIndex: tt.batchIndex,
 					},
-					Records:         make([]rolloutv1alpha1.RolloutRunStepStatus, tt.batchSize),
-					SkipTolerations: tt.existingSkipToleration,
+					Records: make([]rolloutv1alpha1.RolloutRunStepStatus, tt.batchSize),
 				},
 			}
 
-			handleBatchStatusWhenSkipped(newStatus, tt.batchSize, tt.batches, tt.workloads)
+			batchStrategy := &rolloutv1alpha1.RolloutRunBatchStrategy{
+				Batches:     tt.batches,
+				Tolerations: tt.existingToleration,
+			}
 
-			if tt.expectedSkipToleration == nil {
-				if newStatus.BatchStatus.SkipTolerations != nil {
-					t.Errorf("expected nil SkipToleration, got %v", newStatus.BatchStatus.SkipTolerations)
+			handleBatchStatusWhenSkipped(newStatus, tt.batchSize, tt.batches, tt.workloads, batchStrategy)
+
+			if tt.expectedToleration == nil {
+				if batchStrategy.Tolerations != nil {
+					t.Errorf("expected nil Tolerations, got %v", batchStrategy.Tolerations)
 				}
 			} else {
-				if len(newStatus.BatchStatus.SkipTolerations) != len(tt.expectedSkipToleration) {
-					t.Errorf("expected %d SkipToleration entries, got %d", len(tt.expectedSkipToleration), len(newStatus.BatchStatus.SkipTolerations))
+				if len(batchStrategy.Tolerations) != len(tt.expectedToleration) {
+					t.Errorf("expected %d Tolerations entries, got %d", len(tt.expectedToleration), len(batchStrategy.Tolerations))
 				}
-				for i, expected := range tt.expectedSkipToleration {
-					actual := newStatus.BatchStatus.SkipTolerations[i]
+				for i, expected := range tt.expectedToleration {
+					actual := batchStrategy.Tolerations[i]
 					if actual.Cluster != expected.Cluster || actual.Name != expected.Name || actual.Toleration != expected.Toleration {
-						t.Errorf("SkipToleration[%d] = %+v, want %+v", i, actual, expected)
+						t.Errorf("Tolerations[%d] = %+v, want %+v", i, actual, expected)
 					}
 				}
 			}
@@ -155,44 +160,40 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 }
 
 func TestFindSkipToleration(t *testing.T) {
-	tolerations := []rolloutv1alpha1.WorkloadSkipToleration{
-		{Cluster: "cluster-a", Name: "test-a", Toleration: 5},
-		{Cluster: "cluster-b", Name: "test-b", Toleration: 8},
+	tolerations := []rolloutv1alpha1.RolloutRunTolerationTarget{
+		{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
+		{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-b", Name: "test-b"}, Toleration: 8},
 	}
 
 	tests := []struct {
 		name        string
-		tolerations []rolloutv1alpha1.WorkloadSkipToleration
-		cluster     string
-		wlName      string
+		tolerations []rolloutv1alpha1.RolloutRunTolerationTarget
+		ref         rolloutv1alpha1.CrossClusterObjectNameReference
 		expected    int32
 	}{
 		{
 			name:        "found workload",
 			tolerations: tolerations,
-			cluster:     "cluster-a",
-			wlName:      "test-a",
+			ref:         rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"},
 			expected:    5,
 		},
 		{
 			name:        "not found workload",
 			tolerations: tolerations,
-			cluster:     "cluster-c",
-			wlName:      "test-c",
+			ref:         rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-c", Name: "test-c"},
 			expected:    0,
 		},
 		{
 			name:        "nil tolerations",
 			tolerations: nil,
-			cluster:     "cluster-a",
-			wlName:      "test-a",
+			ref:         rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"},
 			expected:    0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := findSkipToleration(tt.tolerations, tt.cluster, tt.wlName)
+			result := findSkipToleration(tt.tolerations, tt.ref)
 			if result != tt.expected {
 				t.Errorf("findSkipToleration() = %d, want %d", result, tt.expected)
 			}

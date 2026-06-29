@@ -92,7 +92,6 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 	// Determine V1 vs V2 path based on BatchV2 presence
 	if strategy.BatchV2 != nil {
 		// V2 path: BatchV2 + optional CanaryV2
-		// Note: BatchStrategyV2 does not support Toleration, only V1 BatchStrategy has it
 		if strategy.CanaryV2 != nil {
 			run.Spec.Canary = constructRolloutRunCanaryV2(strategy.CanaryV2, workloadWrappers)
 		}
@@ -105,8 +104,7 @@ func constructRolloutRun(obj *rolloutv1alpha1.Rollout, strategy *rolloutv1alpha1
 			run.Spec.Canary = constructRolloutRunCanary(strategy.Canary, workloadWrappers)
 		}
 		run.Spec.Batch = &rolloutv1alpha1.RolloutRunBatchStrategy{
-			Toleration: strategy.Batch.Toleration,
-			Batches:    constructRolloutRunBatches(strategy.Batch, workloadWrappers),
+			Batches: constructRolloutRunBatches(strategy.Batch, workloadWrappers),
 		}
 	}
 

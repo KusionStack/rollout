@@ -349,10 +349,10 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						{Index: ptr.To[int32](1), State: StepRunning, StartTime: ptr.To(metav1.Now())},
 						{Index: ptr.To[int32](2), State: StepNone},
 					},
-					// Batch 0 was skipped: gap = 30 - 25 = 5
-					SkipTolerations: []rolloutv1alpha1.WorkloadSkipToleration{
-						{Cluster: "cluster-a", Name: "test-a", Toleration: 5},
-					},
+				}
+				// Batch 0 was skipped: gap = 30 - 25 = 5
+				rolloutRun.Spec.Batch.Tolerations = []rolloutv1alpha1.RolloutRunTolerationTarget{
+					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
 				}
 				return rollout, rolloutRun
 			},
@@ -399,10 +399,10 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						{Index: ptr.To[int32](1), State: StepRunning, StartTime: ptr.To(metav1.Now())},
 						{Index: ptr.To[int32](2), State: StepNone},
 					},
-					// gap = 60 - 52 = 8 > toleration(5)
-					SkipTolerations: []rolloutv1alpha1.WorkloadSkipToleration{
-						{Cluster: "cluster-a", Name: "test-a", Toleration: 5},
-					},
+				}
+				// gap = 60 - 52 = 8 > toleration(5)
+				rolloutRun.Spec.Batch.Tolerations = []rolloutv1alpha1.RolloutRunTolerationTarget{
+					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
 				}
 				return rollout, rolloutRun
 			},
@@ -448,10 +448,10 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						{Index: ptr.To[int32](1), State: StepSucceeded},
 						{Index: ptr.To[int32](2), State: StepRunning, StartTime: ptr.To(metav1.Now())},
 					},
-					// Last batch: toleration should NOT apply
-					SkipTolerations: []rolloutv1alpha1.WorkloadSkipToleration{
-						{Cluster: "cluster-a", Name: "test-a", Toleration: 5},
-					},
+				}
+				// Last batch: toleration should NOT apply
+				rolloutRun.Spec.Batch.Tolerations = []rolloutv1alpha1.RolloutRunTolerationTarget{
+					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
 				}
 				return rollout, rolloutRun
 			},
@@ -491,8 +491,8 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 					Records: []rolloutv1alpha1.RolloutRunStepStatus{
 						{Index: ptr.To[int32](0), State: StepRunning, StartTime: ptr.To(metav1.Now())},
 					},
-					SkipTolerations: nil,
 				}
+				// No skip tolerations
 				return rollout, rolloutRun
 			},
 			getWorkloads: func() []client.Object {
