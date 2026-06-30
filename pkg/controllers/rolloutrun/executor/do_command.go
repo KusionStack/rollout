@@ -69,16 +69,16 @@ func handleBatchStatusWhenSkipped(newStatus *rolloutv1alpha1.RolloutRunStatus, b
 				}
 
 				// Accumulate toleration into the batch strategy spec
-				accumulateSkipToleration(batchStrategy, target.CrossClusterObjectNameReference, gap)
+				updateSkipToleration(batchStrategy, target.CrossClusterObjectNameReference, gap)
 			}
 		}
 	}
 }
 
-func accumulateSkipToleration(batchStrategy *rolloutv1alpha1.RolloutRunBatchStrategy, ref rolloutv1alpha1.CrossClusterObjectNameReference, gap int32) {
+func updateSkipToleration(batchStrategy *rolloutv1alpha1.RolloutRunBatchStrategy, ref rolloutv1alpha1.CrossClusterObjectNameReference, gap int32) {
 	for i := range batchStrategy.Tolerations {
 		if batchStrategy.Tolerations[i].CrossClusterObjectNameReference == ref {
-			batchStrategy.Tolerations[i].Toleration += gap
+			batchStrategy.Tolerations[i].Toleration = gap
 			return
 		}
 	}

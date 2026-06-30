@@ -46,7 +46,7 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 			expectedCurrentBatchState: rolloutv1alpha1.RolloutStepNone,
 		},
 		{
-			name:       "skip accumulates toleration when existing toleration present",
+			name:       "skip overwrites toleration when existing toleration present",
 			batchIndex: 1,
 			batchSize:  3,
 			batches: []rolloutv1alpha1.RolloutRunStep{
@@ -65,7 +65,7 @@ func TestHandleBatchStatusWhenSkipped(t *testing.T) {
 				{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
 			},
 			expectedToleration: []rolloutv1alpha1.RolloutRunTolerationTarget{
-				{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 13}, // 5 + (60-52=8) = 13
+				{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 8}, // 60-52=8, overwrites existing 5
 			},
 			expectedCurrentBatchIndex: 2,
 			expectedCurrentBatchState: rolloutv1alpha1.RolloutStepNone,
