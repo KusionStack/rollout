@@ -1021,8 +1021,8 @@ k8s.io/sample-apiserver v0.22.2/go.mod h1:h+/DIV5EmuNq4vfPr5TSXy9mIBVXXlPAKQMPbj
 k8s.io/system-validators v1.5.0/go.mod h1:bPldcLgkIUK22ALflnsXk8pvkTEndYdNuaHH6gRrl0Q=
 k8s.io/utils v0.0.0-20240102154912-e7106e64919e h1:eQ/4ljkx21sObifjzXwlPKpdGLrCfRziVtos3ofG/sQ=
 k8s.io/utils v0.0.0-20240102154912-e7106e64919e/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
-kusionstack.io/kube-api v0.7.5-0.20260512114711-9570d38337c2 h1:jrUVO6a6/fuwdfF8NnehVXGbiYV57AfIJvqnsYRB3sI=
-kusionstack.io/kube-api v0.7.5-0.20260512114711-9570d38337c2/go.mod h1:e1jtrQH2LK5fD2nTyfIXG6nYrYbU8VXShRxTRwVPaLk=
+kusionstack.io/kube-api v0.7.5-0.20260629032255-be28009453cb h1:7lrtNodnXf7rsm3NzVhGZ4TwrM2ekJ656FN0qT9fHaI=
+kusionstack.io/kube-api v0.7.5-0.20260629032255-be28009453cb/go.mod h1:e1jtrQH2LK5fD2nTyfIXG6nYrYbU8VXShRxTRwVPaLk=
 kusionstack.io/kube-utils v0.2.1-0.20251125083928-1134a582b341 h1:dnMtHJvIpU3338WpqGiNN2qXWZFiXaoiuzR9jwhvWpg=
 kusionstack.io/kube-utils v0.2.1-0.20251125083928-1134a582b341/go.mod h1:Lz5SBYWg9+jw+kP0CAyf/b62D5DeUPf6+jE1d0WC4cI=
 kusionstack.io/resourceconsist v0.0.4 h1:wRqLJuNh8O4TT6p0uOklFpHUKiRdRxcAH71Sw/q9LhE=

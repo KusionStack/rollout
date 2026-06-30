@@ -217,7 +217,10 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 		currentBatchExpectedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
 
-		ready, reason := info.CheckUpdatedReady(currentBatchExpectedReplicas, isLastBatch)
+		// Find skip toleration for this workload
+		skipToleration := findSkipToleration(rolloutRun.Spec.Batch.Tolerations, item.CrossClusterObjectNameReference)
+
+		ready, reason := info.CheckUpdatedReady(currentBatchExpectedReplicas, isLastBatch, skipToleration)
 		if ready {
 			// if the target is ready, we will not change partition
 			continue
@@ -269,4 +272,14 @@ func (e *batchExecutor) calculateExpectedReplicasBySlidingWindow(status rolloutv
 	// limit expected replicas to currentBatchExpectedReplicas
 	expected = min(currentBatchExpectedReplicas, expected)
 	return expected, nil
+}
+
+// findSkipToleration finds the accumulated skip toleration for the given workload
+func findSkipToleration(tolerations []rolloutv1alpha1.RolloutRunTolerationTarget, ref rolloutv1alpha1.CrossClusterObjectNameReference) int32 {
+	for _, t := range tolerations {
+		if t.CrossClusterObjectNameReference == ref {
+			return t.Toleration
+		}
+	}
+	return 0
 }
