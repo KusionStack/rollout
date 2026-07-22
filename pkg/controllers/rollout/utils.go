@@ -15,11 +15,13 @@
 package rollout
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -310,24 +312,43 @@ type singleClusterDiscovery struct {
 }
 
 func (d *singleClusterDiscovery) IsSupported(gvk schema.GroupVersionKind) (bool, string, error) {
-	_, resources, err := d.client.ServerGroupsAndResources()
+	supported, err := supportsGVK(d.client, gvk)
 	if err != nil {
 		return false, "", err
 	}
-
-	for _, resourceList := range resources {
-		if resourceList.GroupVersion != gvk.GroupVersion().String() {
-			continue
-		}
-		_, found := lo.Find(resourceList.APIResources, func(value metav1.APIResource) bool {
-			return value.Kind == gvk.Kind
-		})
-		if found {
-			return true, "", nil
-		}
+	if supported {
+		return true, "", nil
 	}
 
 	return false, fmt.Sprintf("gvk(%s) is not supported by single cluster discovery", gvk.String()), nil
+}
+
+// supportsGVK checks only the target group version result so a discovery failure
+// in an unrelated API group does not prevent its workload watcher from being
+// registered. Errors from the target group version still fail closed.
+func supportsGVK(client discovery.DiscoveryInterface, gvk schema.GroupVersionKind) (bool, error) {
+	groupVersion := gvk.GroupVersion().String()
+	resourceList, err := client.ServerResourcesForGroupVersion(groupVersion)
+	if err != nil {
+		if errors.Is(err, memory.ErrCacheNotFound) || apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if resourceList == nil {
+		return false, fmt.Errorf("received nil discovery response for %s", groupVersion)
+	}
+	if resourceList.GroupVersion != groupVersion {
+		return false, nil
+	}
+	if len(resourceList.APIResources) == 0 {
+		return false, fmt.Errorf("received empty discovery response for %s", groupVersion)
+	}
+
+	_, found := lo.Find(resourceList.APIResources, func(value metav1.APIResource) bool {
+		return value.Kind == gvk.Kind
+	})
+	return found, nil
 }
 
 type multiclusterDiscovery struct {
@@ -336,28 +357,20 @@ type multiclusterDiscovery struct {
 
 func (d *multiclusterDiscovery) IsSupported(gvk schema.GroupVersionKind) (bool, string, error) {
 	allClusters := sets.NewString()
-	supportedCluters := sets.NewString()
+	supportedClusters := sets.NewString()
 	for cluster, client := range d.clients {
 		allClusters.Insert(cluster)
 
-		_, resources, err := client.ServerGroupsAndResources()
+		supported, err := supportsGVK(client, gvk)
 		if err != nil {
-			return false, "", err
+			return false, "", fmt.Errorf("failed to discover gvk(%s) in member cluster %q: %w", gvk.String(), cluster, err)
 		}
-		for _, resourceList := range resources {
-			if resourceList.GroupVersion != gvk.GroupVersion().String() {
-				continue
-			}
-			_, found := lo.Find(resourceList.APIResources, func(value metav1.APIResource) bool {
-				return value.Kind == gvk.Kind
-			})
-			if found {
-				supportedCluters.Insert(cluster)
-			}
+		if supported {
+			supportedClusters.Insert(cluster)
 		}
 	}
 
-	unsupported := allClusters.Difference(supportedCluters)
+	unsupported := allClusters.Difference(supportedClusters)
 	if unsupported.Len() > 0 {
 		msg := fmt.Sprintf("gvk(%s) is not supported by member clusters: %s", gvk.String(), unsupported.List())
 		return false, msg, nil
