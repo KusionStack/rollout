@@ -16,7 +16,6 @@ func TestCheckUpdatedReady(t *testing.T) {
 		observedReplicas int32
 		replicas         int32
 		strictCheck      bool
-		skipToleration   int32
 		expectedReady    bool
 		expectedReason   string
 	}{
@@ -29,7 +28,6 @@ func TestCheckUpdatedReady(t *testing.T) {
 			observedReplicas: 100,
 			replicas:         10,
 			strictCheck:      false,
-			skipToleration:   0,
 			expectedReady:    false,
 			expectedReason:   "workload Generation and ObservedGeneration are mismatched",
 		},
@@ -42,7 +40,6 @@ func TestCheckUpdatedReady(t *testing.T) {
 			observedReplicas: 100,
 			replicas:         10,
 			strictCheck:      false,
-			skipToleration:   0,
 			expectedReady:    true,
 			expectedReason:   "",
 		},
@@ -55,12 +52,11 @@ func TestCheckUpdatedReady(t *testing.T) {
 			observedReplicas: 100,
 			replicas:         10,
 			strictCheck:      false,
-			skipToleration:   0,
 			expectedReady:    false,
 			expectedReason:   "workload updated available replicas is not satisfied",
 		},
 		{
-			name:             "toleration covers gap, not last batch, returns ready",
+			name:             "replicas not satisfied without toleration, returns not ready",
 			generation:       1,
 			observedGen:      1,
 			updatedAvailable: 8,
@@ -68,38 +64,35 @@ func TestCheckUpdatedReady(t *testing.T) {
 			observedReplicas: 100,
 			replicas:         10,
 			strictCheck:      false,
-			skipToleration:   3,
-			expectedReady:    true,
-			expectedReason:   "",
-		},
-		{
-			name:             "toleration exactly equals gap, not last batch, returns ready",
-			generation:       1,
-			observedGen:      1,
-			updatedAvailable: 8,
-			desiredReplicas:  100,
-			observedReplicas: 100,
-			replicas:         10,
-			strictCheck:      false,
-			skipToleration:   2,
-			expectedReady:    true,
-			expectedReason:   "",
-		},
-		{
-			name:             "toleration insufficient, not last batch, returns not ready",
-			generation:       1,
-			observedGen:      1,
-			updatedAvailable: 8,
-			desiredReplicas:  100,
-			observedReplicas: 100,
-			replicas:         10,
-			strictCheck:      false,
-			skipToleration:   1,
 			expectedReady:    false,
 			expectedReason:   "workload updated available replicas is not satisfied",
 		},
 		{
-			name:             "last batch ignores toleration, gap exists, returns not ready",
+			name:             "replicas not satisfied (gap), returns not ready",
+			generation:       1,
+			observedGen:      1,
+			updatedAvailable: 8,
+			desiredReplicas:  100,
+			observedReplicas: 100,
+			replicas:         10,
+			strictCheck:      false,
+			expectedReady:    false,
+			expectedReason:   "workload updated available replicas is not satisfied",
+		},
+		{
+			name:             "gap exists, returns not ready",
+			generation:       1,
+			observedGen:      1,
+			updatedAvailable: 8,
+			desiredReplicas:  100,
+			observedReplicas: 100,
+			replicas:         10,
+			strictCheck:      false,
+			expectedReady:    false,
+			expectedReason:   "workload updated available replicas is not satisfied",
+		},
+		{
+			name:             "last batch gap exists, returns not ready",
 			generation:       1,
 			observedGen:      1,
 			updatedAvailable: 96,
@@ -107,12 +100,11 @@ func TestCheckUpdatedReady(t *testing.T) {
 			observedReplicas: 100,
 			replicas:         100,
 			strictCheck:      true,
-			skipToleration:   5,
 			expectedReady:    false,
 			expectedReason:   "workload updated available replicas is not satisfied",
 		},
 		{
-			name:             "last batch no toleration needed, replicas satisfied, returns ready",
+			name:             "last batch replicas satisfied, returns ready",
 			generation:       1,
 			observedGen:      1,
 			updatedAvailable: 100,
@@ -120,7 +112,6 @@ func TestCheckUpdatedReady(t *testing.T) {
 			observedReplicas: 100,
 			replicas:         100,
 			strictCheck:      true,
-			skipToleration:   5,
 			expectedReady:    true,
 			expectedReason:   "",
 		},
@@ -133,7 +124,6 @@ func TestCheckUpdatedReady(t *testing.T) {
 			observedReplicas: 105,
 			replicas:         100,
 			strictCheck:      true,
-			skipToleration:   0,
 			expectedReady:    false,
 			expectedReason:   "workload observed replicas is more than desiredReplicas",
 		},
@@ -152,7 +142,7 @@ func TestCheckUpdatedReady(t *testing.T) {
 					ObservedReplicas:         tt.observedReplicas,
 				},
 			}
-			ready, reason := info.CheckUpdatedReady(tt.replicas, tt.strictCheck, tt.skipToleration)
+			ready, reason := info.CheckUpdatedReady(tt.replicas, tt.strictCheck)
 			if ready != tt.expectedReady {
 				t.Errorf("CheckUpdatedReady() ready = %v, want %v", ready, tt.expectedReady)
 			}

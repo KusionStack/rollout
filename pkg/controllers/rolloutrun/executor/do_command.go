@@ -30,59 +30,72 @@ func (r *Executor) doCommand(ctx *ExecutorContext) ctrl.Result {
 		}
 	case rolloutapis.AnnoManualCommandSkip:
 		if batchError != nil {
-			handleBatchStatusWhenSkipped(newStatus, len(rolloutRun.Spec.Batch.Batches), rolloutRun.Spec.Batch.Batches, ctx.Workloads, rolloutRun.Spec.Batch)
+			handleBatchStatusWhenSkipped(newStatus, len(rolloutRun.Spec.Batch.Batches), rolloutRun.Spec.Batch.Batches, ctx.Workloads)
 		}
 	case rolloutapis.AnnoManualCommandCancel:
 		newStatus.Phase = rolloutv1alpha1.RolloutRunPhaseCanceling
 	case rolloutapis.AnnoManualCommandForceSkipCurrentBatch:
-		handleBatchStatusWhenSkipped(newStatus, len(rolloutRun.Spec.Batch.Batches), rolloutRun.Spec.Batch.Batches, ctx.Workloads, rolloutRun.Spec.Batch)
+		handleBatchStatusWhenSkipped(newStatus, len(rolloutRun.Spec.Batch.Batches), rolloutRun.Spec.Batch.Batches, ctx.Workloads)
 	}
 
 	return ctrl.Result{Requeue: true}
 }
 
-func handleBatchStatusWhenSkipped(newStatus *rolloutv1alpha1.RolloutRunStatus, batchSize int, batches []rolloutv1alpha1.RolloutRunStep, workloads *workload.Set, batchStrategy *rolloutv1alpha1.RolloutRunBatchStrategy) {
+func handleBatchStatusWhenSkipped(newStatus *rolloutv1alpha1.RolloutRunStatus, batchSize int, batches []rolloutv1alpha1.RolloutRunStep, workloads *workload.Set) {
 	currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
 	if newStatus.Error != nil {
 		newStatus.Error = nil
 	}
 
-	// only skip when current batch is not the last batch
-	if int(currentBatchIndex) < (batchSize - 1) {
-		newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
-		newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
-		newStatus.BatchStatus.CurrentBatchState = StepNone
+	newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
 
-		// Calculate and accumulate skip toleration for each workload in current batch
-		if workloads != nil && batchStrategy != nil {
-			currentBatch := batches[currentBatchIndex]
-			for _, target := range currentBatch.Targets {
-				info := workloads.Get(target.Cluster, target.Name)
-				if info == nil {
-					continue
-				}
-				status := info.APIStatus()
-				currentBatchExpectedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, target.Replicas)
-				gap := currentBatchExpectedReplicas - status.UpdatedAvailableReplicas
-				if gap <= 0 {
-					continue
-				}
+	// Record tolerations for each workload in the current batch
+	recordRolloutRunTolerations(&newStatus.BatchStatus.Tolerations, batches, workloads, currentBatchIndex)
 
-				// Accumulate toleration into the batch strategy spec
-				updateSkipToleration(batchStrategy, target.CrossClusterObjectNameReference, gap)
-			}
+	if int(currentBatchIndex) >= (batchSize - 1) {
+		// Last batch: advance to PostRollout phase (will transition to Succeeded)
+		newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
+		return
+	}
+
+	// Not the last batch: advance to the next batch
+	newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
+	newStatus.BatchStatus.CurrentBatchState = StepNone
+}
+
+// recordRolloutRunTolerations upserts tolerations for each workload in the current batch.
+// For each target, it calculates the gap between expected and actual updated available replicas,
+// and updates (or inserts) the toleration value into the tolerations slice.
+func recordRolloutRunTolerations(tolerations *[]rolloutv1alpha1.RolloutRunTolerationTarget, batches []rolloutv1alpha1.RolloutRunStep, workloads *workload.Set, currentBatchIndex int32) {
+	if workloads == nil || int(currentBatchIndex) >= len(batches) {
+		return
+	}
+	currentBatch := batches[currentBatchIndex]
+	for _, target := range currentBatch.Targets {
+		info := workloads.Get(target.Cluster, target.Name)
+		if info == nil {
+			continue
 		}
+		status := info.APIStatus()
+		currentBatchExpectedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, target.Replicas)
+		gap := currentBatchExpectedReplicas - status.UpdatedAvailableReplicas
+		if gap < 0 {
+			gap = 0
+		}
+		upsertToleration(tolerations, target.CrossClusterObjectNameReference, gap)
 	}
 }
 
-func updateSkipToleration(batchStrategy *rolloutv1alpha1.RolloutRunBatchStrategy, ref rolloutv1alpha1.CrossClusterObjectNameReference, gap int32) {
-	for i := range batchStrategy.Tolerations {
-		if batchStrategy.Tolerations[i].CrossClusterObjectNameReference == ref {
-			batchStrategy.Tolerations[i].Toleration = gap
+// upsertToleration updates the toleration value for the given workload reference,
+// or appends a new entry if the workload is not yet present.
+func upsertToleration(tolerations *[]rolloutv1alpha1.RolloutRunTolerationTarget, ref rolloutv1alpha1.CrossClusterObjectNameReference, gap int32) {
+	for i, t := range *tolerations {
+		if t.CrossClusterObjectNameReference == ref {
+			(*tolerations)[i].Toleration = gap
 			return
 		}
 	}
-	batchStrategy.Tolerations = append(batchStrategy.Tolerations, rolloutv1alpha1.RolloutRunTolerationTarget{
+	*tolerations = append(*tolerations, rolloutv1alpha1.RolloutRunTolerationTarget{
 		CrossClusterObjectNameReference: ref,
 		Toleration:                      gap,
 	})

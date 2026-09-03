@@ -236,6 +236,7 @@ func resolveRolloutTargets(targets []rolloutv1alpha1.RolloutStrategyTargets, wor
 				},
 				Replicas:             t.Replicas,
 				ReplicaSlidingWindow: t.ReplicaSlidingWindow,
+				Toleration:           t.Toleration,
 			}
 			result = append(result, target)
 		}

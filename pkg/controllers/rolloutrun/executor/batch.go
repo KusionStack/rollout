@@ -205,6 +205,8 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
 
 	allWorkloadReady := true
+	allWorkloadsAutoSkippable := true
+
 	for _, item := range currentBatch.Targets {
 		info := ctx.Workloads.Get(item.Cluster, item.Name)
 		if info == nil {
@@ -217,10 +219,7 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 		currentBatchExpectedReplicas, _ := workload.CalculateUpdatedReplicas(&status.Replicas, item.Replicas)
 
-		// Find skip toleration for this workload
-		skipToleration := findSkipToleration(rolloutRun.Spec.Batch.Tolerations, item.CrossClusterObjectNameReference)
-
-		ready, reason := info.CheckUpdatedReady(currentBatchExpectedReplicas, isLastBatch, skipToleration)
+		ready, reason := info.CheckUpdatedReady(currentBatchExpectedReplicas, isLastBatch)
 		if ready {
 			// if the target is ready, we will not change partition
 			continue
@@ -229,6 +228,11 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 		allWorkloadReady = false
 		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference, "reason", reason)
+
+		// Check auto-skip toleration for this workload
+		if !e.canAutoSkipTarget(item, info, currentBatchExpectedReplicas, isLastBatch, newStatus) {
+			allWorkloadsAutoSkippable = false
+		}
 
 		expectedReplicas, err := e.calculateExpectedReplicasBySlidingWindow(status, currentBatchExpectedReplicas, item.ReplicaSlidingWindow)
 		if err != nil {
@@ -253,8 +257,62 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		return true, retryImmediately, nil
 	}
 
+	if allWorkloadsAutoSkippable {
+		logger.Info("auto-skipping batch due to toleration")
+		newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
+		recordRolloutRunTolerations(&newStatus.BatchStatus.Tolerations, rolloutRun.Spec.Batch.Batches, ctx.Workloads, currentBatchIndex)
+		return true, retryImmediately, nil
+	}
+
 	// wait for next reconcile
 	return false, retryDefault, nil
+}
+
+// canAutoSkipTarget checks if the workload target meets the auto-skip toleration conditions.
+// Returns true only when the workload is not ready due to a real deficit (gap > 0) within
+// the toleration threshold and the initial delay has elapsed.
+// Transient states (Generation mismatch, terminating replicas, last-batch overscaling)
+// are NOT auto-skippable because the gap is unreliable until the workload stabilizes.
+func (e *batchExecutor) canAutoSkipTarget(item rolloutv1alpha1.RolloutRunStepTarget, info *workload.Info, currentBatchExpectedReplicas int32, isLastBatch bool, newStatus *rolloutv1alpha1.RolloutRunStatus) bool {
+	if item.Toleration == nil || item.Toleration.FailureThreshold == nil {
+		return false
+	}
+
+	// Not skippable while workload has not been reconciled yet (Generation mismatch).
+	// UpdatedAvailableReplicas may be stale from the previous generation.
+	if info.Generation != info.Status.ObservedGeneration {
+		return false
+	}
+
+	// On last batch, not skippable if observed replicas exceed desired or terminating replicas exist(strict check).
+	if isLastBatch && info.Status.ObservedReplicas > info.Status.DesiredReplicas || info.Status.TerminatingReplicas != 0 {
+		return false
+	}
+
+	// Only evaluate toleration on a real deficit.
+	gap := currentBatchExpectedReplicas - info.Status.UpdatedAvailableReplicas
+	if gap <= 0 {
+		return false
+	}
+
+	if gap > *item.Toleration.FailureThreshold {
+		return false
+	}
+
+	// gap is within threshold, check timeout
+	if item.Toleration.InitialDelaySeconds != nil {
+		currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
+		startTime := newStatus.BatchStatus.Records[currentBatchIndex].StartTime
+		if startTime == nil {
+			return false
+		}
+		elapsed := time.Since(startTime.Time)
+		if elapsed < time.Duration(*item.Toleration.InitialDelaySeconds)*time.Second {
+			return false
+		}
+	}
+
+	return true
 }
 
 // calculateExpectedReplicasBySlidingWindow calculate expected replicas by sliding window
@@ -272,14 +330,4 @@ func (e *batchExecutor) calculateExpectedReplicasBySlidingWindow(status rolloutv
 	// limit expected replicas to currentBatchExpectedReplicas
 	expected = min(currentBatchExpectedReplicas, expected)
 	return expected, nil
-}
-
-// findSkipToleration finds the accumulated skip toleration for the given workload
-func findSkipToleration(tolerations []rolloutv1alpha1.RolloutRunTolerationTarget, ref rolloutv1alpha1.CrossClusterObjectNameReference) int32 {
-	for _, t := range tolerations {
-		if t.CrossClusterObjectNameReference == ref {
-			return t.Toleration
-		}
-	}
-	return 0
 }

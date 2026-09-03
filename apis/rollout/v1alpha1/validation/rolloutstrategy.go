@@ -188,6 +188,24 @@ func ValidateRolloutStrategyTargets(targets *rolloutv1alpha1.RolloutStrategyTarg
 
 	allErrs = append(allErrs, appsvalidation.ValidatePositiveIntOrPercent(targets.Replicas, fldPath.Child("replicas"))...)
 	allErrs = append(allErrs, ValidateResourceMatch(targets.Match, fldPath.Child("matchTargets"))...)
+	allErrs = append(allErrs, validateToleration(targets.Toleration, fldPath.Child("toleration"))...)
+
+	return allErrs
+}
+
+func validateToleration(toleration *rolloutv1alpha1.RolloutStepTargetToleration, fldPath *field.Path) field.ErrorList {
+	if toleration == nil {
+		return nil
+	}
+
+	allErrs := field.ErrorList{}
+
+	if toleration.FailureThreshold == nil {
+		allErrs = append(allErrs, field.Required(fldPath.Child("failureThreshold"), "must be set when toleration is configured"))
+	}
+	if toleration.InitialDelaySeconds == nil {
+		allErrs = append(allErrs, field.Required(fldPath.Child("initialDelaySeconds"), "must be set when toleration is configured"))
+	}
 
 	return allErrs
 }

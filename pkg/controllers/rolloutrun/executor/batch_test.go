@@ -321,7 +321,7 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do() {
 func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 	tests := []batchExectorTestCase{
 		{
-			name: "skip toleration allows batch to complete with deficit in middle batch",
+			name: "auto-skip applies in middle batch when gap within threshold and delay elapsed",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
 				rollout := s.rollout.DeepCopy()
 				rolloutRun := s.rolloutRun.DeepCopy()
@@ -332,7 +332,10 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(30)),
 					}},
 					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(60)),
+						newRunStepTargetWithToleration("cluster-a", "test-a", intstr.FromInt(60), &rolloutv1alpha1.RolloutStepTargetToleration{
+							FailureThreshold:    ptr.To[int32](5),
+							InitialDelaySeconds: ptr.To[int32](0),
+						}),
 					}},
 					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(100)),
@@ -350,14 +353,11 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						{Index: ptr.To[int32](2), State: StepNone},
 					},
 				}
-				// Batch 0 was skipped: gap = 30 - 25 = 5
-				rolloutRun.Spec.Batch.Tolerations = []rolloutv1alpha1.RolloutRunTolerationTarget{
-					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
-				}
 				return rollout, rolloutRun
 			},
 			getWorkloads: func() []client.Object {
-				// UpdatedAvailableReplicas = 55, expected = 60, gap = 5 <= toleration(5)
+				// UpdatedAvailableReplicas = 55, expected = 60, gap = 5 <= FailureThreshold(5)
+				// InitialDelaySeconds = 0 means elapsed(>=0s) >= 0s -> auto-skip
 				return []client.Object{
 					newFakeObject("cluster-a", "default", "test-a", 100, 55, 55),
 				}
@@ -369,10 +369,15 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 			},
 			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
 				s.Equal(StepPostBatchStepHook, status.BatchStatus.CurrentBatchState)
+				// StepSkipped set in doBatchUpgrading is overwritten by state engine's MoveToNextState;
+				// the durable observable for auto-skip is the Tolerations field below.
+				// Tolerations should record gap = 5 for the skipped workload
+				s.Len(status.BatchStatus.Tolerations, 1)
+				s.Equal(int32(5), status.BatchStatus.Tolerations[0].Toleration)
 			},
 		},
 		{
-			name: "skip toleration not enough, batch stays running",
+			name: "auto-skip does not apply when gap exceeds threshold, batch stays running",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
 				rollout := s.rollout.DeepCopy()
 				rolloutRun := s.rolloutRun.DeepCopy()
@@ -382,7 +387,10 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(30)),
 					}},
 					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(60)),
+						newRunStepTargetWithToleration("cluster-a", "test-a", intstr.FromInt(60), &rolloutv1alpha1.RolloutStepTargetToleration{
+							FailureThreshold:    ptr.To[int32](5),
+							InitialDelaySeconds: ptr.To[int32](0),
+						}),
 					}},
 					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
 						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(100)),
@@ -400,13 +408,10 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						{Index: ptr.To[int32](2), State: StepNone},
 					},
 				}
-				// gap = 60 - 52 = 8 > toleration(5)
-				rolloutRun.Spec.Batch.Tolerations = []rolloutv1alpha1.RolloutRunTolerationTarget{
-					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
-				}
 				return rollout, rolloutRun
 			},
 			getWorkloads: func() []client.Object {
+				// gap = 60 - 52 = 8 > FailureThreshold(5) -> not auto-skippable, keep waiting
 				return []client.Object{
 					newFakeObject("cluster-a", "default", "test-a", 100, 52, 52),
 				}
@@ -418,10 +423,11 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 			},
 			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
 				s.Equal(StepRunning, status.BatchStatus.CurrentBatchState)
+				s.Empty(status.BatchStatus.Tolerations)
 			},
 		},
 		{
-			name: "skip toleration does not apply on last batch",
+			name: "auto-skip on last batch transitions toward success",
 			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
 				rollout := s.rollout.DeepCopy()
 				rolloutRun := s.rolloutRun.DeepCopy()
@@ -434,7 +440,10 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(60)),
 					}},
 					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
-						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(100)),
+						newRunStepTargetWithToleration("cluster-a", "test-a", intstr.FromInt(100), &rolloutv1alpha1.RolloutStepTargetToleration{
+							FailureThreshold:    ptr.To[int32](5),
+							InitialDelaySeconds: ptr.To[int32](0),
+						}),
 					}},
 				}
 				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
@@ -449,26 +458,23 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 						{Index: ptr.To[int32](2), State: StepRunning, StartTime: ptr.To(metav1.Now())},
 					},
 				}
-				// Last batch: toleration should NOT apply
-				rolloutRun.Spec.Batch.Tolerations = []rolloutv1alpha1.RolloutRunTolerationTarget{
-					{CrossClusterObjectNameReference: rolloutv1alpha1.CrossClusterObjectNameReference{Cluster: "cluster-a", Name: "test-a"}, Toleration: 5},
-				}
 				return rollout, rolloutRun
 			},
 			getWorkloads: func() []client.Object {
-				// UpdatedAvailableReplicas = 96, expected = 100, gap = 4 <= toleration(5)
-				// but last batch, so toleration does NOT apply, needs strict check
+				// Last batch: gap = 100 - 96 = 4 <= FailureThreshold(5) -> auto-skippable on last batch too
 				return []client.Object{
 					newFakeObject("cluster-a", "default", "test-a", 100, 96, 96),
 				}
 			},
 			assertResult: func(done bool, result reconcile.Result, err error) {
 				s.Require().NoError(err)
-				s.False(done)
-				s.Equal(reconcile.Result{RequeueAfter: retryDefault}, result)
+				s.False(done) // still need to go through PostBatchStepHook and Recycle
+				s.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
-				s.Equal(StepRunning, status.BatchStatus.CurrentBatchState)
+				s.Equal(StepPostBatchStepHook, status.BatchStatus.CurrentBatchState)
+				s.Len(status.BatchStatus.Tolerations, 1)
+				s.Equal(int32(4), status.BatchStatus.Tolerations[0].Toleration)
 			},
 		},
 		{
@@ -508,11 +514,18 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 			},
 			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
 				s.Equal(StepRunning, status.BatchStatus.CurrentBatchState)
+				s.Empty(status.BatchStatus.Tolerations)
 			},
 		},
 	}
 
 	s.runBatchTestCases(tests)
+}
+
+func newRunStepTargetWithToleration(cluster, name string, replicas intstr.IntOrString, toleration *rolloutv1alpha1.RolloutStepTargetToleration) rolloutv1alpha1.RolloutRunStepTarget {
+	target := newRunStepTarget(cluster, name, replicas)
+	target.Toleration = toleration
+	return target
 }
 
 func newRunStepTarget(cluster, name string, replicas intstr.IntOrString) rolloutv1alpha1.RolloutRunStepTarget {

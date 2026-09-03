@@ -203,6 +203,8 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	batchTargetStatuses := make([]rolloutv1alpha1.ScaleWorkloadStatus, 0)
 
 	allWorkloadReady := true
+	allWorkloadsAutoSkippable := true
+
 	for _, item := range currentBatch.Targets {
 		info := ctx.Workloads.Get(item.Cluster, item.Name)
 		if info == nil {
@@ -230,6 +232,12 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		}
 
 		allWorkloadReady = false
+
+		// Check auto-skip toleration for scale-up scenarios
+		if !e.canAutoSkipTarget(item, info, workloadStatus.ScaleFrom, workloadStatus.ScaleTo, newStatus) {
+			allWorkloadsAutoSkippable = false
+		}
+
 		if !needApplyReplicas {
 			// if the target's replicas has been updated, we will not change replicas
 			continue
@@ -252,8 +260,60 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		return true, retryImmediately, nil
 	}
 
+	if allWorkloadsAutoSkippable {
+		logger.Info("auto-skipping batch due to toleration")
+		newStatus.Batches.Records[currentBatchIndex].State = rorexecutor.StepSkipped
+		recordScaleRunTolerations(&newStatus.Batches.Tolerations, scaleRun.Spec.Batch.Batches, ctx.Workloads, currentBatchIndex, newStatus.Batches.Records[currentBatchIndex].Targets)
+		return true, retryImmediately, nil
+	}
+
 	// wait for next reconcile
 	return false, retryDefault, nil
+}
+
+// canAutoSkipTarget checks if the scale target meets the auto-skip toleration conditions.
+// Toleration only applies for scale-up scenarios (ScaleFrom < ScaleTo).
+// Returns true only when the workload is not ready due to a real deficit (gap > 0) within
+// the toleration threshold and the initial delay has elapsed.
+// Transient states (Generation mismatch) are NOT auto-skippable because the
+// AvailableReplicas may be stale.
+func (e *batchExecutor) canAutoSkipTarget(item rolloutv1alpha1.ScaleRunStepTarget, info *workload.Info, scaledFrom, scaledTo int32, newStatus *rolloutv1alpha1.ScaleRunStatus) bool {
+	// Toleration only applies for scale-up scenarios
+	if scaledFrom >= scaledTo {
+		return false
+	}
+	if item.Toleration == nil || item.Toleration.FailureThreshold == nil {
+		return false
+	}
+
+	// Not skippable while workload has not been reconciled yet (Generation mismatch).
+	if info.Generation != info.Status.ObservedGeneration {
+		return false
+	}
+
+	// Only evaluate toleration on a real deficit.
+	gap := scaledTo - info.Status.AvailableReplicas
+	if gap <= 0 {
+		return false
+	}
+	if gap > *item.Toleration.FailureThreshold {
+		return false
+	}
+
+	// gap is within threshold, check timeout
+	if item.Toleration.InitialDelaySeconds != nil {
+		currentBatchIndex := newStatus.Batches.CurrentBatchIndex
+		startTime := newStatus.Batches.Records[currentBatchIndex].StartTime
+		if startTime == nil {
+			return false
+		}
+		elapsed := time.Since(startTime.Time)
+		if elapsed < time.Duration(*item.Toleration.InitialDelaySeconds)*time.Second {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (e *batchExecutor) checkScaledReady(info *workload.Info, scaledFrom, scaledTo int32) bool {
