@@ -261,7 +261,23 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		logger.Info("auto-skipping batch due to toleration")
 		newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
 		recordRolloutRunTolerations(&newStatus.BatchStatus.Tolerations, rolloutRun.Spec.Batch.Batches, ctx.Workloads, currentBatchIndex)
-		return true, retryImmediately, nil
+
+		// Mirror manual-skip semantics (see do_command.go:handleBatchStatusWhenSkipped):
+		// bypass PostBatchStepHook (webhook) and ResourceRecycling, and advance to the
+		// next batch or PostRollout phase directly. Returns done=false so the state
+		// engine does NOT call MoveToNextState(StepPostBatchStepHook), which would
+		// otherwise overwrite the StepSkipped state we just wrote above.
+		if int(currentBatchIndex) >= len(rolloutRun.Spec.Batch.Batches)-1 {
+			// Last batch: advance phase to PostRollout (will transition to Succeeded
+			// on the next reconcile, mirroring manual skip behavior).
+			newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
+		} else {
+			// Not the last batch: advance to the next batch from StepNone so the
+			// state machine restarts on doPausing/Initialize for the new batch.
+			newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
+			newStatus.BatchStatus.CurrentBatchState = StepNone
+		}
+		return false, retryImmediately, nil
 	}
 
 	// wait for next reconcile

@@ -368,10 +368,14 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 				s.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
-				s.Equal(StepPostBatchStepHook, status.BatchStatus.CurrentBatchState)
-				// StepSkipped set in doBatchUpgrading is overwritten by state engine's MoveToNextState;
-				// the durable observable for auto-skip is the Tolerations field below.
-				// Tolerations should record gap = 5 for the skipped workload
+				// auto-skip mirrors manual skip: bypass PostBatchStepHook/Recycling,
+				// mark current batch as StepSkipped, advance to next batch (index 2)
+				// from StepNone.
+				s.Equal(StepSkipped, status.BatchStatus.Records[1].State)
+				s.Equal(int32(2), status.BatchStatus.CurrentBatchIndex)
+				s.Equal(StepNone, status.BatchStatus.CurrentBatchState)
+				s.Equal(rolloutv1alpha1.RolloutRunPhaseProgressing, status.Phase)
+				// Tolerations records gap = 5 for the skipped workload
 				s.Len(status.BatchStatus.Tolerations, 1)
 				s.Equal(int32(5), status.BatchStatus.Tolerations[0].Toleration)
 			},
@@ -468,11 +472,15 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
 			},
 			assertResult: func(done bool, result reconcile.Result, err error) {
 				s.Require().NoError(err)
-				s.False(done) // still need to go through PostBatchStepHook and Recycle
+				s.False(done) // auto-skip transitions Phase to PostRollout; not yet Succeeded
 				s.Equal(reconcile.Result{Requeue: true}, result)
 			},
 			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
-				s.Equal(StepPostBatchStepHook, status.BatchStatus.CurrentBatchState)
+				// auto-skip on last batch mirrors manual skip: mark StepSkipped,
+				// bypass PostBatchStepHook/Recycling, advance Phase to PostRollout.
+				s.Equal(StepSkipped, status.BatchStatus.Records[2].State)
+				s.Equal(int32(2), status.BatchStatus.CurrentBatchIndex)
+				s.Equal(rolloutv1alpha1.RolloutRunPhasePostRollout, status.Phase)
 				s.Len(status.BatchStatus.Tolerations, 1)
 				s.Equal(int32(4), status.BatchStatus.Tolerations[0].Toleration)
 			},
