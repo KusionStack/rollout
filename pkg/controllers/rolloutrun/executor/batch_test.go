@@ -318,6 +318,224 @@ func (s *batchExecutorTestSuite) Test_BatchExecutor_Do() {
 	s.runBatchTestCases(tests)
 }
 
+func (s *batchExecutorTestSuite) Test_BatchExecutor_Do_SkipToleration() {
+	tests := []batchExectorTestCase{
+		{
+			name: "auto-skip applies in middle batch when gap within threshold and delay elapsed",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
+
+				// 3 batches, currently on batch 2 (index 1), not the last batch
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(30)),
+					}},
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTargetWithToleration("cluster-a", "test-a", intstr.FromInt(60), &rolloutv1alpha1.RolloutStepTargetToleration{
+							FailureThreshold:    ptr.To[int32](5),
+							InitialDelaySeconds: ptr.To[int32](0),
+						}),
+					}},
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(100)),
+					}},
+				}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 1,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{Index: ptr.To[int32](0), State: StepSkipped},
+						{Index: ptr.To[int32](1), State: StepRunning, StartTime: ptr.To(metav1.Now())},
+						{Index: ptr.To[int32](2), State: StepNone},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			getWorkloads: func() []client.Object {
+				// UpdatedAvailableReplicas = 55, expected = 60, gap = 5 <= FailureThreshold(5)
+				// InitialDelaySeconds = 0 means elapsed(>=0s) >= 0s -> auto-skip
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-a", 100, 55, 55),
+				}
+			},
+			assertResult: func(done bool, result reconcile.Result, err error) {
+				s.Require().NoError(err)
+				s.False(done) // not all done, move to next batch
+				s.Equal(reconcile.Result{Requeue: true}, result)
+			},
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				// auto-skip mirrors manual skip: bypass PostBatchStepHook/Recycling,
+				// mark current batch as StepSkipped, advance to next batch (index 2)
+				// from StepNone.
+				s.Equal(StepSkipped, status.BatchStatus.Records[1].State)
+				s.Equal(int32(2), status.BatchStatus.CurrentBatchIndex)
+				s.Equal(StepNone, status.BatchStatus.CurrentBatchState)
+				s.Equal(rolloutv1alpha1.RolloutRunPhaseProgressing, status.Phase)
+				// Tolerations records gap = 5 for the skipped workload
+				s.Len(status.BatchStatus.Tolerations, 1)
+				s.Equal(int32(5), status.BatchStatus.Tolerations[0].Toleration)
+			},
+		},
+		{
+			name: "auto-skip does not apply when gap exceeds threshold, batch stays running",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
+
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(30)),
+					}},
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTargetWithToleration("cluster-a", "test-a", intstr.FromInt(60), &rolloutv1alpha1.RolloutStepTargetToleration{
+							FailureThreshold:    ptr.To[int32](5),
+							InitialDelaySeconds: ptr.To[int32](0),
+						}),
+					}},
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(100)),
+					}},
+				}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 1,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{Index: ptr.To[int32](0), State: StepSkipped},
+						{Index: ptr.To[int32](1), State: StepRunning, StartTime: ptr.To(metav1.Now())},
+						{Index: ptr.To[int32](2), State: StepNone},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			getWorkloads: func() []client.Object {
+				// gap = 60 - 52 = 8 > FailureThreshold(5) -> not auto-skippable, keep waiting
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-a", 100, 52, 52),
+				}
+			},
+			assertResult: func(done bool, result reconcile.Result, err error) {
+				s.Require().NoError(err)
+				s.False(done)
+				s.Equal(reconcile.Result{RequeueAfter: retryDefault}, result)
+			},
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Equal(StepRunning, status.BatchStatus.CurrentBatchState)
+				s.Empty(status.BatchStatus.Tolerations)
+			},
+		},
+		{
+			name: "auto-skip on last batch transitions toward success",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
+
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(30)),
+					}},
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(60)),
+					}},
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTargetWithToleration("cluster-a", "test-a", intstr.FromInt(100), &rolloutv1alpha1.RolloutStepTargetToleration{
+							FailureThreshold:    ptr.To[int32](5),
+							InitialDelaySeconds: ptr.To[int32](0),
+						}),
+					}},
+				}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 2,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{Index: ptr.To[int32](0), State: StepSkipped},
+						{Index: ptr.To[int32](1), State: StepSucceeded},
+						{Index: ptr.To[int32](2), State: StepRunning, StartTime: ptr.To(metav1.Now())},
+					},
+				}
+				return rollout, rolloutRun
+			},
+			getWorkloads: func() []client.Object {
+				// Last batch: gap = 100 - 96 = 4 <= FailureThreshold(5) -> auto-skippable on last batch too
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-a", 100, 96, 96),
+				}
+			},
+			assertResult: func(done bool, result reconcile.Result, err error) {
+				s.Require().NoError(err)
+				s.False(done) // auto-skip transitions Phase to PostRollout; not yet Succeeded
+				s.Equal(reconcile.Result{Requeue: true}, result)
+			},
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				// auto-skip on last batch mirrors manual skip: mark StepSkipped,
+				// bypass PostBatchStepHook/Recycling, advance Phase to PostRollout.
+				s.Equal(StepSkipped, status.BatchStatus.Records[2].State)
+				s.Equal(int32(2), status.BatchStatus.CurrentBatchIndex)
+				s.Equal(rolloutv1alpha1.RolloutRunPhasePostRollout, status.Phase)
+				s.Len(status.BatchStatus.Tolerations, 1)
+				s.Equal(int32(4), status.BatchStatus.Tolerations[0].Toleration)
+			},
+		},
+		{
+			name: "no skip toleration, behavior unchanged",
+			getObjects: func() (*rolloutv1alpha1.Rollout, *rolloutv1alpha1.RolloutRun) {
+				rollout := s.rollout.DeepCopy()
+				rolloutRun := s.rolloutRun.DeepCopy()
+
+				rolloutRun.Spec.Batch.Batches = []rolloutv1alpha1.RolloutRunStep{
+					{Targets: []rolloutv1alpha1.RolloutRunStepTarget{
+						newRunStepTarget("cluster-a", "test-a", intstr.FromInt(10)),
+					}},
+				}
+				rolloutRun.Status.Phase = rolloutv1alpha1.RolloutRunPhaseProgressing
+				rolloutRun.Status.BatchStatus = &rolloutv1alpha1.RolloutRunBatchStatus{
+					RolloutBatchStatus: rolloutv1alpha1.RolloutBatchStatus{
+						CurrentBatchIndex: 0,
+						CurrentBatchState: StepRunning,
+					},
+					Records: []rolloutv1alpha1.RolloutRunStepStatus{
+						{Index: ptr.To[int32](0), State: StepRunning, StartTime: ptr.To(metav1.Now())},
+					},
+				}
+				// No skip tolerations
+				return rollout, rolloutRun
+			},
+			getWorkloads: func() []client.Object {
+				// UpdatedAvailableReplicas=8 < expected=10, no toleration -> not ready
+				return []client.Object{
+					newFakeObject("cluster-a", "default", "test-a", 100, 8, 8),
+				}
+			},
+			assertResult: func(done bool, result reconcile.Result, err error) {
+				s.Require().NoError(err)
+				s.False(done)
+				s.Equal(reconcile.Result{RequeueAfter: retryDefault}, result)
+			},
+			assertStatus: func(status *rolloutv1alpha1.RolloutRunStatus) {
+				s.Equal(StepRunning, status.BatchStatus.CurrentBatchState)
+				s.Empty(status.BatchStatus.Tolerations)
+			},
+		},
+	}
+
+	s.runBatchTestCases(tests)
+}
+
+func newRunStepTargetWithToleration(cluster, name string, replicas intstr.IntOrString, toleration *rolloutv1alpha1.RolloutStepTargetToleration) rolloutv1alpha1.RolloutRunStepTarget {
+	target := newRunStepTarget(cluster, name, replicas)
+	target.Toleration = toleration
+	return target
+}
+
 func newRunStepTarget(cluster, name string, replicas intstr.IntOrString) rolloutv1alpha1.RolloutRunStepTarget {
 	return newRunStepTargetWithSlidingWindow(cluster, name, replicas, nil)
 }

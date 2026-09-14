@@ -311,6 +311,52 @@ func TestValidateRolloutStrategy_V2(t *testing.T) {
 			}(),
 			wantErr: false,
 		},
+		{
+			name: "toleration without failureThreshold",
+			obj: func() *rolloutv1alpha1.RolloutStrategy {
+				obj := validV2Strategy.DeepCopy()
+				obj.BatchV2.Batches[0].Targets[0].Toleration = &rolloutv1alpha1.RolloutStepTargetToleration{
+					InitialDelaySeconds: ptr.To[int32](300),
+				}
+				return obj
+			}(),
+			wantErr: true,
+			errLen:  1,
+		},
+		{
+			name: "toleration without initialDelaySeconds",
+			obj: func() *rolloutv1alpha1.RolloutStrategy {
+				obj := validV2Strategy.DeepCopy()
+				obj.BatchV2.Batches[0].Targets[0].Toleration = &rolloutv1alpha1.RolloutStepTargetToleration{
+					FailureThreshold: ptr.To[int32](2),
+				}
+				return obj
+			}(),
+			wantErr: true,
+			errLen:  1,
+		},
+		{
+			name: "toleration with both fields set is valid",
+			obj: func() *rolloutv1alpha1.RolloutStrategy {
+				obj := validV2Strategy.DeepCopy()
+				obj.BatchV2.Batches[0].Targets[0].Toleration = &rolloutv1alpha1.RolloutStepTargetToleration{
+					FailureThreshold:    ptr.To[int32](2),
+					InitialDelaySeconds: ptr.To[int32](300),
+				}
+				return obj
+			}(),
+			wantErr: false,
+		},
+		{
+			name: "toleration with both fields nil",
+			obj: func() *rolloutv1alpha1.RolloutStrategy {
+				obj := validV2Strategy.DeepCopy()
+				obj.BatchV2.Batches[0].Targets[0].Toleration = &rolloutv1alpha1.RolloutStepTargetToleration{}
+				return obj
+			}(),
+			wantErr: true,
+			errLen:  2,
+		},
 	}
 
 	for i := range tests {

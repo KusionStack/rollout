@@ -129,6 +129,10 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	newStatus := obj.Status.DeepCopy()
 
+	// Save original Tolerations before executor runs, as executor may modify
+	// RolloutRun.Spec.Batch.Tolerations when a batch is skipped.
+	originalTolerations := saveTolerations(obj)
+
 	accessor, workloads, canaryWorkloads, err := r.findWorkloadsCrossCluster(ctx, obj)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -139,6 +143,12 @@ func (r *RolloutRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	if tempErr := r.cleanupAnnotation(ctx, obj); tempErr != nil {
 		logger.Error(tempErr, "failed to clean up annotation")
+	}
+
+	// Persist spec changes if Tolerations was modified by the executor
+	if tempErr := r.updateTolerations(ctx, obj, originalTolerations); tempErr != nil {
+		logger.Error(tempErr, "failed to update tolerations")
+		return reconcile.Result{}, tempErr
 	}
 
 	updateStatus := r.updateStatusOnly(ctx, obj, newStatus, workloads, canaryWorkloads)
@@ -364,6 +374,41 @@ func (r *RolloutRunReconciler) updateStatusOnly(ctx context.Context, obj *rollou
 		return err
 	}
 
+	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
+	return nil
+}
+
+// saveTolerations saves a deep copy of the current Tolerations before the executor runs.
+// Returns nil if the batch strategy is not set or Tolerations is empty.
+func saveTolerations(obj *rolloutv1alpha1.RolloutRun) []rolloutv1alpha1.RolloutRunTolerationTarget {
+	if obj.Spec.Batch == nil || len(obj.Spec.Batch.Tolerations) == 0 {
+		return nil
+	}
+	saved := make([]rolloutv1alpha1.RolloutRunTolerationTarget, len(obj.Spec.Batch.Tolerations))
+	copy(saved, obj.Spec.Batch.Tolerations)
+	return saved
+}
+
+// updateTolerations persists spec changes to Tolerations if the executor modified them
+// (e.g., when a batch is skipped).
+func (r *RolloutRunReconciler) updateTolerations(ctx context.Context, obj *rolloutv1alpha1.RolloutRun, original []rolloutv1alpha1.RolloutRunTolerationTarget) error {
+	if obj.Spec.Batch == nil {
+		return nil
+	}
+	if equality.Semantic.DeepEqual(original, obj.Spec.Batch.Tolerations) {
+		return nil
+	}
+
+	_, err := kubeutilclient.UpdateOnConflict(clusterinfo.WithCluster(ctx, clusterinfo.Fed), r.Client, r.Client, obj, func(in *rolloutv1alpha1.RolloutRun) error {
+		if in.Spec.Batch != nil {
+			in.Spec.Batch.Tolerations = obj.Spec.Batch.Tolerations
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	key := utils.ObjectKeyString(obj)
 	r.rvExpectation.ExpectUpdate(key, obj.ResourceVersion) // nolint
 	return nil
 }
