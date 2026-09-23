@@ -205,6 +205,8 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 	batchTargetStatuses := make([]rolloutv1alpha1.RolloutWorkloadStatus, 0)
 
 	allWorkloadReady := true
+	allWorkloadsAutoSkippable := true
+
 	for _, item := range currentBatch.Targets {
 		info := ctx.Workloads.Get(item.Cluster, item.Name)
 		if info == nil {
@@ -226,6 +228,11 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 
 		allWorkloadReady = false
 		logger.V(3).Info("still waiting for target to be ready", "target", item.CrossClusterObjectNameReference, "reason", reason)
+
+		// Check auto-skip toleration for this workload
+		if !e.canAutoSkipTarget(item, info, currentBatchExpectedReplicas, isLastBatch, newStatus) {
+			allWorkloadsAutoSkippable = false
+		}
 
 		expectedReplicas, err := e.calculateExpectedReplicasBySlidingWindow(status, currentBatchExpectedReplicas, item.ReplicaSlidingWindow)
 		if err != nil {
@@ -250,8 +257,78 @@ func (e *batchExecutor) doBatchUpgrading(ctx *ExecutorContext) (bool, time.Durat
 		return true, retryImmediately, nil
 	}
 
+	if allWorkloadsAutoSkippable {
+		logger.Info("auto-skipping batch due to toleration")
+		newStatus.BatchStatus.Records[currentBatchIndex].State = StepSkipped
+		recordRolloutRunTolerations(&newStatus.BatchStatus.Tolerations, rolloutRun.Spec.Batch.Batches, ctx.Workloads, currentBatchIndex)
+
+		// Mirror manual-skip semantics (see do_command.go:handleBatchStatusWhenSkipped):
+		// bypass PostBatchStepHook (webhook) and ResourceRecycling, and advance to the
+		// next batch or PostRollout phase directly. Returns done=false so the state
+		// engine does NOT call MoveToNextState(StepPostBatchStepHook), which would
+		// otherwise overwrite the StepSkipped state we just wrote above.
+		if int(currentBatchIndex) >= len(rolloutRun.Spec.Batch.Batches)-1 {
+			// Last batch: advance phase to PostRollout (will transition to Succeeded
+			// on the next reconcile, mirroring manual skip behavior).
+			newStatus.Phase = rolloutv1alpha1.RolloutRunPhasePostRollout
+		} else {
+			// Not the last batch: advance to the next batch from StepNone so the
+			// state machine restarts on doPausing/Initialize for the new batch.
+			newStatus.BatchStatus.CurrentBatchIndex = currentBatchIndex + 1
+			newStatus.BatchStatus.CurrentBatchState = StepNone
+		}
+		return false, retryImmediately, nil
+	}
+
 	// wait for next reconcile
 	return false, retryDefault, nil
+}
+
+// canAutoSkipTarget checks if the workload target meets the auto-skip toleration conditions.
+// Returns true only when the workload is not ready due to a real deficit (gap > 0) within
+// the toleration threshold and the initial delay has elapsed.
+// Transient states (Generation mismatch, terminating replicas, last-batch overscaling)
+// are NOT auto-skippable because the gap is unreliable until the workload stabilizes.
+func (e *batchExecutor) canAutoSkipTarget(item rolloutv1alpha1.RolloutRunStepTarget, info *workload.Info, currentBatchExpectedReplicas int32, isLastBatch bool, newStatus *rolloutv1alpha1.RolloutRunStatus) bool {
+	if item.Toleration == nil || item.Toleration.FailureThreshold == nil {
+		return false
+	}
+
+	// Not skippable while workload has not been reconciled yet (Generation mismatch).
+	// UpdatedAvailableReplicas may be stale from the previous generation.
+	if info.Generation != info.Status.ObservedGeneration {
+		return false
+	}
+
+	// On last batch, not skippable if observed replicas exceed desired or terminating replicas exist(strict check).
+	if isLastBatch && info.Status.ObservedReplicas > info.Status.DesiredReplicas || info.Status.TerminatingReplicas != 0 {
+		return false
+	}
+
+	// Only evaluate toleration on a real deficit.
+	gap := currentBatchExpectedReplicas - info.Status.UpdatedAvailableReplicas
+	if gap <= 0 {
+		return false
+	}
+
+	if gap > *item.Toleration.FailureThreshold {
+		return false
+	}
+
+	// gap is within threshold, check timeout
+	if item.Toleration.InitialDelaySeconds != nil {
+		currentBatchIndex := newStatus.BatchStatus.CurrentBatchIndex
+		startTime := newStatus.BatchStatus.Records[currentBatchIndex].StartTime
+		if startTime == nil {
+			return false
+		}
+		elapsed := time.Since(startTime.Time)
+		if elapsed < time.Duration(*item.Toleration.InitialDelaySeconds)*time.Second {
+			return false
+		}
+	}
+
+	return true
 }
 
 // calculateExpectedReplicasBySlidingWindow calculate expected replicas by sliding window

@@ -50,8 +50,7 @@ var (
 			},
 			Webhooks: []rolloutv1alpha1.RolloutWebhook{},
 			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
-				Toleration: &rolloutv1alpha1.TolerationStrategy{},
-				Batches:    []rolloutv1alpha1.RolloutRunStep{},
+				Batches: []rolloutv1alpha1.RolloutRunStep{},
 			},
 		},
 		Status: rolloutv1alpha1.RolloutRunStatus{
@@ -76,8 +75,7 @@ var (
 				Targets: []rolloutv1alpha1.RolloutRunStepTarget{},
 			},
 			Batch: &rolloutv1alpha1.RolloutRunBatchStrategy{
-				Toleration: &rolloutv1alpha1.TolerationStrategy{},
-				Batches:    []rolloutv1alpha1.RolloutRunStep{},
+				Batches: []rolloutv1alpha1.RolloutRunStep{},
 			},
 		},
 		Status: rolloutv1alpha1.RolloutRunStatus{

@@ -107,9 +107,11 @@ func (o *Info) CheckUpdatedReady(replicas int32, strictCheck bool) (bool, string
 	if o.Generation != o.Status.ObservedGeneration {
 		return false, "workload Generation and ObservedGeneration are mismatched"
 	}
+
 	if o.Status.UpdatedAvailableReplicas < replicas {
 		return false, "workload updated available replicas is not satisfied"
 	}
+
 	if strictCheck && (o.Status.ObservedReplicas > o.Status.DesiredReplicas || o.Status.TerminatingReplicas != 0) {
 		return false, "workload observed replicas is more than desiredReplicas"
 	}

@@ -108,6 +108,7 @@ func validateRolloutRunStepTargets(targets []rolloutv1alpha1.RolloutRunStepTarge
 			allErrs = append(allErrs, field.Duplicate(fldPath.Index(i).Child("name"), target.CrossClusterObjectNameReference))
 		}
 		targetMap[target.CrossClusterObjectNameReference] = true
+		allErrs = append(allErrs, validateToleration(target.Toleration, fldPath.Index(i).Child("toleration"))...)
 	}
 
 	return allErrs
