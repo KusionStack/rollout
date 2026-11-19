@@ -315,6 +315,16 @@ func (r *RolloutRunReconciler) findOwnerKindName(rolloutRun *rolloutv1alpha1.Rol
 func (r *RolloutRunReconciler) findWorkloadsCrossCluster(ctx context.Context, obj *rolloutv1alpha1.RolloutRun) (workload.Accessor, *workload.Set, *workload.Set, error) {
 	all := make([]rolloutv1alpha1.CrossClusterObjectNameReference, 0)
 
+	// nothing to list when the RolloutRun has no batches defined
+	if obj.Spec.Batch == nil || len(obj.Spec.Batch.Batches) == 0 {
+		gvk := schema.FromAPIVersionAndKind(obj.Spec.TargetType.APIVersion, obj.Spec.TargetType.Kind)
+		accessor, err := r.workloadRegistry.Get(gvk)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return accessor, workload.NewSet(), workload.NewSet(), nil
+	}
+
 	for _, b := range obj.Spec.Batch.Batches {
 		for _, t := range b.Targets {
 			all = append(all, t.CrossClusterObjectNameReference)

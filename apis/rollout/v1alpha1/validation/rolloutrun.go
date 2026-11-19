@@ -65,14 +65,11 @@ func ValidateRolloutRunCanaryStrategy(canary *rolloutv1alpha1.RolloutRunCanarySt
 }
 
 func ValidateRolloutRunBatchStrategy(batch *rolloutv1alpha1.RolloutRunBatchStrategy, fldPath *field.Path) field.ErrorList {
-	if batch == nil {
-		return nil
-	}
-
 	var allErrs field.ErrorList
 
-	if len(batch.Batches) == 0 {
+	if batch == nil || len(batch.Batches) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("batches"), "must specify at least one batch"))
+		return allErrs
 	}
 
 	for i := range batch.Batches {

@@ -154,6 +154,17 @@ func TestValidateRolloutRun(t *testing.T) {
 				return obj
 			}(),
 			wantErr: true,
+			errLen:  2,
+		},
+		{
+			name: "set neither canary nor batch",
+			obj: func() *rolloutv1alpha1.RolloutRun {
+				obj := validRolloutRun.DeepCopy()
+				obj.Spec.Canary = nil
+				obj.Spec.Batch = nil
+				return obj
+			}(),
+			wantErr: true,
 			errLen:  1,
 		},
 		{
